@@ -117,7 +117,7 @@ def test_extended_fields_are_owned_by_the_correct_domain():
     assert 'price_usd' not in set().union(*(set(v) for v in specs.fields.values()))
 ```
 
-增加 `PRAGMA table_info` 逐表核对测试，数据库使用实际 `schema.sql` 和现有扩展表建表入口初始化的临时库。字段所有权表须覆盖下面全部集合：
+增加 `PRAGMA table_info` 逐表核对测试。实际快照包含 benchmark 的 citation/evidence_level/methodology/reference_url，但基础 schema.sql 尚未包含这四列：从实际只读快照提取 sqlite_master 的建表 DDL，保存不含业务行的 `tests/fixtures/domain_discovery/business_schema.sql`，用于临时完整 schema 正向测试；基础 schema.sql 用于明确缺列的负向测试。测试不能依赖 Git 忽略的 data/data.db 在清洁 checkout 中存在，也不为通过检查修改正式库。字段所有权表须覆盖下面全部集合：
 
 | 域/表 | 可提取字段 |
 |---|---|
@@ -232,6 +232,8 @@ def checked_reference(root, relative):
 同步脚本提供 `--check`（只核对）与 `--write`（生成六域副本和安装清单）两种动作；默认只核对。安装源只取 `.hermes-skills`，旧 `_hermes_skills_setup.sh` 遇到六域目标目录必须退出并说明迁移入口。不自动卸载宿主机旧人工工具。
 
 Hermes 预检在实际目标版本核验隔离 Skill 根能力；支持时用运行专用规则目录并保存实际根路径、已加载包/参考哈希和版本证明。不支持时明确 `unsupported_skill_isolation`，在模型阶段前停止；不发明未经版本确认的 CLI 参数，也不复制含凭据的整个 Hermes 配置到产物。
+
+实现参考：当前上游的 `get_skills_dir()` 从 Hermes home 下取 skills，技能解析还可能优先选择已信任项目目录中的同名包。因此不能只设置 HERMES_HOME 或核对该目录，就认定实际加载了冻结包。应在运行专用工作目录启动，禁止共享的外部/项目技能根覆盖六域，并通过目标版本的技能解析器核对实际选中 SKILL.md 路径、内容及参考哈希；此检查必须针对部署版本执行。上游源代码是适配参考，不代表目标服务器版本能力已通过验证。[Hermes 路径定义](https://github.com/NousResearch/hermes-agent/blob/main/hermes_constants.py)、[Hermes 技能解析](https://github.com/NousResearch/hermes-agent/blob/main/agent/skill_utils.py)。
 - [ ] **Step 4：GREEN。** `python scripts/sync_domain_skills.py --check` 和 rules 测试通过；归档文件仍可读，六域副本与安装清单一致，运行包中无密钥。
 - [ ] **Step 5：提交。** 仅添加上述规则、归档、同步/安装脚本及 tests，`git commit -m "feat: migrate and freeze authoritative domain skills"`。
 
