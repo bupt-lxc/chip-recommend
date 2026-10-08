@@ -13,7 +13,7 @@ import shutil
 import tempfile
 from pathlib import Path, PurePosixPath
 
-from .contracts import DOMAINS, _reject_duplicate_keys, load_domain
+from .contracts import DOMAINS, DomainContract, _reject_duplicate_keys
 
 
 PHASES = ("plan", "select", "extract", "review", "complete")
@@ -64,17 +64,30 @@ def _skill_document(text: str, skill_name: str) -> None:
         raise ValueError(f"Skill must reference domain.json and rule version: {skill_name}")
 
 
+def _contract_from_bytes(data: bytes, domain_id: str) -> DomainContract:
+    contract = DomainContract.model_validate(
+        json.loads(data.decode("utf-8"), object_pairs_hook=_reject_duplicate_keys)
+    )
+    if contract.domain_id != domain_id or contract.skill_name != f"chip-{domain_id}":
+        raise ValueError("Contract identity must match requested domain and skill_name")
+    return contract
+
+
 def _contents(root: Path) -> dict[str, bytes]:
     files: dict[str, bytes] = {}
     for domain in DOMAINS:
-        contract = load_domain(root, domain)
+        relative_contract = f"chip-{domain}/domain.json"
+        data = _approved_path(root, relative_contract).read_bytes()
+        contract = _contract_from_bytes(data, domain)
+        files[relative_contract] = data
         required = {"_shared/rules.md", f"{contract.skill_name}/references/{domain}-rules.md"}
         if not required.issubset(contract.references):
             raise ValueError(f"Missing required public references: {domain}")
         relative_skill = f"{contract.skill_name}/SKILL.md"
         skill = _approved_path(root, relative_skill).read_bytes()
         _skill_document(skill.decode("utf-8").replace("\r\n", "\n"), contract.skill_name)
-        paths = (f"{contract.skill_name}/domain.json", relative_skill, *contract.references)
+        files[relative_skill] = skill
+        paths = contract.references
         for relative in paths:
             # Explicit public references only; do not package machine config,
             # credentials, shell helpers, or files discovered by directory glob.
@@ -86,7 +99,8 @@ def _contents(root: Path) -> dict[str, bytes]:
             path = _approved_path(root, relative)
             if not path.is_file():
                 raise FileNotFoundError(f"Missing required package file: {relative}")
-            files[relative] = path.read_bytes()
+            if relative not in files:
+                files[relative] = path.read_bytes()
     return dict(sorted(files.items()))
 
 
@@ -109,8 +123,10 @@ def build_installation_manifest(authority_root: Path) -> dict:
     return {**_manifest(_contents(root)), "source_metadata": {"source_root": root.name}}
 
 
-def _verify(root: Path, filename: str) -> dict:
-    actual = _manifest(_contents(root))
+def _verify(root: Path, filename: str, *, contents: dict[str, bytes] | None = None) -> dict:
+    # Optional caller-owned bytes are the exact snapshot being validated. Default
+    # callers retain the original manifest return value and all-file checking.
+    actual = _manifest(_contents(root) if contents is None else contents)
     saved = _read_json(_approved_path(root, filename))
     expected_keys = set(actual) | ({"source_metadata"} if filename == INSTALL_MANIFEST else set())
     if set(saved) != expected_keys:
@@ -172,16 +188,19 @@ def load_phase(bundle_root: Path, domain_id: str, phase: str) -> dict:
     if phase not in PHASES:
         raise ValueError(f"不支持的阶段: {phase}")
     root = Path(bundle_root).resolve()
-    manifest = _verify(root, BUNDLE_MANIFEST)
-    contract = load_domain(root, domain_id)
+    if domain_id not in DOMAINS:
+        raise ValueError(f"Unknown domain: {domain_id!r}")
+    contents = _contents(root)
+    manifest = _verify(root, BUNDLE_MANIFEST, contents=contents)
+    contract = _contract_from_bytes(contents[f"chip-{domain_id}/domain.json"], domain_id)
     relative_contract = f"{contract.skill_name}/domain.json"
     return {
         "domain_id": domain_id,
         "skill_name": contract.skill_name,
         "rule_version": contract.rule_version,
         "phase": phase,
-        "skill_text": _approved_path(root, f"{contract.skill_name}/SKILL.md").read_text(encoding="utf-8"),
-        "references": {relative: _approved_path(root, relative).read_text(encoding="utf-8") for relative in contract.references},
+        "skill_text": contents[f"{contract.skill_name}/SKILL.md"].decode("utf-8"),
+        "references": {relative: contents[relative].decode("utf-8") for relative in contract.references},
         "contract": contract.model_dump(),
         "bundle_sha256": manifest["bundle_sha256"],
         "contract_sha256": manifest["files"][relative_contract],

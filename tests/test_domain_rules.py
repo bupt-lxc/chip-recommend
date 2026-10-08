@@ -156,6 +156,43 @@ def test_invalid_or_missing_phase_fails_explicitly(installed, tmp_path, rules):
         rules.build_installation_manifest(installed)
 
 
+@pytest.mark.parametrize("kind", ["skill", "contract", "reference"])
+def test_phase_uses_verified_bytes_when_file_changes_after_verification(installed, tmp_path, rules, monkeypatch, kind):
+    """Deterministic temporary-file mutation after a real manifest verification."""
+    bundle = tmp_path / "bundle"
+    manifest = rules.freeze_bundle(installed, bundle)
+    relative = {
+        "skill": "chip-specs/SKILL.md",
+        "contract": "chip-specs/domain.json",
+        "reference": "_shared/rules.md",
+    }[kind]
+    path = bundle / relative
+    original = path.read_bytes()
+    verify = rules._verify
+
+    def verify_then_mutate(*args, **kwargs):
+        result = verify(*args, **kwargs)
+        if kind == "contract":
+            changed = json.loads(original)
+            changed["label"] = "changed after verification"
+            path.write_text(json.dumps(changed), encoding="utf-8")
+        else:
+            path.write_bytes(original + b"\nchanged after verification\n")
+        return result
+
+    monkeypatch.setattr(rules, "_verify", verify_then_mutate)
+    result = rules.load_phase(bundle, "specs", "extract")
+    if kind == "contract":
+        assert result["contract"] == json.loads(original)
+        assert result["contract_sha256"] == hashlib.sha256(original).hexdigest()
+    else:
+        text = result["skill_text"] if kind == "skill" else result["references"][relative]
+        assert text.encode("utf-8") == original
+        digest = manifest["files"][relative] if kind == "skill" else result["reference_hashes"][relative]
+        assert hashlib.sha256(text.encode("utf-8")).hexdigest() == digest
+    assert result["bundle_sha256"] == manifest["bundle_sha256"]
+
+
 def test_actual_resolver_report_must_match_every_frozen_file(installed, tmp_path, rules):
     bundle = tmp_path / "bundle"
     manifest = rules.freeze_bundle(installed, bundle)
