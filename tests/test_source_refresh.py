@@ -435,9 +435,15 @@ def test_pdf_without_parser_dependency_is_unsupported(
     assert result["outcome"] == "unsupported"
     assert result["error_code"] == "unsupported_content_type"
     assert result["error_message"] == "PDF 解析组件未安装。"
+    check = fetch_row(temp_db, "SELECT * FROM source_checks WHERE link_id=1")
+    assert check["outcome"] == "unsupported"
+    assert check["error_code"] == "unsupported_content_type"
+    assert check["error_message"] == "PDF 解析组件未安装。"
     state = fetch_row(temp_db, "SELECT * FROM source_monitor_state WHERE link_id=1")
     assert state["failure_count"] == 1
     assert state["content_hash"] is None
+    assert state["last_error_code"] == "unsupported_content_type"
+    assert state["last_error_message"] == "PDF 解析组件未安装。"
 
 
 def test_pdf_parse_failure_is_failed_content(
@@ -460,9 +466,15 @@ def test_pdf_parse_failure_is_failed_content(
     assert result["outcome"] == "failed"
     assert result["error_code"] == "empty_content"
     assert result["error_message"] == "PDF 文本提取失败：invalid PDF fixture。"
+    check = fetch_row(temp_db, "SELECT * FROM source_checks WHERE link_id=1")
+    assert check["outcome"] == "failed"
+    assert check["error_code"] == "empty_content"
+    assert check["error_message"] == "PDF 文本提取失败：invalid PDF fixture。"
     state = fetch_row(temp_db, "SELECT * FROM source_monitor_state WHERE link_id=1")
     assert state["failure_count"] == 1
     assert state["content_hash"] is None
+    assert state["last_error_code"] == "empty_content"
+    assert state["last_error_message"] == "PDF 文本提取失败：invalid PDF fixture。"
 
 
 def test_timeout_retries_then_schedules_retry(temp_db: Path, tmp_path: Path):
