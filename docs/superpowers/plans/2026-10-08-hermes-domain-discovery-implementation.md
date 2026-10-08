@@ -174,7 +174,7 @@ def load_domain(root: Path, domain_id: str) -> DomainContract:
 
 **Files:** 六域 `SKILL.md/references`、`.hermes-skills/_shared`、`docs/archive/hermes-skills`、`rules.py`、`scripts/sync_domain_skills.py`、两个安装脚本；测试 `tests/test_domain_rules.py`。生成六域 `.agents/skills` 副本。
 
-- [ ] **Step 1：写冻结不可变、缺参考失败和旧同名覆盖失败测试。**
+- [x] **Step 1：写冻结不可变、缺参考失败和旧同名覆盖失败测试。**
 
 ```python
 import hashlib
@@ -199,8 +199,8 @@ def test_unsupported_phase_is_rejected(tmp_path):
         load_phase(tmp_path, 'specs', 'publish')
 ```
 
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_rules.py -q`。
-- [ ] **Step 3：迁移具体规则。** 按 spec §4.2 归档 16 个旧目录，旧文件以实施前 `f9a22a5` 的 Git 版本为准，先归档旧 chip-compute 的原文件再写同名新包；保留 Task 1 新增的 domain.json，不将新合同混入旧包或随目录移动丢失。四个独立查询/模型 Skill 保留，但不自动安装。六域均按下面阶段格式编写，规则来源与迁移去向在归档 README 标注：
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_rules.py -q`。
+- [x] **Step 3：迁移具体规则。** 按 spec §4.2 归档 16 个旧目录，旧文件以实施前 `f9a22a5` 的 Git 版本为准，先归档旧 chip-compute 的原文件再写同名新包；保留 Task 1 新增的 domain.json，不将新合同混入旧包或随目录移动丢失。四个独立查询/模型 Skill 保留，但不自动安装。六域均按下面阶段格式编写，规则来源与迁移去向在归档 README 标注：
 
 ```markdown
 ## plan
@@ -234,12 +234,12 @@ def checked_reference(root, relative):
 Hermes 预检在实际目标版本核验隔离 Skill 根能力；支持时用运行专用规则目录并保存实际根路径、已加载包/参考哈希和版本证明。不支持时明确 `unsupported_skill_isolation`，在模型阶段前停止；不发明未经版本确认的 CLI 参数，也不复制含凭据的整个 Hermes 配置到产物。
 
 实现参考：当前上游的 `get_skills_dir()` 从 Hermes home 下取 skills，技能解析还可能优先选择已信任项目目录中的同名包。因此不能只设置 HERMES_HOME 或核对该目录，就认定实际加载了冻结包。应在运行专用工作目录启动，禁止共享的外部/项目技能根覆盖六域，并通过目标版本的技能解析器核对实际选中 SKILL.md 路径、内容及参考哈希；此检查必须针对部署版本执行。上游源代码是适配参考，不代表目标服务器版本能力已通过验证。[Hermes 路径定义](https://github.com/NousResearch/hermes-agent/blob/main/hermes_constants.py)、[Hermes 技能解析](https://github.com/NousResearch/hermes-agent/blob/main/agent/skill_utils.py)。
-- [ ] **Step 4：GREEN。** `python scripts/sync_domain_skills.py --check` 和 rules 测试通过；归档文件仍可读，六域副本与安装清单一致，运行包中无密钥。
-- [ ] **Step 5：提交。** 仅添加上述规则、归档、同步/安装脚本及 tests，`git commit -m "feat: migrate and freeze authoritative domain skills"`。
+- [x] **Step 4：GREEN。** `python scripts/sync_domain_skills.py --check` 和 rules 测试通过；归档文件仍可读，六域副本与安装清单一致，运行包中无密钥。
+- [x] **Step 5：提交。** 仅添加上述规则、归档、同步/安装脚本及 tests，`git commit -m "feat: migrate and freeze authoritative domain skills"`。
 
 ## Task 3：统一 CLI/API 启动语义
 
-**Files:** `contracts.py`、`scripts/run_hermes_open_web_test.py`；测试 `tests/test_domain_start.py`。API 接线在 Task 12。
+**Files:** `contracts.py`、`scripts/run_hermes_open_web_test.py`；测试 `tests/test_domain_start.py`。API 接线在 Task 13，完整运行分派在 Task 12。Task 3 先建立统一规范化与 CLI 接口，使用可注入执行器验证转交内容；默认执行器只委托后续 v3 runtime，未接线时明确返回 runtime_unavailable，不回退旧全库入口、不写运行产物。
 
 - [ ] **Step 1：写无芯片默认与兼容参数测试。**
 
