@@ -17,5 +17,6 @@ build/
 *.log
 .gstack/
 .tmp/
+.worktrees/
 outputs/
 chip-recommend-server-backups/
