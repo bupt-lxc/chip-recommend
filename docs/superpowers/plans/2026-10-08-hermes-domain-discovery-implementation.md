@@ -241,7 +241,7 @@ Hermes 预检在实际目标版本核验隔离 Skill 根能力；支持时用运
 
 **Files:** `contracts.py`、`scripts/run_hermes_open_web_test.py`；测试 `tests/test_domain_start.py`。API 接线在 Task 13，完整运行分派在 Task 12。Task 3 先建立统一规范化与 CLI 接口，使用可注入执行器验证转交内容；默认执行器只委托后续 v3 runtime，未接线时明确返回 runtime_unavailable，不回退旧全库入口、不写运行产物。
 
-- [ ] **Step 1：写无芯片默认与兼容参数测试。**
+- [x] **Step 1：写无芯片默认与兼容参数测试。**
 
 ```python
 import pytest
@@ -270,8 +270,8 @@ def test_unsupported_or_conflicting_scope_is_rejected(payload):
         normalize_start(payload)
 ```
 
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_start.py -q`。
-- [ ] **Step 3：实现单一规范化函数。**
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_start.py -q`。
+- [x] **Step 3：实现单一规范化函数。**
 
 ```python
 def normalize_start(payload, idempotency_key=None):
@@ -311,8 +311,8 @@ def normalize_start(payload, idempotency_key=None):
 ```
 
 幂等键与规范化业务 payload 分别传给 store；键不进入 payload 哈希。CLI 必须提供 `--domain` 或兼容 `--skill`，二者冲突报错；`--field` 保留 argparse 错误说明“请按数据域运行”，不传给旧函数。增加 `--request-id/--resume/--timeout`，默认 1800 秒；废除全库单元的 `--workers`。退出码 success/no_findings 为 0，其余为 2；JSON 包含 run_id、启动键、状态和产物路径，中文保持 ensure_ascii=False。
-- [ ] **Step 4：GREEN。** start 测试和旧 CLI 合同测试运行；旧全库行为测试改为历史读取测试，不继续把错误默认作为需求。
-- [ ] **Step 5：提交。** 仅添加合同、CLI 和 `tests/test_domain_start.py`，`git commit -m "feat: start domain discovery without a required chip"`。
+- [x] **Step 4：GREEN。** start 测试和旧 CLI 合同测试运行；旧全库行为测试改为历史读取测试，不继续把错误默认作为需求。
+- [x] **Step 5：提交。** 仅添加合同、CLI 和 `tests/test_domain_start.py`，`git commit -m "feat: start domain discovery without a required chip"`。
 
 ## Task 4：持久化幂等、租约与不可变基线
 
