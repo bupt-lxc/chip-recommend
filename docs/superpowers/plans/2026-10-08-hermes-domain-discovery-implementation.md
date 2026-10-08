@@ -96,7 +96,7 @@ v3 标识固定为 `hermes-open-web-v3`，工具版本固定为 `3.0.0`。请求
 
 **Files:** 创建六个 `.hermes-skills/<skill>/domain.json`、`chip_model/pipeline/domain_discovery/__init__.py`、`contracts.py`；测试 `tests/test_domain_contracts.py`。
 
-- [ ] **Step 1：写字段覆盖、归属和 schema 检查的失败测试。** 逐字采用 spec §5 的字段，不从旧 `TEST_SKILL_REGISTRY` 推断。测试至少包含下列扩展字段和排除字段：
+- [x] **Step 1：写字段覆盖、归属和 schema 检查的失败测试。** 逐字采用 spec §5 的字段，不从旧 `TEST_SKILL_REGISTRY` 推断。测试至少包含下列扩展字段和排除字段：
 
 ```python
 from pathlib import Path
@@ -131,8 +131,8 @@ def test_extended_fields_are_owned_by_the_correct_domain():
 
 关系键：compatibility 为 chip_model/model_id；benchmark 为 chip_model/model_id/suite_name/workload_type/chip_count/precision；deployment 为 url/title/chip_model/model_id/source_type。身份匹配保留厂商、具体 SKU、容量和形态。公共 source_url/source_type/confidence 是候选元数据，与部署表身份中的 source_type 区分命名空间。
 
-- [ ] **Step 2：运行 RED。** `python -m pytest tests/test_domain_contracts.py -q`；预期缺新模块/合同失败，不接受数据库缺列造成的无关失败。
-- [ ] **Step 3：实现严格合同加载。** Pydantic 禁止额外字段，先校验路径与 ID，再读取唯一 JSON；不保留第二份 Python 业务字段白名单。
+- [x] **Step 2：运行 RED。** `python -m pytest tests/test_domain_contracts.py -q`；预期缺新模块/合同失败，不接受数据库缺列造成的无关失败。
+- [x] **Step 3：实现严格合同加载。** Pydantic 禁止额外字段，先校验路径与 ID，再读取唯一 JSON；不保留第二份 Python 业务字段白名单。
 
 ```python
 import json
@@ -167,8 +167,8 @@ def load_domain(root: Path, domain_id: str) -> DomainContract:
 ```
 
 合同的 units/conditions 写入单卡、建议系统 PSU、带宽方向/聚合、Dense/Sparse、实测最低条件、非适用条件和部署版本存储规则。复用既有来源枚举，启动时逐列核对实际 schema；不自动 ALTER 正式库来消除错误。
-- [ ] **Step 4：运行 GREEN。** 合同测试全部通过，并核对精度字段能无损保存现有格式与候选口径元数据。
-- [ ] **Step 5：提交。** `git add .hermes-skills/chip-identity/domain.json .hermes-skills/chip-specs/domain.json .hermes-skills/chip-compute/domain.json .hermes-skills/chip-compatibility/domain.json .hermes-skills/chip-benchmark/domain.json .hermes-skills/chip-deployment/domain.json chip_model/pipeline/domain_discovery tests/test_domain_contracts.py`，随后 `git commit -m "feat: define complete six-domain discovery contracts"`。
+- [x] **Step 4：运行 GREEN。** 合同测试全部通过，并核对精度字段能无损保存现有格式与候选口径元数据。
+- [x] **Step 5：提交。** `git add .hermes-skills/chip-identity/domain.json .hermes-skills/chip-specs/domain.json .hermes-skills/chip-compute/domain.json .hermes-skills/chip-compatibility/domain.json .hermes-skills/chip-benchmark/domain.json .hermes-skills/chip-deployment/domain.json chip_model/pipeline/domain_discovery tests/test_domain_contracts.py`，随后 `git commit -m "feat: define complete six-domain discovery contracts"`。
 
 ## Task 2：迁移 Skill、冻结规则并证明加载路径
 
