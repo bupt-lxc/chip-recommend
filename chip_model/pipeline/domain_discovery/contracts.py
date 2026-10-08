@@ -3,6 +3,8 @@
 import json
 import re
 import sqlite3
+import unicodedata
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from pydantic import BaseModel, ConfigDict, JsonValue, model_validator
@@ -12,6 +14,84 @@ DOMAINS = ("identity", "specs", "compute", "compatibility", "benchmark", "deploy
 # SQL identifier allowlist only. Business field ownership lives in domain.json.
 _TABLES = frozenset({"chips", "chip_model_compatibility", "chip_model_benchmarks", "deployment_guides"})
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+_RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
+_RESERVED_IDS = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))})
+_START_KEYS = frozenset({"domain", "chip", "skill", "chips", "resume_run_id", "request_id", "mode", "pipeline"})
+
+
+def validate_run_id(value: object) -> str:
+    """Validate a portable v3 run ID; storage checks its actual scope later."""
+    if not isinstance(value, str) or not _RUN_ID.fullmatch(value) or value.upper() in _RESERVED_IDS:
+        raise ValueError("续跑运行 ID 必须为 1–128 位字母、数字、下划线或连字符，以字母或数字开头，且不能使用系统保留名")
+    return value
+
+
+def _start_request_id(value: object) -> str | None:
+    if value is None:
+        return None
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or len(value.strip()) > 200
+        or any(unicodedata.category(char) == "Cc" for char in value)
+    ):
+        raise ValueError("请求幂等键必须为非空字符串，最多 200 字符且不含控制字符")
+    return value.strip()
+
+
+def _start_chip(value: object) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value.strip()) > 160:
+        raise ValueError("芯片线索必须为非空字符串，最多 160 字符")
+    return value.strip()
+
+
+def normalize_start(payload: Mapping, idempotency_key: object = None) -> dict:
+    """Normalize shared CLI/API business input without database access or mutation.
+
+    Request keys are validated separately and never enter the canonical payload.
+    """
+    if not isinstance(payload, Mapping):
+        raise ValueError("启动请求必须为对象")
+    unknown = set(payload) - _START_KEYS
+    if unknown:
+        raise ValueError(f"不支持的启动参数：{', '.join(sorted(map(str, unknown)))}；请按数据域运行")
+    domain = payload.get("domain")
+    if "domain" in payload and (not isinstance(domain, str) or domain not in DOMAINS):
+        raise ValueError(f"数据域必须为：{', '.join(DOMAINS)}")
+    if "skill" in payload:
+        skill = payload["skill"]
+        if not isinstance(skill, str) or skill not in tuple(f"chip-{item}" for item in DOMAINS):
+            raise ValueError("Skill 必须为受支持数据域的 chip-<domain> 别名")
+        skill_domain = skill.removeprefix("chip-")
+        if domain is not None and domain != skill_domain:
+            raise ValueError("数据域与 Skill 别名必须一致")
+        domain = skill_domain
+    if domain is None:
+        raise ValueError("必须提供数据域 domain 或兼容 Skill 别名")
+    if "mode" in payload and payload["mode"] != "test":
+        raise ValueError("启动模式仅支持 test 测试")
+    if "pipeline" in payload and payload["pipeline"] != "open_web":
+        raise ValueError("启动流水线仅支持 open_web 开放互联网发现")
+
+    chip = _start_chip(payload["chip"]) if payload.get("chip") is not None else None
+    old_chip = None
+    if "chips" in payload:
+        chips = payload["chips"]
+        if not isinstance(chips, list) or len(chips) > 1:
+            raise ValueError("旧 chips 参数必须为列表，最多包含一条芯片线索")
+        if chips:
+            old_chip = _start_chip(chips[0])
+    if chip is not None and old_chip is not None and chip != old_chip:
+        raise ValueError("chip 与旧 chips 芯片线索必须一致")
+    chip = chip or old_chip
+    resume = payload.get("resume_run_id")
+    if resume is not None:
+        resume = validate_run_id(resume)
+    body_key = _start_request_id(payload.get("request_id"))
+    header_key = _start_request_id(idempotency_key)
+    if body_key is not None and header_key is not None and body_key != header_key:
+        raise ValueError("请求 request_id 与 Idempotency-Key 必须一致")
+    return {"domain": domain, "chip": chip, "scope_type": "chip" if chip else "discovery", "resume_run_id": resume}
 
 
 class DomainContract(BaseModel):
