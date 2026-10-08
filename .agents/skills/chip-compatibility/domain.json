@@ -1,0 +1,96 @@
+{
+  "domain_id": "compatibility",
+  "label": "模型与软件兼容性",
+  "skill_name": "chip-compatibility",
+  "rule_version": "3.0.0",
+  "fields": {
+    "chips": [
+      "software_stack",
+      "compatible_frameworks",
+      "framework_compat",
+      "sw_stack"
+    ],
+    "chip_model_compatibility": [
+      "compat_status",
+      "framework",
+      "precision",
+      "verified_at",
+      "notes"
+    ]
+  },
+  "entity_keys": {
+    "chips": [
+      "vendor",
+      "chip_model"
+    ],
+    "chip_model_compatibility": [
+      "chip_model",
+      "model_id"
+    ]
+  },
+  "conditions": {
+    "entity_matching": {
+      "preserve": [
+        "sku_suffix",
+        "capacity",
+        "form_factor"
+      ],
+      "strip_suffix_or_capacity": false
+    },
+    "candidate_metadata": [
+      "source_url",
+      "source_type",
+      "confidence"
+    ],
+    "candidate_metadata_namespace": "separate_from_business_fields",
+    "ambiguous_history": {
+      "candidate_status": "validated",
+      "comparison_status": "comparison_unresolved",
+      "overwrite": false
+    },
+    "discovery": {
+      "mode": "open",
+      "chip_hint": "optional_existing_or_unknown",
+      "enumerate_full_database": false
+    },
+    "entity_scope": {
+      "chips": "software_ecosystem_for_explicit_sku",
+      "chip_model_compatibility": "explicit_chip_and_full_model_relation"
+    },
+    "compat_status": {
+      "verified": "actual_verification",
+      "vendor_claimed": "vendor_statement",
+      "community": "community_report",
+      "unknown": "insufficient_evidence",
+      "unsupported": "explicit_non_support_evidence"
+    },
+    "vendor_statement_is_verified": false,
+    "verification": {
+      "preserve": [
+        "full_model",
+        "sku",
+        "framework",
+        "framework_version",
+        "precision",
+        "software_stack_version",
+        "test_environment"
+      ],
+      "missing_optional_details": "unknown"
+    },
+    "model_metadata": {
+      "hf_api_fields_owned": false,
+      "model_id": "relation_key_only"
+    }
+  },
+  "units": {
+    "verified_at": {
+      "unit": "source_date",
+      "preserve_source_date_precision": true
+    },
+    "precision": "explicit_source_format"
+  },
+  "references": [
+    "_shared/rules.md",
+    "chip-compatibility/references/compatibility-rules.md"
+  ]
+}

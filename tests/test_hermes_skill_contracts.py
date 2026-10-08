@@ -7,7 +7,8 @@ from chip_model.pipeline.data_agent import SKILL_FIELD_TARGETS
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / ".hermes-skills"
+# Historical V2 contracts; these assertions do not prove active V3 execution.
+SKILL_ROOT = ROOT / "docs" / "archive" / "hermes-skills"
 
 FORMAL_SKILLS = (
     "url-discovery",
@@ -34,9 +35,15 @@ REQUIRED_SECTIONS = (
 )
 
 
+def _skill_path(skill_name: str) -> Path:
+    if skill_name in {"model-catalog", "model-activity"}:
+        return ROOT / ".hermes-skills" / skill_name / "SKILL.md"
+    return SKILL_ROOT / skill_name / "SKILL.md"
+
+
 @pytest.mark.parametrize("skill_name", FORMAL_SKILLS)
 def test_formal_hermes_skills_are_self_contained(skill_name: str) -> None:
-    path = SKILL_ROOT / skill_name / "SKILL.md"
+    path = _skill_path(skill_name)
     text = path.read_text(encoding="utf-8")
 
     assert text.startswith("---\n")
@@ -57,7 +64,7 @@ def test_formal_hermes_skills_are_self_contained(skill_name: str) -> None:
     tuple(name for name in FORMAL_SKILLS if name != "data-quality-review"),
 )
 def test_extraction_skills_document_the_worker_contract(skill_name: str) -> None:
-    text = (SKILL_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
+    text = (_skill_path(skill_name)).read_text(encoding="utf-8")
     for term in (
         "source_url",
         "evidence_text",
@@ -83,7 +90,7 @@ def test_extraction_skills_document_the_worker_contract(skill_name: str) -> None
     ),
 )
 def test_snapshot_extract_skills_document_runtime_provenance(skill_name: str) -> None:
-    text = (SKILL_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
+    text = (_skill_path(skill_name)).read_text(encoding="utf-8")
     for term in (
         "job.input.url",
         "evidence_scope",
@@ -104,7 +111,7 @@ def test_snapshot_extract_skills_document_runtime_provenance(skill_name: str) ->
     "skill_name", tuple(name for name in FORMAL_SKILLS if name in SKILL_FIELD_TARGETS)
 )
 def test_formal_skills_name_every_owned_field(skill_name: str) -> None:
-    text = (SKILL_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
+    text = (_skill_path(skill_name)).read_text(encoding="utf-8")
     for field_names in SKILL_FIELD_TARGETS[skill_name].values():
         for field_name in field_names:
             assert f"`{field_name}`" in text
@@ -112,7 +119,7 @@ def test_formal_skills_name_every_owned_field(skill_name: str) -> None:
 
 @pytest.mark.parametrize("skill_name", ("model-catalog", "model-activity"))
 def test_model_skills_are_not_routed_into_chip_open_web_flow(skill_name: str) -> None:
-    text = (SKILL_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
+    text = (_skill_path(skill_name)).read_text(encoding="utf-8")
     assert "当前芯片开放互联网流程不得调用" in text
     assert "API" in text
 

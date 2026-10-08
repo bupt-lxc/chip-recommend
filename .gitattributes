@@ -1,1 +1,21 @@
 *.sh text eol=lf
+
+# Frozen-package SHA-256 and original archive blobs require exact bytes.
+.hermes-skills/chip-identity/** -text
+.hermes-skills/chip-specs/** -text
+.hermes-skills/chip-compute/** -text
+.hermes-skills/chip-compatibility/** -text
+.hermes-skills/chip-benchmark/** -text
+.hermes-skills/chip-deployment/** -text
+.hermes-skills/_shared/** -text
+.hermes-skills/installed.manifest.json -text
+.agents/skills/chip-identity/** -text
+.agents/skills/chip-specs/** -text
+.agents/skills/chip-compute/** -text
+.agents/skills/chip-compatibility/** -text
+.agents/skills/chip-benchmark/** -text
+.agents/skills/chip-deployment/** -text
+.agents/skills/_shared/** -text
+.agents/skills/installed.manifest.json -text
+docs/archive/hermes-skills/** -text
+docs/archive/codex-domain-skills/** -text
