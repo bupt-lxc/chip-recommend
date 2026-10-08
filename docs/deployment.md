@@ -1,6 +1,15 @@
 # 当前线上部署
 
-更新时间：2026-09-30
+更新时间：2026-10-08
+
+## 2026-10-08 搜索源异常回退修复
+
+- 主站容器仍使用 `chip-recommend:hermes-skill-first-73b4c38`；工具容器 `chip-recommend-open-web-tools` 更新为 `chip-recommend:search-fix-20261008`，继续绑定 `127.0.0.1:5341`。
+- 搜索工具识别“非空但整批不包含明确目标型号”的异常，继续备用源，并遵守搜索词的 `site:` / `-site:` 限定。开放发现和 Hermes 页面价值判断保持原合同。
+- 发布目录：`/home/lxc/chip-recommend/releases/20261008-search-relevance-fix`。工具回滚容器：`chip-recommend-open-web-tools-previous-20261008-search-fix`（已停止）。
+- PR 提交前完整回归 325 项通过；追加的连字符型号匹配修复尚未重新发布到工具容器。实际已部署版本的 Hermes/Kimi 会话 `20261008-124757-74b34351` 完成 10 条搜索词、4 个候选访问、3 个官方页面选择，并取得 3 条显存 80 GB 的目标字段来源记录。
+- 含关联 Skill，共 21 条候选记录通过现有校验；这不是 21 项独立参数，语义质量仍有待核验。9 条搜索词未获有效批次，搜索覆盖仍有限。
+- 正式数据库主体哈希前后一致；详情、运行环境修正和后续问题见 [搜索修复记录](search_provider_fix_20261008.md)。
 
 ## 2026-09-30 Hermes Skill-first 全芯片编排 v2
 

@@ -440,6 +440,14 @@ def create_open_web_tool_app(
             except Exception as exc:
                 search_errors.append({"query": query.query, "error": str(exc)[:500]})
                 continue
+            finally:
+                for check in getattr(provider, "last_diagnostics", []):
+                    append_jsonl(folder / "events.jsonl", {
+                        "schema_version": HERMES_OPEN_WEB_SCHEMA,
+                        "time": _now(), "stage": "search_provider",
+                        "query": query.query, **check,
+                        "message": check.get("reason") or "搜索源返回有效结果。",
+                    })
             for result in rows:
                 raw_count += 1
                 try:

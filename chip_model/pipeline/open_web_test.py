@@ -516,8 +516,65 @@ class SoHtmlSearch:
         return results
 
 
+def _search_model_anchor(query: str) -> str:
+    """Use an explicit model code only; broad discovery stays model-neutral."""
+    text = re.sub(r"(?:-?site|filetype):\S+", "", query.casefold())
+    for token in re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)*", text):
+        compact = token.replace("-", "")
+        if not (re.search(r"[a-z]", compact) and re.search(r"\d", compact)):
+            continue
+        # Precision, memory type, form factor and quantities are not chip IDs.
+        if re.match(r"^(?:fp|bf|tf|int|hbm|gddr|ddr|pcie|sxm|nvlink)\d", compact):
+            continue
+        if re.fullmatch(r"\d+(?:gb|tb|mb|nm|w|bit|bits|tops|tflops)", compact):
+            continue
+        return compact
+    return ""
+
+
+def _checked_search_batch(query: str, rows: list[SearchResult]) -> list[SearchResult]:
+    """Check transport-level query fidelity, leaving page value to Hermes.
+
+    A whole batch without its explicit model code is a degraded search response.
+    In a healthy batch, keep all rows: a sparse summary can still lead to a useful
+    document. Only literal search operators constrain individual destinations.
+    """
+    includes = re.findall(r"(?<![\w-])site:([^\s\"']+)", query, re.IGNORECASE)
+    excludes = re.findall(r"(?<!\w)-site:([^\s\"']+)", query, re.IGNORECASE)
+
+    def in_scope(url: str, scope: str) -> bool:
+        parsed = urlparse(url)
+        expected = urlparse("https://" + scope)
+        host = (parsed.hostname or "").casefold()
+        domain = (expected.hostname or "").casefold()
+        return bool(domain) and (host == domain or host.endswith("." + domain)) and (
+            not expected.path or parsed.path.startswith(expected.path)
+        )
+
+    scoped = [row for row in rows if (
+        (not includes or any(in_scope(row.url, scope) for scope in includes))
+        and not any(in_scope(row.url, scope) for scope in excludes)
+    )]
+    if rows and not scoped:
+        raise RuntimeError("搜索结果全部违反 site: 域名或路径限定")
+    anchor = _search_model_anchor(query)
+    if anchor and scoped:
+        pattern = re.compile(
+            r"(?<![a-z0-9])"
+            + r"[-_\s]*".join(re.escape(char) for char in anchor)
+            + r"(?![a-z0-9])"
+        )
+        for row in scoped:
+            text = unquote(f"{row.title} {row.snippet} {row.url}").casefold()
+            if pattern.search(text):
+                break
+        else:
+            raise RuntimeError(f"搜索返回非空，但整批结果未包含目标型号 {anchor.upper()}")
+    return scoped
+
+
 class FallbackSearch:
-    """Combine reachable Chinese search pages; use DDG only if both fail."""
+    """Combine valid search batches; nonempty off-topic batches also fail over."""
 
     name = "bing-plus-so360-fallback-duckduckgo"
 
@@ -531,15 +588,29 @@ class FallbackSearch:
     def search(self, query: str, limit: int) -> list[SearchResult]:
         errors: list[str] = []
         provider_results: list[list[SearchResult]] = []
-        for provider in self.providers[:2]:
+        self.last_diagnostics: list[dict[str, Any]] = []
+
+        def fetch(provider: SearchProvider) -> list[SearchResult]:
             try:
-                results = provider.search(query, limit)
+                raw = provider.search(query, limit)
+                results = _checked_search_batch(query, raw)
+                if not results:
+                    raise RuntimeError("没有返回结果")
             except Exception as exc:
-                errors.append(f"{provider.name}: {str(exc)[:180]}")
-                continue
-            provider_results.append(results)
-            if not results:
-                errors.append(f"{provider.name}: 没有返回结果")
+                reason = str(exc)[:400]
+                errors.append(f"{provider.name}: {reason}")
+                self.last_diagnostics.append({
+                    "provider": provider.name, "status": "failed", "reason": reason,
+                })
+                return []
+            self.last_diagnostics.append({
+                "provider": provider.name, "status": "success",
+                "returned": len(raw), "accepted": len(results),
+            })
+            return results
+
+        for provider in self.providers[:2]:
+            provider_results.append(fetch(provider))
         if any(provider_results):
             combined: list[SearchResult] = []
             seen: set[str] = set()
@@ -556,15 +627,10 @@ class FallbackSearch:
                     if len(combined) >= max(1, limit):
                         return combined
             return combined
-        provider = self.providers[2]
-        try:
-            results = provider.search(query, limit)
-        except Exception as exc:
-            errors.append(f"{provider.name}: {str(exc)[:180]}")
-        else:
+        for provider in self.providers[2:]:
+            results = fetch(provider)
             if results:
                 return results
-            errors.append(f"{provider.name}: 没有返回结果")
         raise RuntimeError("；".join(errors))
 
 
