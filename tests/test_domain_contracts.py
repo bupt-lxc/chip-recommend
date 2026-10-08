@@ -118,6 +118,25 @@ def test_relation_keys_cannot_be_claimed_as_scalar_fields(tmp_path):
         load_domain(tmp_path, "benchmark")
 
 
+@pytest.mark.parametrize("duplicate_members, duplicate_key", [
+    ('"rule_version": "2.0.0", "rule_version": "3.0.0", "conditions": {}', "rule_version"),
+    ('"rule_version": "3.0.0", "conditions": {"nested": [{"overwrite": true, "overwrite": false}]}', "overwrite"),
+])
+def test_load_domain_rejects_duplicate_json_keys_at_any_depth(tmp_path, duplicate_members, duplicate_key):
+    path = tmp_path / "chip-identity" / "domain.json"
+    path.parent.mkdir()
+    # Raw JSON is essential: constructing a dict would discard the duplicate.
+    path.write_text(
+        '{"domain_id": "identity", "label": "Identity", "skill_name": "chip-identity", '
+        + duplicate_members
+        + ', "fields": {"chips": ["vendor"]}, "entity_keys": {"chips": ["vendor", "chip_model"]}, '
+        '"units": {}, "references": ["chip-identity/rules.md"]}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=f"Duplicate JSON key: '{duplicate_key}'"):
+        load_domain(tmp_path, "identity")
+
+
 def test_frozen_contract_rejects_attribute_assignment():
     contract = load_domain(BUNDLES, "identity")
     with pytest.raises(ValidationError):

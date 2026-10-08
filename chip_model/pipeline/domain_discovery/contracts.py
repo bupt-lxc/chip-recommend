@@ -79,6 +79,15 @@ def _within_root(root: Path, path: Path) -> Path:
     return resolved
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, JsonValue]]) -> dict[str, JsonValue]:
+    result: dict[str, JsonValue] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Duplicate JSON key: {key!r}")
+        result[key] = value
+    return result
+
+
 def load_domain(root: Path, domain_id: str) -> DomainContract:
     """Read one contract without following paths outside the approved root.
 
@@ -88,7 +97,9 @@ def load_domain(root: Path, domain_id: str) -> DomainContract:
         raise ValueError(f"Unknown domain: {domain_id!r}")
     approved_root = Path(root).resolve()
     path = _within_root(approved_root, approved_root / f"chip-{domain_id}" / "domain.json")
-    contract = DomainContract.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    contract = DomainContract.model_validate(
+        json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_reject_duplicate_keys)
+    )
     if contract.domain_id != domain_id or contract.skill_name != f"chip-{domain_id}":
         raise ValueError("Contract identity must match requested domain and skill_name")
     for reference in contract.references:
