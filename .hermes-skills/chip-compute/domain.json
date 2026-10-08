@@ -1,0 +1,114 @@
+{
+  "domain_id": "compute",
+  "label": "精度与理论算力",
+  "skill_name": "chip-compute",
+  "rule_version": "3.0.0",
+  "fields": {
+    "chips": [
+      "precision_support",
+      "precision_perf",
+      "compute_units",
+      "tensor_cores",
+      "rt_cores",
+      "shading_units",
+      "sm_count"
+    ]
+  },
+  "entity_keys": {
+    "chips": [
+      "vendor",
+      "chip_model"
+    ]
+  },
+  "conditions": {
+    "entity_matching": {
+      "preserve": [
+        "sku_suffix",
+        "capacity",
+        "form_factor"
+      ],
+      "strip_suffix_or_capacity": false
+    },
+    "candidate_metadata": [
+      "source_url",
+      "source_type",
+      "confidence"
+    ],
+    "candidate_metadata_namespace": "separate_from_business_fields",
+    "ambiguous_history": {
+      "candidate_status": "validated",
+      "comparison_status": "comparison_unresolved",
+      "overwrite": false
+    },
+    "discovery": {
+      "mode": "open",
+      "chip_hint": "optional_existing_or_unknown",
+      "enumerate_full_database": false
+    },
+    "entity_scope": {
+      "default": [
+        "chip",
+        "single_card"
+      ]
+    },
+    "precision_formats": [
+      "FP64",
+      "FP32",
+      "TF32",
+      "BF16",
+      "FP16",
+      "FP8",
+      "FP4",
+      "INT8",
+      "INT4"
+    ],
+    "cross_format_inference": false,
+    "precision_support": {
+      "explicit_evidence_only": true,
+      "unknown_is_not_unsupported": true
+    },
+    "business_format": {
+      "field": "precision_perf",
+      "preserve_existing_format": true,
+      "lossless_metadata": true,
+      "metadata": [
+        "source_precision",
+        "source_unit",
+        "dense_or_sparse",
+        "calculation_basis",
+        "source_value"
+      ]
+    },
+    "theoretical_peak": {
+      "evidence_kind": "theoretical",
+      "do_not_label_as_measured": true,
+      "dense_and_sparse_separate": true
+    }
+  },
+  "units": {
+    "precision_perf": {
+      "accepted": [
+        "TFLOPS",
+        "TOPS"
+      ],
+      "preserve": [
+        "precision",
+        "dense_or_sparse",
+        "TFLOPS_or_TOPS"
+      ],
+      "never_convert_float_to_integer_ops": true
+    },
+    "compute_units": {
+      "unit": "source_native_count",
+      "preserve_unit_type": true
+    },
+    "tensor_cores": "count",
+    "rt_cores": "count",
+    "shading_units": "count",
+    "sm_count": "count"
+  },
+  "references": [
+    "_shared/rules.md",
+    "chip-compute/references/compute-rules.md"
+  ]
+}

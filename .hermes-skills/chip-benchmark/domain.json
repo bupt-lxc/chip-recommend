@@ -1,0 +1,168 @@
+{
+  "domain_id": "benchmark",
+  "label": "推理与训练实测",
+  "skill_name": "chip-benchmark",
+  "rule_version": "3.0.0",
+  "fields": {
+    "chip_model_benchmarks": [
+      "scenario",
+      "task",
+      "hardware_config",
+      "framework",
+      "batch_size",
+      "input_seq_length",
+      "output_seq_length",
+      "concurrency",
+      "prefill_throughput",
+      "decode_throughput",
+      "time_to_first_token_ms",
+      "inter_token_latency_ms",
+      "memory_peak_mb",
+      "throughput_tok_s",
+      "throughput_samples_s",
+      "tpot_ms",
+      "mfu_pct",
+      "gpu_hours",
+      "training_tokens_T",
+      "training_gpu_count",
+      "training_workload_type",
+      "test_date",
+      "notes",
+      "citation",
+      "evidence_level",
+      "methodology",
+      "reference_url"
+    ]
+  },
+  "entity_keys": {
+    "chip_model_benchmarks": [
+      "chip_model",
+      "model_id",
+      "suite_name",
+      "workload_type",
+      "chip_count",
+      "precision"
+    ]
+  },
+  "conditions": {
+    "entity_matching": {
+      "preserve": [
+        "sku_suffix",
+        "capacity",
+        "form_factor"
+      ],
+      "strip_suffix_or_capacity": false
+    },
+    "candidate_metadata": [
+      "source_url",
+      "source_type",
+      "confidence"
+    ],
+    "candidate_metadata_namespace": "separate_from_business_fields",
+    "ambiguous_history": {
+      "candidate_status": "validated",
+      "comparison_status": "comparison_unresolved",
+      "overwrite": false
+    },
+    "discovery": {
+      "mode": "open",
+      "chip_hint": "optional_existing_or_unknown",
+      "enumerate_full_database": false
+    },
+    "entity_scope": {
+      "relation": "explicit_sku_and_full_model",
+      "preserve_variant_and_configuration": true
+    },
+    "minimum_evidence": [
+      "explicit_sku",
+      "full_model",
+      "workload",
+      "card_count",
+      "precision",
+      "absolute_metric_and_unit",
+      "distinguishable_report_suite_configuration"
+    ],
+    "generative_metrics": {
+      "applies_to": [
+        "generative_throughput",
+        "generative_latency"
+      ],
+      "required": [
+        "input_seq_length",
+        "output_seq_length",
+        "batch_size_or_concurrency"
+      ],
+      "unknown_required_conditions": "incomplete_evidence"
+    },
+    "training_metrics": {
+      "required": [
+        "training_workload",
+        "training_data",
+        "hardware_configuration"
+      ],
+      "preserve": [
+        "pretrain_or_finetune",
+        "data_size_or_work_amount",
+        "hardware_count_and_configuration",
+        "absolute_metric_and_unit"
+      ]
+    },
+    "optional_or_not_applicable": "unknown_allowed",
+    "evidence_kinds": {
+      "measured": "actual_test",
+      "extrapolated": "explicit_extrapolation",
+      "theoretical": "explicit_theoretical_estimate",
+      "distinct_labels_and_confidence": true
+    },
+    "comparison": {
+      "same_report_suite_and_configuration_only": true,
+      "do_not_collapse_different_runs": true
+    },
+    "source_namespace": {
+      "citation": "benchmark_report_citation",
+      "evidence_level": "benchmark_evidence_classification",
+      "methodology": "test_method",
+      "reference_url": "benchmark_business_reference",
+      "source_url": "common_candidate_metadata"
+    }
+  },
+  "units": {
+    "input_seq_length": "tokens",
+    "output_seq_length": "tokens",
+    "batch_size": "samples_per_batch",
+    "concurrency": "concurrent_requests",
+    "prefill_throughput": {
+      "preserve_source_unit": true,
+      "typical": "tokens/s",
+      "distinguish_total_and_per_chip": true
+    },
+    "decode_throughput": {
+      "preserve_source_unit": true,
+      "typical": "tokens/s",
+      "distinguish_total_and_per_chip": true
+    },
+    "time_to_first_token_ms": "ms",
+    "inter_token_latency_ms": "ms",
+    "memory_peak_mb": {
+      "unit": "MB",
+      "preserve_decimal_or_binary_basis": true
+    },
+    "throughput_tok_s": "tokens/s",
+    "throughput_samples_s": "samples/s",
+    "tpot_ms": "ms/token",
+    "mfu_pct": "%",
+    "gpu_hours": "GPU-hours",
+    "training_tokens_T": "trillion_tokens",
+    "training_gpu_count": "cards",
+    "chip_count": "cards",
+    "metrics": {
+      "absolute_value_required": true,
+      "preserve_source_unit_and_scope": true,
+      "relative_speedup_alone_is_insufficient": true
+    }
+  },
+  "references": [
+    "_shared/rules.md",
+    "chip-benchmark/references/benchmark-rules.md"
+  ]
+}
