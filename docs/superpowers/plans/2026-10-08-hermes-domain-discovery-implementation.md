@@ -200,7 +200,7 @@ def test_unsupported_phase_is_rejected(tmp_path):
 ```
 
 - [ ] **Step 2：RED。** `python -m pytest tests/test_domain_rules.py -q`。
-- [ ] **Step 3：迁移具体规则。** 按 spec §4.2 归档 16 个旧目录，先归档旧 chip-compute 再写同名新包；四个独立查询/模型 Skill 保留，但不自动安装。六域均按下面阶段格式编写，规则来源与迁移去向在归档 README 标注：
+- [ ] **Step 3：迁移具体规则。** 按 spec §4.2 归档 16 个旧目录，旧文件以实施前 `f9a22a5` 的 Git 版本为准，先归档旧 chip-compute 的原文件再写同名新包；保留 Task 1 新增的 domain.json，不将新合同混入旧包或随目录移动丢失。四个独立查询/模型 Skill 保留，但不自动安装。六域均按下面阶段格式编写，规则来源与迁移去向在归档 README 标注：
 
 ```markdown
 ## plan
