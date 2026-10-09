@@ -493,7 +493,7 @@ def serialize_page(items, offset, base, limit=10):
 
 **Files:** `pages.py`、`contracts.py`；复用 `source_refresh.py` 的安全抓取和 HTML/PDF 规范化组件；测试 `tests/test_domain_pages.py`。
 
-- [ ] **Step 1：写核心文本定位、PDF/表格与 detail 缓存测试。**
+- [x] **Step 1：写核心文本定位、PDF/表格与 detail 缓存测试。**
 
 ```python
 from chip_model.pipeline.domain_discovery.pages import locate_preview
@@ -508,8 +508,8 @@ def test_preview_is_locatable_core_text_in_unicode_characters():
 ```
 
 抓取样例含标题、导航、页脚、产品核心段、同页两个 SKU 表格和必要脚注。检测不可达、空正文、PDF、跳转、安全地址拒绝、超大小、总时限。detail 3 次后拒绝，缓存读取不再访问网络；长正文必须有所有范围或明确未处理范围，不默默截前 60000 字。
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_pages.py -q`。
-- [ ] **Step 3：实现预览和快照读取。**
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_pages.py -q`。
+- [x] **Step 3：实现预览和快照读取。**
 
 ```python
 def locate_preview(text, core_start):
@@ -524,8 +524,8 @@ def locate_preview(text, core_start):
 `preview(mode='initial')` 按主要候选集合版本、游标分批真实访问并返回最多 10 条；每页保存实际状态、最终 URL、正文 hash、方法、时间与片段位置。`mode='detail'` 在已保存全文按 offset 读最多 4000 字，同页累计最多 3 次；不重新抓取。响应合计仍不超过 12000 字。
 
 正文分块按完整段落/表格与上下文进行；每块保存 start/end、共用表头/脚注的独立位置引用。大表无法放入一次模型输入时按数据行分块并重复相同表头，脚注保留引用；不对重复上下文重复计独立事实。每块处理结果进入 coverage，模型失败的范围保留未完成清单。
-- [ ] **Step 4：GREEN。** pages 和既有 source_refresh 安全测试通过，HTML/PDF 均有可审计正文路径。
-- [ ] **Step 5：提交。** 添加 pages/合同及 `tests/test_domain_pages.py`，`git commit -m "feat: preview visited pages with traceable full-text coverage"`。
+- [x] **Step 4：GREEN。** pages 和既有 source_refresh 安全测试通过，HTML/PDF 均有可审计正文路径。
+- [x] **Step 5：提交。** 添加 pages/合同及 `tests/test_domain_pages.py`，`git commit -m "feat: preview visited pages with traceable full-text coverage"`。
 
 ## Task 8：三个工具协议、分页决定与异步 finalize
 
