@@ -673,7 +673,7 @@ def temporary_entity_id(vendor, sku):
 
 **Files:** `compare.py`、`history.py`、`store.py`；测试 `tests/test_domain_compare.py`。
 
-- [ ] **Step 1：写值未变但来源新增、质量未知不误升级测试。**
+- [x] **Step 1：写值未变但来源新增、质量未知不误升级测试。**
 
 ```python
 from chip_model.pipeline.domain_discovery.compare import source_summary
@@ -687,8 +687,8 @@ def test_source_summary_keeps_membership_and_quality_independent():
 ```
 
 值测试涵盖新实体/已有空值/变值/不变/缺历史基线；合法单位换算不变。旧 provenance 只保留支持当时现值的来源；缺旧证据 quality unknown；同 URL 新证据版本算来源成员新增；URL/快照/实体/字段相同幂等，同字段多来源只算一个独立字段。查看历史不能从正式库最新值补造 old_value。
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_compare.py -q`。
-- [ ] **Step 3：实现来源摘要与比较记录。**
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_compare.py -q`。
+- [x] **Step 3：实现来源摘要与比较记录。**
 
 ```python
 def source_summary(membership, quality):
@@ -708,8 +708,8 @@ def source_summary(membership, quality):
 比较数据含 `value_change_kind`、`source_membership_kind`、`source_quality_kind`、派生 `source_change_kind` 和各自理由。upgraded 必须有可比较的新旧证据和更直接一手/更完整条件依据，不以 high 或看似官方域名直接升级；无法核验旧证据为 unknown，口径无法解释为同一条件时 conflict。摘要 priority 固定 conflict > upgraded > added > unknown > unchanged，但保留全部两维。
 
 规范化保留原值，单位换算使用明确倍率并记录。最终统计按规范实体、表、关系键、字段去重；来源候选按 URL/证据版本去重，分别计算新实体、独立字段、来源、URL、拒绝和主/关联结果。业务表和 field_provenance 写入数均为 0，不把隔离审计事件计成正式溯源写入。
-- [ ] **Step 4：GREEN。** compare 与旧 run_history 基线测试通过，无“读历史变旧值”的回归。
-- [ ] **Step 5：提交。** 添加比较/历史/store 与新测试，`git commit -m "feat: compare immutable values and independent source changes"`。
+- [x] **Step 4：GREEN。** compare 与旧 run_history 基线测试通过，无“读历史变旧值”的回归。
+- [x] **Step 5：提交。** 添加比较/历史/store 与新测试，`git commit -m "feat: compare immutable values and independent source changes"`。
 
 ## Task 12：Hermes 运行时、可恢复后端任务和实际规则证据
 
