@@ -352,7 +352,31 @@ def extract_outbound_links(
     return links
 
 
-def _read_response_body(response: requests.Response, max_bytes: int) -> bytes:
+def _read_response_body(
+    response: requests.Response, max_bytes: int, *, remaining_seconds=None
+) -> bytes:
+    """Read a bounded body, optionally checking a cumulative fetch deadline.
+
+    The caller owns/closes the response. A deadline callback raises Timeout
+    when exhausted; smaller chunks prevent a drip-fed stream from deferring
+    the cumulative check until an entire 64 KiB buffer has arrived.
+    """
+    def check_deadline():
+        if remaining_seconds is None:
+            return
+        remaining = remaining_seconds()
+        # A streamed requests response keeps its urllib3 socket timeout from
+        # the initial GET. Shrink it before each subsequent socket read so a
+        # late stalled read cannot restart the original full timeout window.
+        # Buffered/test responses may not expose a live socket at all.
+        try:
+            sock = response.raw._fp.fp.raw._sock
+        except AttributeError:
+            return
+        if sock is not None:
+            timeout = sock.gettimeout() if hasattr(sock, 'gettimeout') else None
+            sock.settimeout(min(timeout, remaining) if timeout is not None else remaining)
+    check_deadline()
     header_length = response.headers.get("Content-Length")
     if header_length:
         try:
@@ -363,9 +387,11 @@ def _read_response_body(response: requests.Response, max_bytes: int) -> bytes:
         except ValueError:
             pass
 
-    chunks: list[bytes] = []
+    body = bytearray()
     total = 0
-    for chunk in response.iter_content(chunk_size=64 * 1024):
+    for chunk in response.iter_content(chunk_size=1 if remaining_seconds else 64 * 1024):
+        if remaining_seconds is not None:
+            check_deadline()
         if not chunk:
             continue
         total += len(chunk)
@@ -373,8 +399,10 @@ def _read_response_body(response: requests.Response, max_bytes: int) -> bytes:
             raise ResponseTooLarge(
                 f"响应实际大小超过上限 {max_bytes} bytes；已停止读取。"
             )
-        chunks.append(chunk)
-    return b"".join(chunks)
+        body.extend(chunk)
+    if remaining_seconds is not None:
+        remaining_seconds()
+    return bytes(body)
 
 
 def _detect_encoding(raw: bytes, declared: str | None) -> str:
@@ -796,27 +824,45 @@ class SourceRefresher:
         )
 
     def _get_with_safe_redirects(
-        self, url: str, headers: dict[str, str]
+        self, url: str, headers: dict[str, str], *, remaining_seconds=None
     ) -> requests.Response:
         """Follow redirects manually so every destination is validated first."""
         current_url = url
         redirect_statuses = {301, 302, 303, 307, 308}
         for redirect_count in range(self.max_redirects + 1):
+            if remaining_seconds is not None:
+                remaining_seconds()
             validate_source_url(current_url, resolver=self.resolver)
+            timeout = self.timeout
+            if remaining_seconds is not None:
+                remaining = remaining_seconds()
+                # urllib3's total timeout bounds connect + first socket read;
+                # the streaming reader separately enforces the total body time.
+                from urllib3.util import Timeout
+                timeout = Timeout(total=remaining, connect=min(timeout[0], remaining),
+                                  read=min(timeout[1], remaining))
             response = self.session.get(
                 current_url,
                 headers=headers,
-                timeout=self.timeout,
+                timeout=timeout,
                 proxies=self.proxies,
                 allow_redirects=False,
                 stream=True,
             )
+            if remaining_seconds is not None:
+                try:
+                    remaining_seconds()
+                except BaseException:
+                    response.close()
+                    raise
             if int(response.status_code) not in redirect_statuses:
                 try:
                     validate_source_url(
                         str(response.url or current_url), resolver=self.resolver
                     )
-                except ConfigurationError:
+                    if remaining_seconds is not None:
+                        remaining_seconds()
+                except BaseException:
                     response.close()
                     raise
                 return response
@@ -830,10 +876,12 @@ class SourceRefresher:
                     f"超过 {self.max_redirects} 次重定向。"
                 )
 
-            next_url = urljoin(str(response.url or current_url), location)
             try:
+                next_url = urljoin(str(response.url or current_url), location)
                 validate_source_url(next_url, resolver=self.resolver)
-            except ConfigurationError:
+                if remaining_seconds is not None:
+                    remaining_seconds()
+            except BaseException:
                 response.close()
                 raise
             response.close()
