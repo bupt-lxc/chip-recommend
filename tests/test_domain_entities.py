@@ -641,6 +641,58 @@ def test_identity_revision_cannot_change_entity_kind_and_reset_revision(entities
     assert len(client.calls)==2 and len(result['candidates'][0]['versions'])==1
 
 
+@pytest.mark.parametrize('order', [('board_sku','chip'),('chip','board_sku')])
+def test_existing_untyped_baseline_does_not_force_two_kinds_into_one_row(entities, env, order):
+    candidates = [fact(env,sku='X80 80GB SXM',scope=kind,
+                       entity_hints={'full_sku':'X80 80GB SXM','entity_type':kind}) for kind in ('board_sku','chip')]
+    candidates.append(fact(env))
+    result,model = audit(env,'identity',candidates)
+    original = model.snapshot()
+    rows = dict(zip(('board_sku','chip','sibling'),result['candidates']))
+    resolved = resolver(entities,env)
+    for name in (*order,'sibling'):
+        resolved.register_identity(rows[name]['logical_candidate_id'])
+    saved = resolved.snapshot()
+    typed = [resolved.resolve_entity({'vendor':'Vendor A','full_sku':'X80 80GB SXM','entity_type':kind})
+             for kind in ('board_sku','chip')]
+    assert all(row['status']=='ambiguous' and row['reason']=='baseline_entity_kind_ambiguous' for row in typed)
+    assert len({row['entity_id'] for row in typed})==2
+    assert all(row['possible_matches']==[1] for row in typed)
+    assert saved['new_entity_count']==1
+    assert len(saved['entities'])==3 and model.snapshot()==original
+    restarted = resolver(entities,env)
+    for name in reversed((*order,'sibling')):
+        restarted.register_identity(rows[name]['logical_candidate_id'])
+    assert restarted.snapshot()==saved
+
+
+def test_later_baseline_kind_ambiguity_keeps_existing_id_and_binding_history(entities, env):
+    first,_ = audit(env,'identity',[fact(env,sku='X80 80GB SXM')])
+    first_id = first['candidates'][0]['logical_candidate_id']
+    resolved = resolver(entities,env)
+    existing = resolved.register_identity(first_id)
+    original = resolved.bind_candidate(first_id)
+    assert existing['status']=='existing' and existing['entity_id']=='1'
+    visited = env[4].visit({'candidate_id':'chip-kind','url':'https://vendor.example/chip-kind'})
+    other_env = (*env[:-1],env[4].read_snapshot(visited['snapshot_id']))
+    second,model = audit(other_env,'identity',[fact(other_env,sku='X80 80GB SXM',scope='chip',
+                                        entity_hints={'full_sku':'X80 80GB SXM','entity_type':'chip'})])
+    before = model.snapshot()
+    chip_id = second['candidates'][0]['logical_candidate_id']
+    resolved.register_identity(chip_id)
+    fresh = resolved.bind_candidate(first_id)
+    chip = resolved.bind_candidate(chip_id)
+    assert fresh['entity']['entity_id']=='1' and fresh['entity']['status']=='ambiguous'
+    assert chip['entity']['status']=='ambiguous' and chip['entity']['entity_id']!='1'
+    assert not fresh['update_eligible'] and not chip['update_eligible']
+    assert resolved.snapshot()['bindings'][first_id][0]==original
+    assert len(resolved.snapshot()['bindings'][first_id])==2
+    saved = resolved.snapshot()
+    for identifier in (first_id,chip_id,first_id):
+        resolved.register_identity(identifier)
+    assert resolved.snapshot()==saved and model.snapshot()==before
+
+
 def test_explicit_generic_model_independent_guide_has_no_fake_dependencies(entities, env):
     candidate = relation(env, 'deployment', target_table='deployment_guides', field_name='backend',
                          raw_value='vLLM',normalized_value='vLLM',unit=None,evidence_kind='explicit',entity_hints={},

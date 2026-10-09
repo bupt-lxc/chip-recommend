@@ -168,7 +168,28 @@ class EntityResolver:
                  'accepted':accepted}
         return row, version['candidate'], proof
 
-    def _match(self, hint, *, verified=False, entity_type=None):
+    def _baseline_kind_conflict(self, normalized, row_id):
+        """Only original accepted identity proofs can make row-kind ambiguous."""
+        state = self.store.metadata(self.run_id, ModelService.KEY) or {}
+        for identifier,row in state.get('candidates', {}).items():
+            if row.get('domain_id')!='identity' or row.get('status')!='validated':
+                continue
+            _,candidate,proof = self._proof(identifier)
+            if not proof['accepted']:
+                continue
+            other_hint = candidate_entity_hint(candidate)
+            other_kind = _entity_kind(other_hint.get('entity_type'))
+            if other_kind not in {'chip','board_sku'} or other_kind==normalized.get('entity_kind'):
+                continue
+            other_normalized,_ = self._hint(other_hint)
+            if any(other_normalized[name]!=normalized[name] for name in ('vendor','full_sku')):
+                continue
+            other = self._match(other_hint, verified=True, entity_type=other_kind, check_kind_conflict=False)
+            if other['status']=='existing' and other['row_id']==row_id:
+                return True
+        return False
+
+    def _match(self, hint, *, verified=False, entity_type=None, check_kind_conflict=True):
         self._baseline()
         if entity_type is not None:
             hint = {**hint, 'entity_type':entity_type}
@@ -234,6 +255,9 @@ class EntityResolver:
         if uncertain or len(matches) > 1:
             return {**result, 'status':'ambiguous', 'reason':'baseline_identity_ambiguous', 'possible_matches':possible}
         if matches:
+            if check_kind_conflict and self._baseline_kind_conflict(normalized, matches[0]):
+                return {**result, 'status':'ambiguous', 'reason':'baseline_entity_kind_ambiguous',
+                        'baseline_row_id':matches[0], 'possible_matches':matches}
             row = next(row for row in chip_rows if row['id'] == matches[0])
             # A uniquely matched immutable row supplies a stable canonical
             # key, whether a particular page restates its variant columns.
@@ -309,6 +333,19 @@ class EntityResolver:
                     record.update(status='ambiguous', reason='board_variant_unspecified',
                                   possible_matches=sorted(row['entity_id'] for row in more_specific))
 
+    @staticmethod
+    def _reconcile_baseline_kinds(state):
+        groups = {}
+        for record in state['entities'].values():
+            row_id = record.get('baseline_row_id', record.get('row_id'))
+            if row_id is not None and record['entity_kind'] in {'chip','board_sku'}:
+                groups.setdefault(row_id, []).append(record)
+        for row_id, records in groups.items():
+            if len({row['entity_kind'] for row in records})>1:
+                for record in records:
+                    record.update(status='ambiguous',reason='baseline_entity_kind_ambiguous',
+                                  baseline_row_id=row_id,possible_matches=[row_id])
+
     def register_identity(self, candidate_id):
         row, candidate, proof = self._proof(candidate_id)
         if candidate['domain_id'] != 'identity' or candidate['target_table'] != 'chips':
@@ -334,10 +371,19 @@ class EntityResolver:
             prior = state['entities'].get(identifier)
             if prior and prior['canonical_key'] != entity['canonical_key']:
                 raise ValueError('entity ID collision: original canonical key differs')
+            if prior is None and entity['reason']=='baseline_entity_kind_ambiguous':
+                # Later-discovered ambiguity preserves a previously issued
+                # identifier and its old bindings; only the current decision
+                # changes. Never use this path for a different canonical key.
+                prior = next((row for row in state['entities'].values()
+                              if row['canonical_key']==entity['canonical_key']), None)
+                if prior is not None:
+                    identifier = prior['entity_id']
+                    entity['entity_id'] = identifier
             if prior:
                 incompatible = any(name in prior['hint'] and prior['hint'][name] != value
                                    for name,value in entity['hint'].items())
-                derived_ambiguity = prior['reason']=='board_variant_unspecified'
+                derived_ambiguity = prior['reason'] in {'board_variant_unspecified','baseline_entity_kind_ambiguous'}
                 if incompatible or (prior['status'] != entity['status'] and not derived_ambiguity):
                     prior.update(status='ambiguous', reason='conflicting_identity_proofs')
                 else:
@@ -349,6 +395,7 @@ class EntityResolver:
                 state['entities'][identifier] = entity
                 result = entity
             self._reconcile_board_variants(state)
+            self._reconcile_baseline_kinds(state)
             changes = []
             for identifier,current in state['entities'].items():
                 if before.get(identifier)==_json(current):
