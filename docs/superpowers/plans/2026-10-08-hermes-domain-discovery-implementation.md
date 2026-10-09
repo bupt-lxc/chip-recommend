@@ -571,6 +571,8 @@ def validate_decisions(major_ids, visited_ids, decisions, finalize):
         raise ValueError('主要候选决定未完成')
 ```
 
+补搜意图通过同一搜索工具的 `action=complete_intents` 独立结束，每批最多 10 项，不带新 plan/queries；先读到替代查询成功，再提交明确决定，避免 execute 重放的幂等冲突。结果读取仍只读。模型侧 Schema 从同一 Pydantic 动作分支生成对象根与共享属性/公共必填项，并标明 `strict:false`；HTTP 使用完整严格联合校验动作条件。测试覆盖各动作 JSON 样例和实际插件到受控服务的传输，不宣称已验证真实模型提供方。
+
 三工具保留名字，HTTP `/v1/search`、`/v1/preview`、`/v1/selection` 保留路由，v3 请求由版本联合合同分派。工具 Schema 从 Pydantic/域公共合同生成，插件打包该版本 JSON；启动核对插件、服务、参考与冻结包合同哈希，未知字段拒绝，不将秘密 token 纳入 Schema。
 
 selection 的 `action='append'` 每批最多 10 个，先保存并用 request_id 去重；调用时校验本批，finalize 时校验数据库中全部已保存决定。上面 visited_ids 包含真实访问尝试，选择为 select 时还要核对可读正文快照存在；不可达访问记录不能被当作可提取正文。相同 candidate_id 重复追加内容相同不重复写，冲突返回 409。`action='finalize'` 锁定集合与选择并事务 enqueue 按 URL×domain 的后端任务，立即返回 receipt/task_ids/current_stage；HTTP 不等待全文提取，不将“已领取”标为“已完成”。finalize 后禁止新增搜索或改决定。补搜改变集合版本后沿用稳定 URL ID、已保存访问/决定，只补新项；旧游标不得读取新版本。
