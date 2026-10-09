@@ -67,7 +67,10 @@ def render_html(raw, encoding):
     linked_notes = {unquote(str(a['href'])[1:]) for a in root.find_all('a', href=True)
                     if str(a['href']).startswith('#')}
     retained_text = ' '.join(tag.get_text(' ', strip=True) for tag in root.find_all(['main', 'article', 'table']))
-    referenced_markers = set(re.findall(r'(?<=\w)[*†‡]+|\[\d+\]', retained_text))
+    # Inline markup (especially <sup>) and ordinary typesetting can insert
+    # whitespace before a marker. Associate a visible footer note by its exact
+    # marker token, rather than requiring adjacency to a preceding value.
+    referenced_markers = set(re.findall(r'[*†‡]+|\[\d+\]', retained_text))
     def is_note(tag):
         marker = ' '.join([str(tag.get('id', '')), ' '.join(tag.get('class', [])), str(tag.get('role', ''))])
         return bool(re.search(r'footnote|endnote|doc-note|(?:^|[-_\s])notes?(?:$|[-_\s])', marker, re.I)

@@ -452,6 +452,25 @@ def test_visible_marker_footer_note_survives_at_its_full_text_position():
     assert any(text[r['start']:r['end']].startswith('* TDP values') for r in row_chunk['context_refs'])
 
 
+@pytest.mark.parametrize('cell', ['150<sup>*</sup>', '150 *', '150 <span>*</span>', '150<sup>†</sup>'])
+def test_spaced_and_inline_marker_notes_survive_snapshot_detail_and_chunk_context(setup, cell):
+    marker = '†' if '†' in cell else '*'
+    note = f'{marker} TDP values are per accelerator, not server total.'
+    html = f'<main><h1>GPU</h1><table><thead><tr><td>SKU</td><td>TDP(W)</td></tr></thead><tbody><tr><td>X100-A</td><td>{cell}</td></tr></tbody></table></main><footer><p>{note}</p><p>Copyright 2026</p></footer>'
+    reader, _ = service(setup, [Response(body=html.encode())])
+    item = reader.preview(save_list(setup))['items'][0]
+    snapshot = reader.read_snapshot(item['snapshot_id'])
+    assert note in snapshot['text'] and 'Copyright' not in snapshot['text']
+    block = next(b for b in snapshot['blocks'] if b['kind'] == 'footnote')
+    assert snapshot['text'][block['start']:block['end']] == note
+    detail = reader.detail('note-detail', item['snapshot_id'], offset=block['start'], length=len(note))
+    assert detail['items'][0]['text'] == note
+    assert detail['items'][0]['start'] == block['start']
+    chunks = reader.chunks(item['snapshot_id'], max_chars=40)['chunks']
+    sku = next(c for c in chunks if 'X100-A' in snapshot['text'][c['start']:c['end']])
+    assert any(snapshot['text'][r['start']:r['end']] == note for r in sku['context_refs'])
+
+
 def test_thead_td_header_retains_units_for_every_sku_chunk():
     from chip_model.pipeline.domain_discovery.pages import render_html, chunk_text
     result = render_html(b'<main><h1>GPU</h1><table><thead><tr><td>SKU</td><td>Memory(GB)</td><td>TDP(W)</td></tr></thead><tbody><tr><td>X100-A</td><td>24</td><td>150</td></tr><tr><td>X100-B</td><td>48</td><td>300</td></tr></tbody></table></main>', 'utf-8')
