@@ -287,3 +287,79 @@ def test_legacy_failed_run_is_inspectable_in_default_ui_list(tmp_path,monkeypatc
     assert api.get('/api/v1/data-agent/open-web-runs/legacy-failed').status_code==200
     assert not source.exists()
     assert digest_tree(tmp_path)==before
+
+
+def test_actual_model_stage_call_ids_map_saved_coverage_scopes_without_domain_guess(tmp_path):
+    from tests.test_domain_compare import factory,capture,fact,audit
+    ctx=factory.__wrapped__(tmp_path)('stage-scope-fixture')
+    main=capture(ctx,url='https://fixture.example/main')
+    audit(ctx,main,[fact(main)],scope='main')
+    # Same actual domain, different task provenance: domain equality cannot
+    # classify main versus linked work.
+    linked=capture(ctx,url='https://fixture.example/linked')
+    audit(ctx,linked,[fact(linked)],scope='linked')
+    identity=capture(ctx,url='https://fixture.example/identity')
+    audit(ctx,identity,[fact(identity,'identity',field='chip_type',value='GPU',unit=None)],scope='identity')
+    ctx['budget'].record_stage('extracting','completed',scope='extract-unknown',
+                              reason='No recorded task/call binding',domain_id='specs')
+    original=ctx['store'].metadata(ctx['id'],'domain_budget.v1')['stages']
+    before=digest_tree(ctx['store'].root)
+    result=history.read_v3_run(ctx['store'].root,ctx['id'])
+    assert result['stages']==original
+    views=result['stage_views']
+    known=[v for v in views if v['recorded_scope']!='extract-unknown']
+    assert len(known)==6
+    assert {(v['domain_id'],tuple(v['scope_categories'])) for v in known}=={
+        ('specs',('main',)),('specs',('linked',)),('identity',('identity',))}
+    assert {(v['stage'],v['domain_id'],tuple(v['scope_categories'])) for v in known}=={
+        (stage,domain,(scope,)) for stage in ('extracting','reviewing')
+        for domain,scope in [('specs','main'),('specs','linked'),('identity','identity')]}
+    assert all(v['scope_status']=='resolved' for v in known)
+    assert all(v['scope_basis_refs'] for v in known)
+    unknown=next(v for v in views if v['recorded_scope']=='extract-unknown')
+    assert unknown['scope_categories']==[]
+    assert unknown['scope_basis_refs']==[]
+    assert digest_tree(ctx['store'].root)==before
+
+
+def test_stage_scope_can_bind_explicit_saved_task_without_model_or_domain_guess(tmp_path):
+    store=RunStore(tmp_path/'runs')
+    store.start('scope-start',{'domain':'specs'},'task-scope-fixture')
+    gen=store.claim('task-scope-fixture','fixture',100)
+    task_id=store.enqueue('task-scope-fixture',gen,'task-key',
+        {'domain':'specs','linked':True,'identity_dependency':False,'snapshot_id':'fixture'})
+    with sqlite3.connect(store.root/'task-scope-fixture/run.sqlite3') as db:
+        db.execute('INSERT INTO metadata VALUES (?,?)',('domain_budget.v1',json.dumps({'stages':{
+            'extracting':{task_id:{'scope':task_id,'domain_id':'specs','status':'running','reason':'actual saved task'}}}})))
+    view=history.read_v3_run(store.root,'task-scope-fixture')['stage_views'][0]
+    assert view['scope_categories']==['linked']
+    assert view['domain_id']=='specs'
+    assert view['scope_basis_refs']==['tasks/'+task_id]
+
+
+@pytest.mark.parametrize('keep_exact_requests',[True,False])
+def test_overlapping_actual_chunk_roles_never_become_a_unique_claim(tmp_path,keep_exact_requests):
+    from tests.test_domain_compare import factory,capture,fact,audit
+    ctx=factory.__wrapped__(tmp_path)('overlap-scope-fixture')
+    snapshot=capture(ctx)
+    audit(ctx,snapshot,[fact(snapshot)],scope='main')
+    # This reuses the actual same saved ModelService chunk, and records both
+    # coverage roles. A single physical call does not have a unique role here.
+    audit(ctx,snapshot,[fact(snapshot)],scope='linked')
+    if not keep_exact_requests:
+        def remove_request_refs(pages):
+            pages['coverage_requests']={}
+            return pages,None,None
+        ctx['store'].update_metadata(ctx['id'],ctx['gen'],'domain_pages.v1',remove_request_refs)
+    before=digest_tree(ctx['store'].root)
+    views=history.read_v3_run(ctx['store'].root,ctx['id'])['stage_views']
+    assert len(views)==2
+    if keep_exact_requests:
+        assert all(v['scope_status']=='ambiguous' for v in views)
+        assert all(v['scope_categories']==['main','linked'] for v in views)
+    else:
+        assert all(v['scope_status']=='unresolved' for v in views)
+        assert all(v['scope_categories']==[] for v in views)
+        assert all(v['possible_scope_categories']==['main','linked'] for v in views)
+        assert all(v['scope_basis_refs']==[] for v in views)
+    assert digest_tree(ctx['store'].root)==before

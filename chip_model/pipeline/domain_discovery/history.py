@@ -319,6 +319,76 @@ def _project_field(identifier,model,saved,entities):
     return row
 
 
+def project_stage_views(stages, models, pages, tasks):
+    """Resolve recorded caller IDs through saved work/coverage, never domains.
+
+    ModelService stage scopes are chunk call IDs, not main/linked labels. A
+    shared chunk can have more than one recorded task scope. Retain that union
+    and leave unbound IDs unknown without altering any original stage record.
+    """
+    from .store import _hash, _json
+    kinds=('main','linked','identity')
+    calls=models.get('calls',[])
+    requests=pages.get('coverage_requests',{})
+    views=[]
+    for stage,records in stages.items():
+        for caller,record in records.items():
+            domain=record.get('domain_id')
+            scopes,possible,refs,possible_refs=set(),set(),[],[]
+            def add(scope,ref):
+                if scope in kinds:
+                    scopes.add(scope)
+                    if ref not in refs: refs.append(ref)
+            add(caller,'domain_budget.v1/stages/'+stage+'/'+caller)
+            bound_calls=[c for c in calls if caller in (c.get('logical_id'),c.get('execution_id'),c.get('operation_id'))
+                         and (not domain or c.get('domain_id')==domain)]
+            for call in bound_calls:
+                domain=domain or call.get('domain_id')
+                add(call.get('task_scope'),'domain_models.v1/calls/'+call['execution_id'])
+                extent=call.get('input_range') or {}
+                # ModelService records both phases under its extract chunk ID.
+                # Bind its actual coverage receipt ID, not just an overlapping
+                # domain/body range that might belong to another task role.
+                logical=caller if caller in models.get('chunks',{}) else call.get('logical_id')
+                if logical not in models.get('chunks',{}): logical=None
+                start,end=extent.get('start'),extent.get('end')
+                if type(start) is not int or type(end) is not int: continue
+                for key,coverage in requests.items():
+                    if (coverage.get('snapshot_id')==extent.get('snapshot_id') and coverage.get('domain_id')==domain
+                            and type(coverage.get('start')) is int and type(coverage.get('end')) is int
+                            and coverage['start']<=start<end<=coverage['end']):
+                        scope=coverage.get('scope')
+                        ref='domain_pages.v1/coverage_requests/'+key
+                        expected='model-coverage-'+_hash(_json([logical,scope,coverage.get('status')])) if logical else None
+                        if key==expected:
+                            add(scope,ref)
+                        elif scope in kinds:
+                            possible.add(scope);possible_refs.append(ref)
+                for scope in kinds:
+                    ranges=(pages.get('coverage_scopes',{}).get(extent.get('snapshot_id'),{})
+                            .get(str(domain)+'/'+scope,[]))
+                    if any(type(r.get('start')) is int and type(r.get('end')) is int
+                           and r['start']<=start<end<=r['end'] for r in ranges):
+                        possible.add(scope)
+                        possible_refs.append('domain_pages.v1/coverage_scopes/'+extent['snapshot_id']+'/'+str(domain)+'/'+scope)
+            for task in tasks:
+                if caller not in (task.get('task_id'),task.get('task_key')): continue
+                job=task.get('payload') or {}
+                if domain and job.get('domain')!=domain: continue
+                domain=domain or job.get('domain')
+                scope=job.get('task_scope')
+                if scope not in kinds:
+                    scope=('identity' if job.get('identity_dependency') is True else
+                           'linked' if job.get('linked') is True else 'main' if job.get('linked') is False else None)
+                add(scope,'tasks/'+task['task_id'])
+            views.append({**copy.deepcopy(record),'stage':stage,'recorded_scope':caller,'domain_id':domain,
+                          'scope_categories':[scope for scope in kinds if scope in scopes],
+                          'scope_status':'resolved' if len(scopes)==1 else 'ambiguous' if scopes else 'unresolved' if possible else 'unknown',
+                          'possible_scope_categories':[scope for scope in kinds if scope in possible],
+                          'scope_basis_refs':refs,'scope_possible_refs':list(dict.fromkeys(possible_refs))})
+    return views
+
+
 def read_v3_run(root,run_id):
     """Read one SQLite snapshot plus original optional exports without mutation.
 
@@ -397,6 +467,7 @@ def read_v3_run(root,run_id):
         'skill_label':DOMAIN_LABELS.get(payload.get('domain'),'开放发现'),
         'field_changes':fields,'verified_entities':verified,
         'stages':(metadata.get('domain_budget.v1') or {}).get('stages',{}),
+        'stage_views':project_stage_views((metadata.get('domain_budget.v1') or {}).get('stages',{}),models,pages,tasks),
         'search':search,'pages':pages,'selection':metadata.get('domain_selection.v1') or {},
         'model_calls':[_diagnostic_call(c) for c in models.get('calls',[])], 'linked_tasks':tasks,
         'executor_proof':redact(metadata.get('domain_executor_audit.v1') or {}),

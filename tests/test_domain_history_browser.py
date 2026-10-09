@@ -64,6 +64,22 @@ def fixture_server(tmp_path,monkeypatch):
     assert sum(r['status']=='program_rejected' for r in rows)==len(invalids)
     raw['store'].finish_run(raw['id'],raw['gen'],{'status':'partial'})
     raw['store'].export_runtime(raw['id']);raw['store'].export_events(raw['id'])
+    scoped=build('fixture-scopes')
+    for scope,domain,field,value,unit in [('main','specs','vram_gb',80,'GB'),
+                                         ('linked','specs','tdp_w',400,'W'),
+                                         ('identity','identity','chip_type','GPU',None)]:
+        scoped_snap=capture(scoped,url='https://fixture.example/scopes-'+scope)
+        audit(scoped,scoped_snap,[fact(scoped_snap,domain,field=field,value=value,unit=unit)],scope=scope)
+    scoped['budget'].record_stage('extracting','completed',scope='extract-unknown',domain_id='specs',
+                                  reason='Fixture caller has no scope binding')
+    scoped['store'].finish_run(scoped['id'],scoped['gen'],{'status':'partial'})
+    scoped['store'].export_runtime(scoped['id']);scoped['store'].export_events(scoped['id'])
+    overlap=build('fixture-scopes-overlap')
+    overlap_snap=capture(overlap)
+    audit(overlap,overlap_snap,[fact(overlap_snap)],scope='main')
+    audit(overlap,overlap_snap,[fact(overlap_snap)],scope='linked')
+    overlap['store'].finish_run(overlap['id'],overlap['gen'],{'status':'partial'})
+    overlap['store'].export_runtime(overlap['id']);overlap['store'].export_events(overlap['id'])
     # All handles are closed. Only this temp fixture tree is relocated.
     (tmp_path/'runs').rename(tmp_path/'domain_runs')
     fixture_run(tmp_path,'partial')
@@ -238,6 +254,108 @@ def test_actual_chromium_five_columns_filters_refresh_and_manual_retry(fixture_s
                 'page_errors':errors,'no_formal_writes':True},ensure_ascii=False,indent=2),encoding='utf-8')
             assert errors==[]
         finally:browser.close()
+
+
+def test_actual_chromium_scope_labels_and_uuid_fallback_secure_retry(fixture_server):
+    playwright=pytest.importorskip('playwright.sync_api')
+    url,data_root=fixture_server
+    from tests.test_domain_history import digest_tree
+    before=digest_tree(data_root)
+    artifacts=ROOT/'.tmp/task14-ui';artifacts.mkdir(parents=True,exist_ok=True)
+    with playwright.sync_playwright() as p:
+        browser=p.chromium.launch(headless=True)
+        page=browser.new_page(viewport={'width':1715,'height':924})
+        page.add_init_script('Object.defineProperty(Crypto.prototype,"randomUUID",{value:undefined,configurable:true})')
+        errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
+        try:
+            page.goto(url+'/status')
+            scopes=page.locator('[data-open-web-session="fixture-scopes"]')
+            scopes.locator(':scope > summary').click();scopes.locator('[data-run-section="v3-stages"] > summary').click()
+            headings=scopes.locator('.run-stage b').all_text_contents()
+            assert sum('主域 · 基础参数' in h for h in headings)==2
+            assert sum('关联域 · 基础参数' in h for h in headings)==2
+            assert sum('身份依赖 · 芯片型号' in h for h in headings)==2
+            assert sum('归属未记录 · 基础参数' in h for h in headings)==1
+            overlap=page.locator('[data-open-web-session="fixture-scopes-overlap"]')
+            overlap.locator(':scope > summary').click();overlap.locator('[data-run-section="v3-stages"] > summary').click()
+            assert overlap.locator('.run-stage b').all_text_contents()==[
+                '提取字段 · 归属无法唯一确认 · 基础参数',
+                '独立复核 · 归属无法唯一确认 · 基础参数']
+            overlap.locator('[data-run-section^="stage-proof-"]').first.locator(':scope > summary').click()
+            proof=overlap.locator('[data-run-section^="stage-proof-"]').first.inner_text()
+            assert '"scope_status": "ambiguous"' in proof
+            assert '"scope_categories"' in proof and '"main"' in proof and '"linked"' in proof
+            scopes.locator('[data-run-section="v3-stages"]').scroll_into_view_if_needed()
+            page.screenshot(path=str(artifacts/'stage-scopes.png'))
+            assert digest_tree(data_root)==before
+            form=page.locator('[data-domain-manual-form]');form.locator('[name="admin_token"]').fill('fixture-admin-only')
+            assert page.evaluate('typeof crypto.randomUUID')=='undefined'
+            posted=[];received=[]
+            def lost_response(route):
+                posted.append(json.loads(route.request.post_data))
+                response=route.fetch();assert response.status==202
+                received.append(response.json())
+                if len(posted)==1:route.abort('failed')
+                else:route.fulfill(response=response)
+            page.route('**/api/v1/data-agent/manual-run',lost_response)
+            form.locator('button[type="submit"]').click();page.wait_for_timeout(300)
+            assert len(posted)==1,errors
+            assert len(posted[0]['request_id'])>=32
+            page.locator('[data-manual-result]').get_by_text('同一请求重试',exact=False).wait_for()
+            form.locator('button[type="submit"]').click()
+            page.locator('[data-manual-result]').get_by_text('已加入隔离运行队列',exact=False).wait_for()
+            assert posted[0]==posted[1] and received[0]['run_id']==received[1]['run_id']
+            form.locator('[name="chip"]').fill('Fixture unknown chip')
+            form.locator('button[type="submit"]').click();page.wait_for_timeout(300)
+            assert posted[2]['request_id']!=posted[1]['request_id']
+            assert posted[2]['chip']=='Fixture unknown chip'
+            # If secure randomness is unavailable altogether, explain locally
+            # and send no request or token. Existing retry IDs are retained.
+            page.evaluate('Object.defineProperty(Crypto.prototype,"getRandomValues",{value:undefined,configurable:true})')
+            form.locator('[name="domain"]').select_option('compute')
+            form.locator('button[type="submit"]').click();page.wait_for_timeout(200)
+            assert len(posted)==3
+            assert '无法生成安全的请求标识' in page.locator('[data-manual-result]').inner_text()
+            assert not form.locator('button[type="submit"]').is_disabled()
+            assert errors==[]
+            (artifacts/'uuid-fallback-results.json').write_text(json.dumps({'fixture_only':True,
+                'randomUUID_removed':True,'requests':posted,'receipts':received,'page_errors':errors},indent=2),encoding='utf-8')
+        finally:browser.close()
+
+
+def test_nonlocal_http_explains_admin_transport_without_sending_token(fixture_server):
+    playwright=pytest.importorskip('playwright.sync_api')
+    url,_=fixture_server
+    from urllib.parse import urlsplit
+    with playwright.sync_playwright() as p:
+        browser=p.chromium.launch(headless=True)
+        page=browser.new_page()
+        page.add_init_script('Object.defineProperty(Crypto.prototype,"randomUUID",{value:undefined,configurable:true})')
+        errors=[];posts=[]
+        page.on('pageerror',lambda error:errors.append(str(error)))
+        def loopback_only(route):
+            parsed=urlsplit(route.request.url)
+            if route.request.method=='POST':
+                posts.append({'url':route.request.url,'headers':route.request.headers})
+                route.fulfill(status=426,json={'detail':'Fixture enforces existing secure transport policy'});return
+            # Every fixture.test read is intercepted locally: no DNS request or
+            # external network, and no relaxation of the production server.
+            local=url+parsed.path+('?' + parsed.query if parsed.query else '')
+            route.fulfill(response=route.fetch(url=local))
+        page.route('http://fixture.test/**',loopback_only)
+        try:
+            page.goto('http://fixture.test/status')
+            assert page.evaluate('isSecureContext') is False
+            form=page.locator('[data-domain-manual-form]');form.locator('[name="admin_token"]').fill('fixture-admin-only')
+            page.locator('[data-open-web-session="fixture-scopes"]').wait_for(timeout=10000)
+            form.locator('button[type="submit"]').click();page.wait_for_timeout(200)
+            message=page.locator('[data-manual-result]').inner_text()
+            assert 'HTTPS' in message and '本机' in message
+            assert posts==[] and errors==[]
+            assert 'fixture-admin-only' not in page.evaluate('JSON.stringify(sessionStorage)')
+        finally:
+            page.unroute_all(behavior='wait')
+            browser.close()
 
 
 def test_actual_chromium_rejected_raw_shapes_and_legacy_phase_records(fixture_server):

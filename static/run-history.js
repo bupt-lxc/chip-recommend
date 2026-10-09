@@ -84,6 +84,17 @@
   const manualKey='domain-discovery-manual-request-v3';
   let manualRequest=null;
   try{manualRequest=JSON.parse(sessionStorage.getItem(manualKey))}catch(_){}
+  function manualTransportAllowed(){
+    return location.protocol==='https:'||(location.protocol==='http:'&&['localhost','127.0.0.1','::1','[::1]'].includes(location.hostname.toLowerCase()));
+  }
+  function newManualRequestId(){
+    if(typeof globalThis.crypto?.randomUUID==='function')return globalThis.crypto.randomUUID();
+    if(typeof globalThis.crypto?.getRandomValues==='function'){
+      const bytes=new Uint8Array(16);globalThis.crypto.getRandomValues(bytes);
+      return 'request-'+Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+    }
+    throw new Error('secure_random_unavailable');
+  }
   function ensureManualForm(root){
     if(document.querySelector('[data-domain-manual-form]'))return;
     const box=document.createElement('section');box.className='run-manual';
@@ -102,22 +113,29 @@
     fetchJSON(`${API}/data-agent/domains`).then(d=>{contracts=d.domains||[];showContract()});
     form.addEventListener('submit',async event=>{
       event.preventDefault();
-      const base={pipeline:'open_web',mode:'test',domain:form.elements.domain.value,chip:form.elements.chip.value.trim()||null};
-      const fingerprint=JSON.stringify(base);
-      if(!manualRequest||manualRequest.fingerprint!==fingerprint){
-        const request_id=crypto.randomUUID();manualRequest={fingerprint,payload:{...base,request_id}};
-        try{sessionStorage.setItem(manualKey,JSON.stringify(manualRequest))}catch(_){}
+      if(!manualTransportAllowed()){
+        result.textContent='手动运行只允许 HTTPS 或本机/SSH 隧道访问。当前 HTTP 地址不支持管理请求；历史记录仍可查看，管理员口令未发送。';return;
       }
-      // Capture the exact request before awaiting; edits cannot mutate a retry.
-      const payload={...manualRequest.payload},button=form.querySelector('button[type="submit"]');
+      const button=form.querySelector('button[type="submit"]');let prepared=false;
       button.disabled=true;result.textContent='正在提交隔离运行请求…';
       try{
+        const base={pipeline:'open_web',mode:'test',domain:form.elements.domain.value,chip:form.elements.chip.value.trim()||null};
+        const fingerprint=JSON.stringify(base);
+        if(!manualRequest?.payload?.request_id||manualRequest.fingerprint!==fingerprint){
+          const request_id=newManualRequestId();manualRequest={fingerprint,payload:{...base,request_id}};
+          try{sessionStorage.setItem(manualKey,JSON.stringify(manualRequest))}catch(_){}
+        }
+        // Capture the exact request before awaiting; edits cannot mutate a retry.
+        const payload={...manualRequest.payload};prepared=true;
         const response=await fetch(`${API}/data-agent/manual-run`,{method:'POST',headers:{'Content-Type':'application/json','X-Data-Agent-Admin':form.elements.admin_token.value,'Idempotency-Key':payload.request_id},body:JSON.stringify(payload)});
         const data=await response.json();
         if(!response.ok){result.textContent=`提交失败（${response.status}）：${data.detail||'未记录原因'}。可用同一请求重试。`;button.textContent='同一请求重试';return}
         result.textContent=`已加入隔离运行队列 · ${labels[data.status]||data.status} · 运行 ${data.run_id}。结果未发布。`;
         button.textContent='查看 / 重试同一请求';await loadRunHistory({silent:true});
-      }catch(_){result.textContent='响应未收到；请使用同一请求重试，持久队列会返回原运行。';button.textContent='同一请求重试'}
+      }catch(_){
+        result.textContent=prepared?'响应未收到；请使用同一请求重试，持久队列会返回原运行。':'无法生成安全的请求标识；请使用支持 Web Crypto 的浏览器。请求和管理员口令未发送。';
+        button.textContent=prepared?'同一请求重试':'开始隔离运行';
+      }
       finally{button.disabled=false}
     });
   }
@@ -390,7 +408,16 @@
     const choose=(name,label,values)=>`<label>${txt(label)}<select data-v3-filter="${name}"><option value="">全部</option>${[...new Set(values.filter(Boolean))].map(v=>`<option value="${txt(v)}">${name==='domain'?txt(domainNames[v]||v):outcome(v)}</option>`).join('')}</select></label>`;
     const filters=`<div class="run-field-filters"><label>实体线索<input type="search" data-v3-filter="entity" placeholder="型号或芯片名称"></label>${choose('domain','信息域',rows.map(x=>x.domain_id))}${choose('value_change','值变化',rows.map(x=>x.value_change_kind))}${choose('source_change','来源变化',rows.map(x=>x.source_change_kind))}${choose('review','独立复核',rows.map(x=>x.review_status))}</div><div class="run-note" data-v3-visible-count></div>`;
     const known=(d.verified_entities||[]).map(e=>`<div class="run-identity-card"><b>${txt(e.hint?.full_sku||e.chip_model)}</b><span>${txt(e.hint?.vendor||e.vendor)} · ${outcome(e.status)}</span><small>已核验身份 · ${txt(e.entity_kind||'')} · ${txt(e.reason)}</small></div>`).join('');
-    const phases=Object.entries(d.stages||{}).map(([name,scopes])=>Object.entries(scopes).map(([scope,s])=>`<div class="run-stage"><b>${txt(stageNames[name]||name)} · ${scope==='main'?'主域':'关联域'}</b><br>${outcome(s.status)}<p>${txt(s.reason)}</p></div>`).join('')).join('');
+    const scopeNames={main:'主域',linked:'关联域',identity:'身份依赖'};
+    const stageViews=Array.isArray(d.stage_views)?d.stage_views:Object.entries(d.stages||{}).flatMap(([stage,records])=>Object.entries(records).map(([caller,s])=>({...s,stage,recorded_scope:caller,scope_categories:['main','linked','identity'].includes(caller)?[caller]:[]})));
+    const scopeLabel=s=>{
+      const confirmed=(s.scope_categories||[]).map(scope=>scopeNames[scope]).filter(Boolean);
+      const possible=(s.possible_scope_categories||[]).map(scope=>scopeNames[scope]).filter(Boolean);
+      if(s.scope_status==='ambiguous'||confirmed.length>1)return '归属无法唯一确认';
+      if(!confirmed.length&&possible.length)return '归属无法唯一确认';
+      return confirmed[0]||'归属未记录';
+    };
+    const phases=stageViews.map(s=>`<div class="run-stage"><b>${txt(stageNames[s.stage]||s.stage)} · ${txt(scopeLabel(s))} · ${txt(domainNames[s.domain_id]||s.domain_id||'信息域未记录')}</b><br>${outcome(s.status)}<p>${txt(s.reason)}</p>${section('stage-proof-'+s.stage+'-'+s.recorded_scope,'原始调用与归属依据',jsonBlock({recorded_scope:s.recorded_scope,scope_status:s.scope_status,scope_categories:s.scope_categories,scope_basis_refs:s.scope_basis_refs,possible_scope_categories:s.possible_scope_categories,scope_possible_refs:s.scope_possible_refs}))}</div>`).join('');
     const candidates=Object.values(d.search?.candidates||{});
     const visits=Object.values(d.pages?.visits||{});
     const previews=visits.map(v=>`<article class="run-source"><b>${txt(v.candidate_id||'网页访问')}</b><div class="run-links">${link(v.requested_url||v.url||v.final_url)}</div><div class="run-note">${outcome(v.status)} · HTTP ${txt(v.http_status)}</div>${jsonBlock(v.preview||v)}</article>`).join('');
