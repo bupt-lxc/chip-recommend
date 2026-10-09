@@ -253,6 +253,18 @@ class _Deadline(requests.Timeout):
     pass
 
 
+class _InfrastructureAbort(BaseException):
+    """Bypass technical-failure receipts; visit rethrows the original error.
+
+    Store.operation deliberately leaves BaseException outcomes unknown. A
+    failed evidence/fence commit is infrastructure failure, never a confirmed
+    page failure that the technical retry loop may silently consume.
+    """
+
+    def __init__(self, error):
+        self.error = error
+
+
 class PageService:
     """Public worker/tool API; preview, detail and chunks share saved evidence.
 
@@ -291,6 +303,12 @@ class PageService:
     def _update(self, callback):
         return self.store.update_metadata(self.run_id, self.generation, self.KEY,
             lambda state: callback(state or self._empty()))
+
+    def _persist_capture(self, callback):
+        try:
+            return self._update(callback)
+        except Exception as exc:
+            raise _InfrastructureAbort(exc) from exc
 
     def _artifact(self, name):
         if not re.fullmatch(r'[0-9a-f]{64}\.(raw|txt)', name):
@@ -363,7 +381,7 @@ class PageService:
             state['attempts'].setdefault(cid, []).append(record)
             return state, None, {'kind': 'page_visit_started', 'stage': 'previewing',
                                  'candidate_id': cid, 'execution_id': record['execution_id'], 'attempt': attempt}
-        self._update(started_visit)
+        self._persist_capture(started_visit)
         def finish_attempt(state):
             for index, saved in enumerate(state['attempts'][cid]):
                 if saved['execution_id'] == record['execution_id']:
@@ -417,15 +435,6 @@ class PageService:
                         'blocks': rendered['blocks'], 'outbound_links': links}
             record.update(status='success', extractable=True, snapshot_id=snapshot_id,
                           title=rendered['title'], preview=locate_preview(rendered['text'], rendered['core_start']))
-            def success(state):
-                state['snapshots'].setdefault(snapshot_id, snapshot)
-                state['coverage'].setdefault(snapshot_id, [])
-                state['visits'].setdefault(cid, record)
-                finish_attempt(state)
-                return state, record, {'kind': 'page_snapshot_saved', 'stage': 'previewing',
-                                       'candidate_id': cid, 'snapshot_id': snapshot_id}
-            self._update(success)
-            return record
         except _Deadline as exc:
             category, error = 'deadline', exc
         except ConfigurationError as exc:
@@ -442,6 +451,19 @@ class PageService:
             error = exc
         except (ValueError, OSError) as exc:
             category, error = 'snapshot_error', exc
+        else:
+            # This commit is outside ordinary fetch/parse failure handling.
+            # Nothing becomes extractable unless the snapshot, visit and
+            # finished attempt metadata all commit under the same lease fence.
+            def success(state):
+                state['snapshots'].setdefault(snapshot_id, snapshot)
+                state['coverage'].setdefault(snapshot_id, [])
+                state['visits'].setdefault(cid, record)
+                finish_attempt(state)
+                return state, record, {'kind': 'page_snapshot_saved', 'stage': 'previewing',
+                                       'candidate_id': cid, 'snapshot_id': snapshot_id}
+            self._persist_capture(success)
+            return record
         finally:
             if response is not None:
                 response.close()
@@ -455,7 +477,7 @@ class PageService:
             finish_attempt(state)
             return state, record, {'kind': 'page_visit_failed', 'stage': 'previewing',
                                    'candidate_id': cid, 'diagnostic': record['diagnostic']}
-        self._update(failure)
+        self._persist_capture(failure)
         raise _PageFailure(category)
 
     @staticmethod
@@ -505,11 +527,53 @@ class PageService:
             return 'backoff_in_progress'
         return 'active_budget_exhausted' if receipt['result']['status'] == 'budget_stopped' else None
 
+    def _finished_receipt(self, candidate, logical, attempt):
+        """Settle a recovered receipt from durable outcome without HTTP/quota.
+
+        An unfinished attempt still follows RunBudget's bounded replay path.
+        A running receipt is never stolen: RunStore returns it unchanged until
+        the runtime explicitly recovers that old generation's unknown work.
+        """
+        records = [r for r in self._state()['attempts'].get(candidate['candidate_id'], [])
+                   if r['attempt'] == attempt and r['requested_url'] == candidate['url']]
+        if not records:
+            return None
+        record = records[-1]
+        # Never borrow an older completed outcome when a later physical
+        # execution of this logical attempt is still unknown.
+        if record['status'] not in {'success', 'failed'}:
+            return None
+        if record['status'] == 'success':
+            self.read_snapshot(record['snapshot_id'])
+        operation_id = self.budget.operation_id(logical, attempt)
+        def reconcile():
+            # Store receipt.attempts also counts this pure completion callback;
+            # this explicit event keeps it distinct from actual HTTP starts.
+            proof = {'kind': 'receipt_reconciliation', 'stage': 'previewing',
+                     'new_physical_fetch': False, 'operation_id': operation_id,
+                     'candidate_id': candidate['candidate_id'], 'requested_url': candidate['url'],
+                     'attempt': attempt, 'execution_id': record['execution_id'],
+                     'finished_status': record['status'], 'original_generation': record['generation'],
+                     'reconciliation_generation': self.generation}
+            def audit(state):
+                return state, None, proof
+            self._persist_capture(audit)
+            if record['status'] == 'failed':
+                raise _PageFailure(record['diagnostic']['error_category'])
+            return record
+        try:
+            return self.store.operation(self.run_id, self.generation, operation_id,
+                        {'stage': 'previewing', 'candidate_id': candidate['candidate_id'], 'url': candidate['url']},
+                        reconcile, confirmed_failure=True)
+        except _InfrastructureAbort as exc:
+            raise exc.error from exc
+
     def visit(self, candidate):
         """Visit a backend-owned candidate once, with <=3 accounted attempts."""
         cid = _key(candidate['candidate_id'])
         url = canonical_url(candidate['url'])
         candidate = {'candidate_id': cid, 'url': url}
+        logical = 'page-fetch-' + _hash(_json([cid, url]))
         state = self._state()
         if cid in state['visits']:
             saved = state['visits'][cid]
@@ -517,12 +581,16 @@ class PageService:
                 raise ValueError('candidate URL conflict')
             if saved['extractable']:
                 self.read_snapshot(saved['snapshot_id'])
+            self._finished_receipt(candidate, logical, saved['attempt'])
             return saved
-        logical = 'page-fetch-' + _hash(_json([cid, url]))
         for attempt in range(3):
             try:
-                receipt = self.budget.operation(logical, {'stage': 'previewing', 'candidate_id': cid, 'url': url},
-                            lambda: self._capture(candidate, attempt), attempt=attempt)
+                receipt = self._finished_receipt(candidate, logical, attempt)
+                if receipt is None:
+                    receipt = self.budget.operation(logical, {'stage': 'previewing', 'candidate_id': cid, 'url': url},
+                                lambda: self._capture(candidate, attempt), attempt=attempt)
+            except _InfrastructureAbort as exc:
+                raise exc.error from exc
             except ValueError as exc:
                 if str(exc) == 'active budget exhausted':
                     return self._pending_visit(candidate, 'active_budget_exhausted')

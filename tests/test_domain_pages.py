@@ -621,3 +621,113 @@ def test_unknown_wait_can_resume_with_conservative_active_accounting(setup):
     assert waits == [1.0] and len(fresh.calls) == 1
     assert budget.snapshot()['active_ms'] == 2250
     assert budget.snapshot()['uncertainties'][-1]['charged_ms'] == 1000
+
+
+@pytest.mark.parametrize('failure', ['permanent', 'retryable'])
+def test_finished_failure_commit_survives_crash_before_operation_receipt(setup, failure):
+    from chip_model.pipeline.domain_discovery.budget import RunBudget
+    store, generation, budget, clock = setup
+    response = Response(mime='image/png') if failure == 'permanent' else requests.ConnectionError('temporary')
+    reader, session = service(setup, [response])
+    version = save_list(setup)
+    original_update = reader._update
+    def crash_after_failure(callback):
+        result = original_update(callback)
+        if isinstance(result, dict) and result.get('status') == 'failed':
+            raise KeyboardInterrupt('crashed after durable failure commit')
+        return result
+    reader._update = crash_after_failure
+    with pytest.raises(KeyboardInterrupt):
+        reader.preview(version)
+    assert len(session.calls) == 1
+    store.release('run-a', generation)
+    generation = store.claim('run-a', 'resumed', 100000)
+    store.recover_operations('run-a', generation)
+    budget = RunBudget(store, 'run-a', generation, monotonic=clock, epoch=clock)
+    waits = []
+    resumed, fresh = service((store, generation, budget, clock), [Response()], backoff=waits.append)
+    item = resumed.preview(version)['items'][0]
+    if failure == 'permanent':
+        assert item['status'] == 'failed' and not item['extractable']
+        assert item['diagnostic']['error_category'] == 'unsupported_mime'
+        assert fresh.calls == []
+        assert waits == []
+        assert next(iter(budget.snapshot()['logical_operations'].values()))['execution_count'] == 1
+    else:
+        assert item['extractable'] and len(fresh.calls) == 1
+        assert waits == [1.0]
+        assert next(iter(budget.snapshot()['logical_operations'].values()))['execution_count'] == 2
+        attempts = store.metadata('run-a', resumed.KEY)['attempts']['candidate-0']
+        assert len(attempts) == 2 and attempts[-1]['attempt'] == 1
+    reconciliations = [event['payload'] for event in store.events('run-a')
+                       if event['payload'].get('kind') == 'receipt_reconciliation']
+    assert len(reconciliations) == 1
+    assert reconciliations[0]['new_physical_fetch'] is False
+    assert reconciliations[0]['attempt'] == 0
+    assert reconciliations[0]['candidate_id'] == 'candidate-0'
+
+
+@pytest.mark.parametrize('error_type', [OSError, ValueError])
+def test_snapshot_metadata_commit_failure_is_infrastructure_not_extractable_page(setup, error_type):
+    reader, session = service(setup, [Response()])
+    version = save_list(setup)
+    original_update = reader._update
+    failures = 0
+    def reject_snapshot_commit(callback):
+        nonlocal failures
+        def wrapped(state):
+            nonlocal failures
+            new_state, result, event = callback(state)
+            if event and event.get('kind') == 'page_snapshot_saved' and failures == 0:
+                failures += 1
+                raise error_type('simulated metadata commit failure')
+            return new_state, result, event
+        return original_update(wrapped)
+    reader._update = reject_snapshot_commit
+    with pytest.raises(error_type, match='simulated metadata commit failure'):
+        reader.preview(version)
+    state = setup[0].metadata('run-a', reader.KEY)
+    assert state['snapshots'] == {} and state['visits'] == {}
+    assert state['attempts']['candidate-0'][-1]['status'] == 'in_progress'
+    assert not state['attempts']['candidate-0'][-1]['extractable']
+    assert len(session.calls) == 1
+
+
+def test_reconciliation_never_uses_older_finished_outcome_for_newer_unknown_execution(setup):
+    """Simulate pre-fix recovery having started newer work for the same attempt."""
+    from chip_model.pipeline.domain_discovery.budget import RunBudget
+    from chip_model.pipeline.domain_discovery.store import _hash, _json
+    store, generation, budget, clock = setup
+    version = save_list(setup)
+    candidate = {'candidate_id': 'candidate-0', 'url': 'https://vendor.example/spec/0'}
+    logical = 'page-fetch-' + _hash(_json(['candidate-0', candidate['url']]))
+    payload = {'stage': 'previewing', 'candidate_id': 'candidate-0', 'url': candidate['url']}
+    reader, _ = service(setup, [Response(mime='image/png')])
+    original_update = reader._update
+    def crash_after_failure(callback):
+        result = original_update(callback)
+        if isinstance(result, dict) and result.get('status') == 'failed':
+            raise KeyboardInterrupt('durable old outcome')
+        return result
+    reader._update = crash_after_failure
+    with pytest.raises(KeyboardInterrupt):
+        reader.preview(version)
+    store.release('run-a', generation)
+    generation = store.claim('run-a', 'old-recovery', 100000)
+    store.recover_operations('run-a', generation)
+    budget = RunBudget(store, 'run-a', generation, monotonic=clock, epoch=clock)
+    old_recovery, session = service((store, generation, budget, clock), [])
+    def interrupted(url, **kwargs):
+        session.calls.append((url, kwargs))
+        raise KeyboardInterrupt('newer outcome unknown')
+    session.get = interrupted
+    with pytest.raises(KeyboardInterrupt):
+        budget.operation(logical, payload, lambda: old_recovery._capture(candidate, 0))
+    store.release('run-a', generation)
+    generation = store.claim('run-a', 'safe-recovery', 100000)
+    store.recover_operations('run-a', generation)
+    budget = RunBudget(store, 'run-a', generation, monotonic=clock, epoch=clock)
+    resumed, fresh = service((store, generation, budget, clock), [Response()])
+    assert resumed.preview(version)['items'][0]['extractable']
+    assert len(fresh.calls) == 1
+    assert next(iter(budget.snapshot()['logical_operations'].values()))['execution_count'] == 3
