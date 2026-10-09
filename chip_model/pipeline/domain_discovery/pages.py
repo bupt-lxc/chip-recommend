@@ -43,7 +43,8 @@ def locate_preview(text, core_start=0):
         raise ValueError('preview requires text')
     _integer(core_start, 0, len(text), 'core_start')
     end = min(len(text), core_start + 500)
-    return {'start': core_start, 'end': end, 'text': text[core_start:end]}
+    return {'start': core_start, 'end': end, 'text': text[core_start:end],
+            'body_length': len(text), 'truncated': core_start != 0 or end != len(text)}
 
 
 def _clean(text):
@@ -65,18 +66,28 @@ def render_html(raw, encoding):
     core = root.find('main') or root.find('article')
     linked_notes = {unquote(str(a['href'])[1:]) for a in root.find_all('a', href=True)
                     if str(a['href']).startswith('#')}
+    retained_text = ' '.join(tag.get_text(' ', strip=True) for tag in root.find_all(['main', 'article', 'table']))
+    referenced_markers = set(re.findall(r'(?<=\w)[*†‡]+|\[\d+\]', retained_text))
     def is_note(tag):
         marker = ' '.join([str(tag.get('id', '')), ' '.join(tag.get('class', [])), str(tag.get('role', ''))])
         return bool(re.search(r'footnote|endnote|doc-note|(?:^|[-_\s])notes?(?:$|[-_\s])', marker, re.I)
-                    or tag.get('id') in linked_notes)
+                    or tag.get('id') in linked_notes or tag.get('data-discovery-footnote') == '1')
+    def visible_note(tag):
+        if tag.name not in {'p', 'li', 'small', 'div'}:
+            return False
+        text = _clean(tag.get_text(' ', strip=True))
+        marker = re.match(r'([*†‡]+|\[\d+\])(?:\s|(?=[A-Za-z\u3400-\u9fff]))', text)
+        return bool((marker and marker[1] in referenced_markers)
+                    or re.match(r'(?i)^(?:footnotes?|notes?)\s*:|^(?:注|注释|说明)\s*[：:]', text))
     # Move relevant footnotes to the footer's position before removing chrome.
     for footer in list(root.find_all('footer')):
-        notes = [tag for tag in footer.find_all(True) if is_note(tag)]
+        notes = [tag for tag in footer.find_all(True) if is_note(tag) or visible_note(tag)]
         notes = [tag for tag in notes if not any(parent in notes for parent in tag.parents)]
         if is_note(footer):
             footer.name = 'div'
             continue
         for note in notes:
+            note['data-discovery-footnote'] = '1'
             footer.insert_before(note.extract())
         footer.decompose()
     for tag in list(root.find_all(['script', 'style', 'noscript', 'template', 'svg', 'iframe',
@@ -133,7 +144,7 @@ def render_html(raw, encoding):
                 cells = row.find_all(['th', 'td'], recursive=False)
                 if cells:
                     emit(' | '.join(cell.get_text(' ', strip=True) for cell in cells),
-                         'table_header' if all(cell.name == 'th' for cell in cells) else 'table_row', row, table_id)
+                         'table_header' if all(cell.name == 'th' for cell in cells) or row.find_parent('thead') is not None else 'table_row', row, table_id)
             return
         if is_note(node):
             emit(node.get_text(' ', strip=True), 'footnote', node)
@@ -240,7 +251,7 @@ class PageService:
 
     def __init__(self, store, run_id, generation, budget, *, session=None,
                  resolver=resolve_host_addresses, monotonic=None, max_bytes=5 * 1024 * 1024,
-                 fetch_seconds=30, proxy=None, max_redirects=5):
+                 fetch_seconds=30, proxy=None, max_redirects=5, backoff=None):
         if (budget.store is not store or budget.run_id != run_id or budget.generation != generation):
             raise ValueError('page budget/run/generation mismatch')
         _integer(max_bytes, 1, 50 * 1024 * 1024, 'max_bytes')
@@ -249,6 +260,9 @@ class PageService:
         self.store, self.run_id, self.generation, self.budget = store, run_id, generation, budget
         self.root = store.run_path(run_id)
         self.monotonic, self.fetch_seconds, self.max_bytes = monotonic or time.monotonic, fetch_seconds, max_bytes
+        if backoff is not None and not callable(backoff):
+            raise ValueError('backoff must be callable')
+        self.backoff = backoff if backoff is not None else time.sleep
         self.fetcher = SourceRefresher(db_path=self.root / 'unused-fetch.db',
                     snapshot_dir=self.root / 'source_snapshots', session=session, resolver=resolver,
                     max_attempts=1, max_bytes=max_bytes, proxy=proxy, max_redirects=max_redirects)
@@ -420,7 +434,9 @@ class PageService:
                 response.close()
         record['status'] = 'failed'
         record['diagnostic'] = redact({'stage': 'previewing', 'error_category': category,
-                        'error': str(error), 'attempt': attempt, 'recoverable': category == 'network_error',
+                        'error': str(error), 'attempt': attempt,
+                        'recoverable': category == 'network_error' or
+                            (category == 'http_error' and (record['http_status'] in {408, 425, 429} or record['http_status'] >= 500)),
                         'requested_url': url, 'final_url': record['final_url'], 'http_status': record['http_status']})
         def failure(state):
             finish_attempt(state)
@@ -445,6 +461,36 @@ class PageService:
             if previous.get('diagnostic') is not None:
                 pending['diagnostic'] = previous['diagnostic']
         return pending
+
+    def _tick_active(self):
+        """Bill the shared owned segment; runtime owns begin/end and heartbeat."""
+        segment = self.budget.snapshot()['segment']
+        if segment is not None and segment['token'] == self.budget.token:
+            self.budget.tick()
+
+    def _retry_wait(self, logical, failed_attempt):
+        """A fenced stable receipt makes completed waits free on replay."""
+        seconds = float(2 ** failed_attempt)
+        request_id = 'page-backoff-' + _hash(_json([logical, failed_attempt]))
+        payload = {'stage': 'previewing', 'kind': 'retry_backoff', 'logical_id': logical,
+                   'failed_attempt': failed_attempt, 'seconds': seconds}
+        def wait():
+            self._tick_active()
+            state = self.budget.snapshot()
+            remaining = (state['active_limit_ms'] - state['active_ms']) / 1000
+            if remaining <= 0:
+                return {'status': 'budget_stopped', 'slept_seconds': 0}
+            delay = min(seconds, remaining)
+            try:
+                self.backoff(delay)
+            finally:
+                self._tick_active()
+            exhausted = self.budget.snapshot()['active_ms'] >= state['active_limit_ms']
+            return {'status': 'budget_stopped' if exhausted else 'completed', 'slept_seconds': delay}
+        receipt = self.store.operation(self.run_id, self.generation, request_id, payload, wait)
+        if receipt['state'] != 'completed':
+            return 'backoff_in_progress'
+        return 'active_budget_exhausted' if receipt['result']['status'] == 'budget_stopped' else None
 
     def visit(self, candidate):
         """Visit a backend-owned candidate once, with <=3 accounted attempts."""
@@ -474,9 +520,17 @@ class PageService:
                 return self._pending_visit(candidate, 'in_progress')
             if receipt['state'] == 'completed':
                 return self._state()['visits'][cid]
-            last = self._state()['attempts'].get(cid, [])
-            if last and last[-1]['diagnostic']['error_category'] == 'deadline':
+            # A replayed failed receipt may precede a later unknown fetch.
+            # Its retry policy belongs to that attempt's confirmed diagnostic,
+            # not the most recent started record for the whole page.
+            last = [record for record in self._state()['attempts'].get(cid, [])
+                    if record['attempt'] == attempt and record.get('diagnostic') is not None]
+            if last and not last[-1]['diagnostic']['recoverable']:
                 break
+            if attempt < 2:
+                stopped = self._retry_wait(logical, attempt)
+                if stopped is not None:
+                    return self._pending_visit(candidate, stopped)
         attempts = self._state()['attempts'].get(cid, [])
         if not attempts:
             return self._pending_visit(candidate, 'retry_budget_exhausted')

@@ -80,7 +80,7 @@ def service(setup, responses, **kwargs):
     session = Session(responses)
     reader = PageService(store, 'run-a', generation, budget, session=session,
                          resolver=kwargs.pop('resolver', lambda _: ['93.184.216.34']),
-                         monotonic=clock, **kwargs)
+                         monotonic=clock, backoff=kwargs.pop('backoff', lambda _: None), **kwargs)
     return reader, session
 
 
@@ -183,16 +183,17 @@ def test_long_body_complete_chunks_and_explicit_coverage(setup):
     (b'%PDF-garbage', 'application/pdf', 200, 'pdf_parse_error'),
 ])
 def test_failures_are_actual_visits_closed_and_not_extractable(setup, body, mime, status, category):
-    responses = [Response(body=body, mime=mime, status=status) for _ in range(3)]
+    expected_attempts = 3 if status == 503 else 1
+    responses = [Response(body=body, mime=mime, status=status) for _ in range(expected_attempts)]
     reader, session = service(setup, responses)
     result = reader.preview(save_list(setup))['items'][0]
     assert result['visited'] and not result['extractable']
     assert result['diagnostic']['error_category'] == category
     assert result['diagnostic']['stage'] == 'previewing'
     assert all(r.closed for r in responses)
-    assert len(session.calls) == 3
+    assert len(session.calls) == expected_attempts
     assert reader.preview('list-1')['items'][0] == result
-    assert len(session.calls) == 3
+    assert len(session.calls) == expected_attempts
 
 
 def test_network_failure_redacted_and_retry_budget_three(setup):
@@ -212,16 +213,16 @@ def test_private_dns_and_private_redirect_never_reach_private_host(setup):
 
 
 def test_redirect_revalidates_and_closes_every_response(setup):
-    responses = [Response(status=302, headers={'Location': 'http://127.0.0.1/secret'}) for _ in range(3)]
+    responses = [Response(status=302, headers={'Location': 'http://127.0.0.1/secret'})]
     reader, session = service(setup, responses)
     item = reader.preview(save_list(setup))['items'][0]
     assert item['diagnostic']['error_category'] == 'unsafe_url'
     assert all(response.closed for response in responses)
-    assert len(session.calls) == 3
+    assert len(session.calls) == 1
 
 
 def test_body_limit_and_cumulative_deadline_close_responses(setup):
-    responses = [Response(body=b'x' * 1025, mime='text/plain') for _ in range(3)]
+    responses = [Response(body=b'x' * 1025, mime='text/plain')]
     reader, _ = service(setup, responses, max_bytes=1024)
     assert reader.preview(save_list(setup))['items'][0]['diagnostic']['error_category'] == 'max_bytes'
     assert all(r.closed for r in responses)
@@ -329,11 +330,11 @@ def test_resumed_fetch_failure_reuses_confirmed_failure_receipts(setup):
 
 
 def test_final_redirect_url_dns_error_always_closes_response(setup):
-    responses = [Response(url='https://private.example/spec') for _ in range(3)]
+    responses = [Response(url='https://private.example/spec')]
     reader, session = service(setup, responses, resolver=lambda host: ['127.0.0.1'] if host == 'private.example' else ['93.184.216.34'])
     assert reader.preview(save_list(setup))['items'][0]['diagnostic']['error_category'] == 'unsafe_url'
     assert all(response.closed for response in responses)
-    assert len(session.calls) == 3
+    assert len(session.calls) == 1
 
 
 def test_serialized_oversize_whole_item_is_explicit_and_saved(setup):
@@ -367,7 +368,7 @@ def test_fetch_deadline_shrinks_underlying_socket_read_timeout():
 
 
 def test_malformed_redirect_closes_response(setup):
-    responses = [Response(status=302, headers={'Location': 'http://['}) for _ in range(3)]
+    responses = [Response(status=302, headers={'Location': 'http://['})]
     reader, _ = service(setup, responses)
     assert not reader.preview(save_list(setup))['items'][0]['extractable']
     assert all(response.closed for response in responses)
@@ -390,13 +391,13 @@ def test_elapsed_failure_preserves_actual_visit_when_retry_budget_stops(setup):
 
 
 def test_redirect_limit_has_distinct_diagnostic_and_no_hidden_retries(setup):
-    responses = [Response(status=302, headers={'Location': '/again'}) for _ in range(6)]
+    responses = [Response(status=302, headers={'Location': '/again'}) for _ in range(2)]
     reader, session = service(setup, responses, max_redirects=1)
     item = reader.preview(save_list(setup))['items'][0]
     assert item['diagnostic']['error_category'] == 'redirect_error'
-    assert len(session.calls) == 6 and all(response.closed for response in responses)
+    assert len(session.calls) == 2 and all(response.closed for response in responses)
     operations = setup[2].snapshot()['logical_operations']
-    assert list(operations.values())[0]['execution_count'] == 3
+    assert list(operations.values())[0]['execution_count'] == 1
 
 
 def test_pdf_magic_with_html_mime_blank_page_is_not_extractable(setup):
@@ -437,3 +438,137 @@ def test_unknown_crash_attempts_are_visible_and_share_three_physical_starts(setu
     assert item['status'] == 'pending' and item['visited']
     assert item['reason'] == 'retry_budget_exhausted'
     assert total_calls == 3 and empty.calls == []
+
+
+def test_visible_marker_footer_note_survives_at_its_full_text_position():
+    from chip_model.pipeline.domain_discovery.pages import render_html, chunk_text
+    result = render_html(b'<main><h1>GPU</h1><table><tr><th>SKU</th><th>TDP(W)</th></tr><tr><td>X100-A</td><td>150*</td></tr></table></main><footer><p>* TDP values are per accelerator, not server total.</p><p>Copyright 2026. Contact us.</p></footer>', 'utf-8')
+    text = result['text']
+    assert '* TDP values are per accelerator, not server total.' in text
+    assert 'Copyright' not in text
+    note = next(b for b in result['blocks'] if b['kind'] == 'footnote')
+    assert text[note['start']:note['end']].startswith('* TDP values')
+    row_chunk = next(c for c in chunk_text(text, result['blocks'], max_chars=40) if 'X100-A' in text[c['start']:c['end']])
+    assert any(text[r['start']:r['end']].startswith('* TDP values') for r in row_chunk['context_refs'])
+
+
+def test_thead_td_header_retains_units_for_every_sku_chunk():
+    from chip_model.pipeline.domain_discovery.pages import render_html, chunk_text
+    result = render_html(b'<main><h1>GPU</h1><table><thead><tr><td>SKU</td><td>Memory(GB)</td><td>TDP(W)</td></tr></thead><tbody><tr><td>X100-A</td><td>24</td><td>150</td></tr><tr><td>X100-B</td><td>48</td><td>300</td></tr></tbody></table></main>', 'utf-8')
+    text = result['text']
+    assert any(b['kind'] == 'table_header' for b in result['blocks'])
+    for sku in ('X100-A', 'X100-B'):
+        chunk = next(c for c in chunk_text(text, result['blocks'], max_chars=40) if sku in text[c['start']:c['end']])
+        assert any('Memory(GB)' in text[r['start']:r['end']] and 'TDP(W)' in text[r['start']:r['end']] for r in chunk['context_refs'])
+
+
+@pytest.mark.parametrize('text,start,truncated', [('abc', 0, False), ('abc', 1, True), ('a' * 500, 0, False), ('a' * 501, 0, True)])
+def test_preview_reports_actual_body_length_and_range_truncation(text, start, truncated):
+    from chip_model.pipeline.domain_discovery.pages import locate_preview
+    result = locate_preview(text, start)
+    assert result['body_length'] == len(text)
+    assert result['truncated'] is truncated
+
+
+def test_network_retry_backoff_is_budgeted_and_replayed_without_sleep(setup):
+    budget, clock = setup[2], setup[3]
+    budget.begin_active()
+    sleeps = []
+    def wait(seconds):
+        sleeps.append(seconds)
+        clock.advance(seconds)
+    reader, session = service(setup, [requests.ConnectionError('temporary'), requests.ConnectionError('temporary'), Response()], backoff=wait)
+    version = save_list(setup)
+    result = reader.preview(version)
+    assert result['items'][0]['extractable'] and sleeps == [1.0, 2.0]
+    assert budget.snapshot()['active_ms'] == 3000
+    assert reader.preview(version) == result and sleeps == [1.0, 2.0]
+    assert len(session.calls) == 3
+
+
+def test_nonrecoverable_page_failures_do_not_sleep_or_retry(setup):
+    waits = []
+    response = Response(mime='image/png')
+    reader, session = service(setup, [response], backoff=waits.append)
+    assert not reader.preview(save_list(setup))['items'][0]['extractable']
+    assert len(session.calls) == 1 and waits == [] and response.closed
+
+
+def test_backoff_cannot_outlive_remaining_active_budget(setup):
+    budget, clock = setup[2], setup[3]
+    budget.begin_active()
+    clock.advance(1799.5)
+    waits = []
+    def wait(seconds):
+        waits.append(seconds)
+        clock.advance(seconds)
+    reader, session = service(setup, [requests.ConnectionError('temporary')], backoff=wait)
+    item = reader.preview(save_list(setup))['items'][0]
+    assert waits == [0.5] and len(session.calls) == 1
+    assert item['status'] == 'pending' and item['visited']
+    assert budget.snapshot()['active_ms'] == budget.snapshot()['active_limit_ms']
+
+
+def test_completed_wait_receipt_replays_after_unknown_next_fetch(setup):
+    from chip_model.pipeline.domain_discovery.budget import RunBudget
+    store, generation, budget, clock = setup
+    budget.begin_active()
+    waits = []
+    def wait(seconds):
+        waits.append(seconds)
+        clock.advance(seconds)
+    reader, session = service(setup, [requests.ConnectionError('temporary')], backoff=wait)
+    original_get = session.get
+    def get(url, **kwargs):
+        if session.responses:
+            return original_get(url, **kwargs)
+        session.calls.append((url, kwargs))
+        raise KeyboardInterrupt('crashed after completed backoff')
+    session.get = get
+    version = save_list(setup)
+    with pytest.raises(KeyboardInterrupt):
+        reader.preview(version)
+    assert waits == [1.0] and len(session.calls) == 2
+    assert reader.preview(version)['items'][0]['status'] == 'pending'
+    assert waits == [1.0]
+    store.release('run-a', generation)
+    generation = store.claim('run-a', 'resumed', 100000)
+    store.recover_operations('run-a', generation)
+    budget = RunBudget(store, 'run-a', generation, monotonic=clock, epoch=clock)
+    budget.begin_active()
+    resumed, fresh = service((store, generation, budget, clock), [Response()], backoff=wait)
+    assert resumed.preview(version)['items'][0]['extractable']
+    assert waits == [1.0] and len(fresh.calls) == 1
+    receipts = [r for r in store.list_operations('run-a') if r['payload'].get('kind') == 'retry_backoff']
+    assert len(receipts) == 1 and receipts[0]['attempts'] == 1
+    assert next(iter(budget.snapshot()['logical_operations'].values()))['execution_count'] == 3
+
+
+def test_unknown_wait_can_resume_with_conservative_active_accounting(setup):
+    from chip_model.pipeline.domain_discovery.budget import RunBudget
+    store, generation, budget, clock = setup
+    budget.begin_active()
+    def interrupted(seconds):
+        clock.advance(0.25)
+        raise KeyboardInterrupt('interrupted wait')
+    reader, session = service(setup, [requests.ConnectionError('temporary')], backoff=interrupted)
+    version = save_list(setup)
+    with pytest.raises(KeyboardInterrupt):
+        reader.preview(version)
+    assert budget.snapshot()['active_ms'] == 250
+    assert reader.preview(version)['items'][0]['reason'] == 'backoff_in_progress'
+    assert len(session.calls) == 1
+    store.release('run-a', generation)
+    generation = store.claim('run-a', 'resumed', 100000)
+    store.recover_operations('run-a', generation)
+    budget = RunBudget(store, 'run-a', generation, monotonic=clock, epoch=clock)
+    budget.begin_active()
+    waits = []
+    def wait(seconds):
+        waits.append(seconds)
+        clock.advance(seconds)
+    resumed, fresh = service((store, generation, budget, clock), [Response()], backoff=wait)
+    assert resumed.preview(version)['items'][0]['extractable']
+    assert waits == [1.0] and len(fresh.calls) == 1
+    assert budget.snapshot()['active_ms'] == 2250
+    assert budget.snapshot()['uncertainties'][-1]['charged_ms'] == 1000
