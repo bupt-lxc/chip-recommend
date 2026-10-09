@@ -433,7 +433,7 @@ def derive_status(fatal, interrupted, incomplete, validated_count):
 
 **Files:** `search.py`、`contracts.py`；复用 `open_web_test.py` 的 FallbackSearch/SearchProvider 适配与当前网络诊断；测试 `tests/test_domain_search.py`。不改既有温度工作。
 
-- [ ] **Step 1：写分页大小、查询语义和开放结果不按已知型号过滤的测试。**
+- [x] **Step 1：写分页大小、查询语义和开放结果不按已知型号过滤的测试。**
 
 ```python
 import json
@@ -455,8 +455,8 @@ def test_pagination_covers_every_item_without_truncating_json():
 ```
 
 另测中文、英文各三条最低数，单词过长 >120 字拒绝，重复查询拒绝，补搜计数，健康零结果与网络超时区别，canonical URL 合并保留所有 query/provider 引用，100 主候选外预算排除明确；英文源失败中文源成功仍展示源级退化。开放结果允许未知型号，定向过滤保留既有完整 SKU 约束。
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_search.py -q`。
-- [ ] **Step 3：实现动作与有界序列化。**
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_search.py -q`。
+- [x] **Step 3：实现动作与有界序列化。**
 
 ```python
 import json
@@ -486,8 +486,8 @@ def serialize_page(items, offset, base, limit=10):
 `open_web_search(action='execute')` 接收 queries：每条 `query_id/text/language/reason/page_type`，以及 initial/supplement 轮次。校验后原样交给既有搜索适配，保存模型原文和实际请求词，不添加所有字段、不把后端模板当模型产物。每条最多 10 条进入规范化候选，原始命中单独保存。返回查询诊断、集合版本、结果引用和第一小页；`action='results'` 只读该版本分页，不再次检索。
 
 诊断至少保存 provider、原/实际 query、HTTP/网络/解析状态、有效 URL 数、fallback、query outcome；区分 healthy_empty/network_error/http_error/parse_error。日志滤掉代理凭据和 API token。预算/策略不能由工具参数扩大。补搜的 `replaces_query_id` 关联失败意图，但只有替代成功且 Hermes 明确结束该意图时恢复完整度，失败原记录不删除。
-- [ ] **Step 4：GREEN。** 运行 domain search 与 `tests/test_search_provider_integrity.py`；现有定向搜索完整性不退化。
-- [ ] **Step 5：提交。** 添加 search/合同及 `tests/test_domain_search.py`，`git commit -m "feat: execute and paginate Hermes search plans"`。
+- [x] **Step 4：GREEN。** 运行 domain search 与 `tests/test_search_provider_integrity.py`；现有定向搜索完整性不退化。
+- [x] **Step 5：提交。** 添加 search/合同及 `tests/test_domain_search.py`，`git commit -m "feat: execute and paginate Hermes search plans"`。
 
 ## Task 7：真实访问、500 字核心预览与全文范围
 
