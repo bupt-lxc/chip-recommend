@@ -255,6 +255,11 @@ def logical_candidate_id(candidate):
     # redundant full_sku hints must not create another logical fact or quota.
     variants = {name: _canonical_identity_value(hints[name], name) for name in ('capacity', 'form_factor')
                 if isinstance(hints, dict) and name in hints}
+    if candidate.get('domain_id') == 'identity':
+        kind = (hints.get('entity_type') if isinstance(hints, dict) else None) or candidate.get('scope')
+        kind = kind.strip().casefold() if isinstance(kind, str) else 'unknown'
+        variants['entity_kind'] = {'chip':'chip','die':'chip','board_sku':'board_sku','single_card':'board_sku',
+                                   'series':'series','server':'server','cluster':'cluster','non_compute':'non_compute'}.get(kind,'unknown')
     if 'capacity' in variants:
         try:
             variants['capacity'] = _capacity_identity(hints['capacity'])
@@ -623,7 +628,7 @@ class ModelService:
         normalized['entity_key'] = _canonical_identity_value(normalized.get('entity_key'))
         hints = normalized.get('entity_hints', {})
         normalized['entity_hints'] = {name: _canonical_identity_value(hints[name], name)
-            for name in ('vendor', 'full_sku', 'capacity', 'form_factor', 'model_id') if name in hints}
+            for name in ('vendor', 'full_sku', 'capacity', 'form_factor', 'model_id', 'entity_type') if name in hints}
         if 'capacity' in normalized['entity_hints']:
             normalized['entity_hints']['capacity'] = _capacity_identity(hints['capacity'])
         return _hash(_json(normalized))

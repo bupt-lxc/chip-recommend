@@ -86,6 +86,10 @@ def env(tmp_path, request):
         if options.get('duplicate_benchmark') or options.get('single_benchmark'):
             for _ in range(2 if options.get('duplicate_benchmark') else 1):
                 db.execute("INSERT INTO chip_model_benchmarks (chip_model,model_id,suite_name,workload_type,chip_count,precision,hardware_config,batch_size,input_seq_length,output_seq_length) VALUES ('X80 64GB PCIe','org/Model-7B','suite-report-A','inference','2','BF16','configuration-A','4','128','256')")
+            if options.get('historical_existing'):
+                db.execute("UPDATE chip_model_benchmarks SET chip_model='X80 80GB SXM'")
+            if options.get('historical_extras'):
+                db.execute("UPDATE chip_model_benchmarks SET concurrency='8',framework='PyTorch 2.5',test_date='2026-10-01'")
         db.execute("INSERT INTO chips (vendor,chip_model,vram_gb,form_factor) VALUES ('Vendor A','D80 64GB PCIe','64','PCIe')")
     store.ensure_baseline('run-a', gen, source, rule_bundle_hash=frozen['bundle_sha256'])
     text = ('Vendor A X80 64GB PCIe GPU; Vendor A X80 80GB SXM GPU; '
@@ -507,6 +511,134 @@ def test_unverifiable_historical_configuration_is_not_silently_ignored(entities,
     resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
     binding = resolved.bind_candidate(benchmark['candidates'][0]['logical_candidate_id'])
     assert binding['comparison']['status'] == 'comparison_unresolved'
+
+
+@pytest.mark.parametrize('env', [{'single_benchmark':True,'historical_existing':True,'historical_extras':True}], indirect=True)
+def test_history_only_known_conditions_require_unresolved_comparison(entities, env):
+    identity,_ = audit(env,'identity',[fact(env,sku='X80 80GB SXM')])
+    candidate = relation(env,entity_key={**relation(env)['entity_key'],'chip_model':'X80 80GB SXM'},
+                         entity_hints={'vendor':'Vendor A','full_sku':'X80 80GB SXM','entity_type':'board_sku'})
+    result,_ = audit(env,'benchmark',[candidate])
+    resolved = resolver(entities,env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    binding = resolved.bind_candidate(result['candidates'][0]['logical_candidate_id'])
+    assert binding['validated'] and binding['evidence_status']=='accepted'
+    assert binding['entity']['status']=='existing' and binding['dependency_status']=='resolved'
+    assert binding['comparison']['status']=='comparison_unresolved'
+    assert not binding['update_eligible']
+
+
+@pytest.mark.parametrize('env', [{'single_benchmark':True,'historical_existing':True}], indirect=True)
+def test_optional_conditions_unknown_on_both_sides_do_not_block_comparison(entities, env):
+    identity,_ = audit(env,'identity',[fact(env,sku='X80 80GB SXM')])
+    candidate = relation(env,entity_key={**relation(env)['entity_key'],'chip_model':'X80 80GB SXM'},
+                         entity_hints={'vendor':'Vendor A','full_sku':'X80 80GB SXM','entity_type':'board_sku'},
+                         conditions={**relation(env)['conditions'],'concurrency':None,'framework':'unknown','test_date':None})
+    result,_ = audit(env,'benchmark',[candidate])
+    resolved = resolver(entities,env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    binding = resolved.bind_candidate(result['candidates'][0]['logical_candidate_id'])
+    assert binding['validated'] and binding['comparison']['status']=='matched'
+    assert binding['update_eligible']
+
+
+@pytest.mark.parametrize('order', [('bare','a','b'),('a','b','bare'),('a','bare','b')])
+def test_bare_board_identity_becomes_ambiguous_without_counting_third_entity(entities, env, order):
+    hints = {'bare':{'full_sku':'X80','entity_type':'board_sku'},
+             'a':{'full_sku':'X80','entity_type':'board_sku','capacity':'64GB','form_factor':'PCIe'},
+             'b':{'full_sku':'X80','entity_type':'board_sku','capacity':'80GB','form_factor':'SXM'}}
+    result,model = audit(env,'identity',[fact(env,sku='X80',entity_hints=hints[name]) for name in ('bare','a','b')])
+    rows = dict(zip(('bare','a','b'), result['candidates']))
+    before = model.snapshot()
+    resolved = resolver(entities,env)
+    early = None
+    for name in order:
+        resolved.register_identity(rows[name]['logical_candidate_id'])
+        if name=='bare':
+            early = resolved.bind_candidate(rows[name]['logical_candidate_id'])
+    bare = resolved.resolve_entity({'vendor':'Vendor A',**hints['bare']})
+    assert bare['status']=='ambiguous'
+    assert resolved.snapshot()['new_entity_count']==2
+    assert resolved.resolve_entity({'vendor':'Vendor A',**hints['a']})['status']=='new'
+    assert resolved.resolve_entity({'vendor':'Vendor A',**hints['b']})['status']=='new'
+    late = resolved.bind_candidate(rows['bare']['logical_candidate_id'])
+    assert not late['validated'] and late['entity']['status']=='ambiguous'
+    assert early is not None and model.snapshot()==before
+    decisions = resolved.snapshot()['entity_decisions']
+    assert any(d['entity_id']==bare['entity_id'] and d['status']=='ambiguous' for d in decisions)
+    count = len(decisions)
+    for name in order:
+        resolved.register_identity(rows[name]['logical_candidate_id'])
+    assert resolved.snapshot()['new_entity_count']==2
+    assert len(resolved.snapshot()['entity_decisions'])==count
+
+
+def test_explicit_chip_die_identity_survives_ambiguous_bare_board(entities, env):
+    candidates = [fact(env,sku='X80',scope='chip',entity_hints={'full_sku':'X80','entity_type':'chip'}),
+                  fact(env,sku='X80',scope='board_sku',entity_hints={'full_sku':'X80','entity_type':'board_sku'}),
+                  *[fact(env,sku='X80',entity_hints={'full_sku':'X80','entity_type':'board_sku','capacity':capacity,'form_factor':form})
+                    for capacity,form in [('64GB','PCIe'),('80GB','SXM')]]]
+    result,model = audit(env,'identity',candidates)
+    assert len(result['candidates'])==4
+    before = model.snapshot()
+    resolved = resolver(entities,env)
+    for row in result['candidates']:
+        resolved.register_identity(row['logical_candidate_id'])
+    chip = resolved.resolve_entity({'vendor':'Vendor A','full_sku':'X80','entity_type':'chip'})
+    board = resolved.resolve_entity({'vendor':'Vendor A','full_sku':'X80','entity_type':'board_sku'})
+    assert chip['status']=='new' and chip['entity_kind']=='chip'
+    assert board['status']=='ambiguous' and board['entity_kind']=='board_sku'
+    assert chip['entity_id']!=board['entity_id']
+    assert resolved.snapshot()['new_entity_count']==3
+    assert model.snapshot()==before
+
+
+def test_untyped_specs_resolves_unique_reviewed_chip_without_inference_from_scope(entities, env):
+    identity,_ = audit(env,'identity',[fact(env,scope='chip',entity_hints={'full_sku':'X80 64GB PCIe','entity_type':'chip'})])
+    specs,_ = audit(env,'specs',[fact(env,'specs',scope='chip',entity_hints={'full_sku':'X80 64GB PCIe'})])
+    resolved = resolver(entities,env)
+    entity = resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    binding = resolved.bind_candidate(specs['candidates'][0]['logical_candidate_id'])
+    assert binding['validated'] and binding['entity']['entity_kind']=='chip'
+    assert binding['entity']['entity_id']==entity['entity_id']
+
+
+def test_untyped_nonidentity_measurement_scope_does_not_choose_between_kinds(entities, env):
+    identity,_ = audit(env,'identity',[fact(env,scope=scope,entity_hints={'full_sku':'X80 64GB PCIe','entity_type':scope})
+                                     for scope in ('chip','board_sku')])
+    specs,_ = audit(env,'specs',[fact(env,'specs',scope='chip',entity_hints={'full_sku':'X80 64GB PCIe'})])
+    resolved = resolver(entities,env)
+    for row in identity['candidates']:
+        resolved.register_identity(row['logical_candidate_id'])
+    binding = resolved.bind_candidate(specs['candidates'][0]['logical_candidate_id'])
+    assert not binding['validated'] and binding['entity']['status']=='ambiguous'
+
+
+def test_old_nonempty_entity_policy_fails_closed_without_modifying_artifacts(entities, env):
+    identity,model = audit(env,'identity',[fact(env)])
+    resolved = resolver(entities,env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    def legacy(state):
+        state.pop('entity_policy_version')
+        for row in state['entities'].values():
+            row.pop('entity_kind')
+        return state,None,None
+    env[0].update_metadata('run-a',env[1],resolved.KEY,legacy)
+    before = resolved.snapshot()
+    proof = model.snapshot()
+    with pytest.raises(ValueError,match='policy version incompatible'):
+        resolver(entities,env)
+    assert resolved.snapshot()==before and model.snapshot()==proof
+
+
+def test_identity_revision_cannot_change_entity_kind_and_reset_revision(entities, env):
+    initial = fact(env)
+    revised = fact(env,scope='chip',entity_hints={'full_sku':'X80 64GB PCIe','entity_type':'chip'})
+    client = Transport([{'facts':[initial]}, {'verdict':'revise','reason':'Change physical entity type','candidate':revised}])
+    model = ModelService(env[0],'run-a',env[1],env[2],env[4],env[3],domain_id='identity',client=client,backoff=lambda _:None)
+    result = model.extract_page(env[-1]['snapshot_id'])
+    assert result['candidates'][0]['status']=='unresolved'
+    assert len(client.calls)==2 and len(result['candidates'][0]['versions'])==1
 
 
 def test_explicit_generic_model_independent_guide_has_no_fake_dependencies(entities, env):
