@@ -395,7 +395,7 @@ run_id 严格校验并解析为允许根下的目录；任何公开 ID 不直接
 
 **Files:** `budget.py`、`store.py`；测试 `tests/test_domain_budget.py`。
 
-- [ ] **Step 1：写预算用满不等于 partial 与实际未完成降级测试。**
+- [x] **Step 1：写预算用满不等于 partial 与实际未完成降级测试。**
 
 ```python
 from chip_model.pipeline.domain_discovery.budget import derive_status
@@ -409,8 +409,8 @@ def test_terminal_precedence_and_zero_findings():
 ```
 
 持久化预算测试：初始 10，补搜两轮最多 5+5，总计 20；一次补搜只提交 1 条仍消耗一轮。每查询结果最多 10，主要候选最多 100，技术重试最多 2 次，detail 每页最多 3 次；休眠排队不计活跃时间，外部等待/退避计入，resume 不重置任何计数。一次网络成功后健康空结果不重试；失败源被备用完成不留未恢复意图。
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_budget.py -q`。
-- [ ] **Step 3：实现纯终态函数与事务预算预留。**
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_budget.py -q`。
+- [x] **Step 3：实现纯终态函数与事务预算预留。**
 
 ```python
 def derive_status(fatal, interrupted, incomplete, validated_count):
@@ -426,8 +426,8 @@ def derive_status(fatal, interrupted, incomplete, validated_count):
 预算存储累计 active_ms、查询 ID/轮次、detail 页次数、操作重试次数和逻辑候选修订数。每次有副作用调用前事务预留，完成后提交时间与结果；崩溃调用标记不确定并保守计费，不能返还额度后重复执行。活跃时间使用 Worker 心跳分段累计和 monotonic 单段计时；停机缺口不计入，未闭合段保留最近已持久化心跳上界与不确定说明，验收模拟断电核对无预算重置。
 
 阶段事件包含未执行/执行中/完成/部分失败/失败/预算停止，不单靠当前 stage 推断所有前置阶段通过。终态由未处理范围、未恢复执行失败与通过候选数推导；业务拒绝、已判定依赖未解析不自动计执行失败。必要模型全部不可用、无可交付审核结果时 failed；部分页已完成且另页模型失败时 partial。预算用满但工作完成允许 success/no_findings。
-- [ ] **Step 4：GREEN。** budget 测试和 store 测试通过；时钟可控且无长 sleep。
-- [ ] **Step 5：提交。** `git add chip_model/pipeline/domain_discovery/budget.py chip_model/pipeline/domain_discovery/store.py tests/test_domain_budget.py`，`git commit -m "feat: enforce cumulative discovery budgets and truthful states"`。
+- [x] **Step 4：GREEN。** budget 测试和 store 测试通过；时钟可控且无长 sleep。
+- [x] **Step 5：提交。** `git add chip_model/pipeline/domain_discovery/budget.py chip_model/pipeline/domain_discovery/store.py tests/test_domain_budget.py`，`git commit -m "feat: enforce cumulative discovery budgets and truthful states"`。
 
 ## Task 6：Hermes 搜索规划与可分页检索
 
