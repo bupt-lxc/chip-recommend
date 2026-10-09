@@ -940,3 +940,85 @@ def test_guide_url_host_case_is_equivalent_but_model_ids_are_opaque(module, envi
     assert cached == result['candidates'][0] and len(client.requests) == 2
     second['entity_key']['model_id'] = 'Qwen/modela'
     assert module.logical_candidate_id(first) != module.logical_candidate_id(second)
+
+
+@pytest.mark.parametrize('entrypoint', ['extract', 'review'])
+def test_cached_verdict_rejects_changed_identity_context_without_new_calls(module, environment, entrypoint):
+    pages, snapshot = page(environment)
+    candidate = fact(snapshot)
+    original_context = {'X80': {'status': 'existing', 'row_id': '1'}}
+    changed_context = {'X80': {'status': 'ambiguous', 'row_id': '2'}}
+    client = FakeModel([{'facts': [candidate]}, {'verdict': 'accept', 'reason': 'Supports frozen row one.'}])
+    models = service(module, environment, pages, client)
+    models.extract_page(snapshot['snapshot_id'], identity_context=original_context)
+    with pytest.raises(ValueError, match='model input conflict'):
+        if entrypoint == 'extract':
+            models.extract_page(snapshot['snapshot_id'], identity_context=changed_context)
+        else:
+            models.review_candidate(candidate, identity_context=changed_context)
+    assert len(client.requests) == 2
+    assert models.snapshot()['input_conflicts']
+
+
+def test_cached_review_rejects_unapproved_values_but_authorized_revision_replays(module, environment):
+    pages, snapshot = page(environment, 'X80 64GB or 80GB')
+    original = fact(snapshot)
+    revised = fact(snapshot, raw_value=80, normalized_value=80)
+    client = FakeModel([{'facts': [original]}, {'verdict': 'revise', 'reason': 'Use alternate capacity.', 'candidate': revised},
+                        {'verdict': 'accept', 'reason': 'Exact alternate capacity.'}])
+    models = service(module, environment, pages, client)
+    result = models.extract_page(snapshot['snapshot_id'])
+    assert models.review_candidate(original, request_id='new-nonce', candidate_version=999) == result['candidates'][0]
+    assert models.review_candidate(revised) == result['candidates'][0]
+    changed = fact(snapshot, raw_value=999, normalized_value=999)
+    with pytest.raises(ValueError, match='model input conflict'):
+        models.review_candidate(changed)
+    assert len(client.requests) == 3
+    assert list(environment[2].snapshot()['candidate_revisions'].values()) == [1]
+
+
+def test_cached_snapshot_never_skips_frozen_baseline_verification(module, environment):
+    pages, snapshot = page(environment)
+    client = FakeModel([{'facts': []}])
+    models = service(module, environment, pages, client)
+    models.extract_page(snapshot['snapshot_id'])
+    baseline = environment[0].run_path('run-a') / 'data.db'
+    baseline.chmod(0o600)  # controlled run-local fixture, never formal data.db
+    baseline.write_bytes(baseline.read_bytes() + b'tampered')
+    with pytest.raises(ValueError, match='baseline hash mismatch'):
+        models.extract_page(snapshot['snapshot_id'])
+    assert len(client.requests) == 1
+
+
+@pytest.mark.parametrize('fail', [False, True])
+def test_baseline_sqlite_connections_close_on_success_and_error(module, environment, monkeypatch, fail):
+    pages, snapshot = page(environment)
+    models = service(module, environment, pages, FakeModel([]))
+    baseline_uri = (environment[0].run_path('run-a') / 'data.db').as_uri() + '?mode=ro'
+    opened = []
+    original_connect = sqlite3.connect
+
+    class FailingConnection(sqlite3.Connection):
+        def execute(self, sql, *args, **kwargs):
+            if sql == 'PRAGMA query_only=ON':
+                raise sqlite3.OperationalError('controlled read failure')
+            return super().execute(sql, *args, **kwargs)
+
+    def connect(path, *args, **kwargs):
+        if path == baseline_uri:
+            if fail:
+                kwargs['factory'] = FailingConnection
+            connection = original_connect(path, *args, **kwargs)
+            opened.append(connection)
+            return connection
+        return original_connect(path, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, 'connect', connect)
+    if fail:
+        with pytest.raises(sqlite3.OperationalError, match='controlled read failure'):
+            models._baseline(fact(snapshot))
+    else:
+        assert models._baseline(fact(snapshot))['chips'][0]['vram_gb'] == '32'
+    assert len(opened) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+        opened[0].execute('SELECT 1')

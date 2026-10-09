@@ -13,6 +13,7 @@ import re
 import sqlite3
 import time
 import uuid
+from contextlib import closing
 from pathlib import Path
 from typing import Literal
 
@@ -223,6 +224,24 @@ def _capacity_identity(value):
     return {'value': float(value), 'unit': unit}
 
 
+def _canonical_identity_value(value, field=None):
+    if isinstance(value, str):
+        if field == 'url':
+            try:
+                return canonical_url(value.strip())
+            except ValueError:
+                return value.strip()  # malformed evidence remains auditable
+        if field in {'vendor', 'chip_model', 'full_sku', 'form_factor'}:
+            return ' '.join(value.split()).casefold()
+        # Model/report/document identifiers are opaque. Display-name rules
+        # cannot lowercase URI paths, query values or HF IDs.
+        return value.strip()
+    if isinstance(value, dict):
+        return {key: int(item) if key == 'chip_count' and _positive_integral(item)
+                else _canonical_identity_value(item, key) for key, item in value.items()}
+    return value
+
+
 def logical_candidate_id(candidate):
     """Ownership + INITIAL complete entity hint/relationship + snapshot, never value."""
     if not isinstance(candidate, dict):
@@ -230,27 +249,11 @@ def logical_candidate_id(candidate):
     evidence = candidate.get('evidence', {})
     if not isinstance(evidence, dict):
         evidence = {}
-    def canonical(value, field=None):
-        if isinstance(value, str):
-            if field == 'url':
-                try:
-                    return canonical_url(value.strip())
-                except ValueError:
-                    return value.strip()  # malformed evidence remains auditable
-            if field in {'vendor', 'chip_model', 'form_factor'}:
-                return ' '.join(value.split()).casefold()
-            # Model/report/document identifiers are opaque. Display-name
-            # rules cannot lowercase URI paths, query values or HF IDs.
-            return value.strip()
-        if isinstance(value, dict):
-            return {key: int(item) if key == 'chip_count' and _positive_integral(item) else canonical(item, key)
-                    for key, item in value.items()}
-        return value
     hints = candidate.get('entity_hints', {})
     # Full SKU/vendor/model relation identity is carried by entity_key. The
     # extra physical variant dimensions are meaningful; free-form notes and
     # redundant full_sku hints must not create another logical fact or quota.
-    variants = {name: canonical(hints[name], name) for name in ('capacity', 'form_factor')
+    variants = {name: _canonical_identity_value(hints[name], name) for name in ('capacity', 'form_factor')
                 if isinstance(hints, dict) and name in hints}
     if 'capacity' in variants:
         try:
@@ -258,7 +261,7 @@ def logical_candidate_id(candidate):
         except ValueError:
             variants['capacity'] = 'invalid_capacity'
     return 'fact-' + _hash(_json([candidate.get('domain_id'), candidate.get('target_table'),
-                  canonical(candidate.get('entity_key')), variants,
+                  _canonical_identity_value(candidate.get('entity_key')), variants,
                   candidate.get('field_name'), evidence.get('snapshot_id')]))
 
 
@@ -484,6 +487,15 @@ class _InfrastructureAbort(BaseException):
         self.error = error
 
 
+class ModelInputConflict(ValueError):
+    """A saved proof cannot authorize changed substantive inputs or new quota."""
+
+    def __init__(self, record):
+        self.record = record
+        self.code = 'model_input_conflict'
+        super().__init__('model input conflict: ' + record['phase'] + '/' + record['input_kind'])
+
+
 class ModelService:
     KEY = 'domain_models.v1'
 
@@ -548,7 +560,7 @@ class ModelService:
         if candidate is None:
             return result
         key = candidate.get('entity_key', {})
-        with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True) as db:
+        with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as db:
             db.row_factory = sqlite3.Row
             db.execute('PRAGMA query_only=ON')
             columns = {row[1] for row in db.execute('PRAGMA table_info(chips)')}
@@ -598,6 +610,49 @@ class ModelService:
                 **({'candidate': candidate} if candidate is not None else {}),
                 'required_schema': (ReviewResponse if candidate is not None else ExtractResponse).model_json_schema(),
                 'candidate_schema': FactCandidate.model_json_schema()}
+
+    @staticmethod
+    def _candidate_signature(candidate):
+        """All semantic fields, with only defined identity equivalences applied.
+
+        Free-form hint notes are audit metadata. Identity hints, evidence,
+        values, conditions, conversion, provenance and explanations stay bound.
+        Client request IDs/version nonces are never part of this signature.
+        """
+        normalized = json.loads(_json(candidate))
+        normalized['entity_key'] = _canonical_identity_value(normalized.get('entity_key'))
+        hints = normalized.get('entity_hints', {})
+        normalized['entity_hints'] = {name: _canonical_identity_value(hints[name], name)
+            for name in ('vendor', 'full_sku', 'capacity', 'form_factor', 'model_id') if name in hints}
+        if 'capacity' in normalized['entity_hints']:
+            normalized['entity_hints']['capacity'] = _capacity_identity(hints['capacity'])
+        return _hash(_json(normalized))
+
+    def _review_binding(self, frozen, snapshot, chunk, identity_context):
+        # The entire frozen file digest binds the selected old facts too; a
+        # matched authorized candidate version fixes their deterministic query.
+        return {'phase': 'review', 'scope_type': self.scope, 'bundle_sha256': frozen['bundle_sha256'],
+                'contract_sha256': frozen['contract_sha256'], 'reference_hashes': frozen['reference_hashes'],
+                'page': self._page_payload(snapshot, chunk), 'identity_context': identity_context,
+                'baseline': self._baseline(), 'required_schema': ReviewResponse.model_json_schema(),
+                'candidate_schema': FactCandidate.model_json_schema()}
+
+    def _input_conflict(self, phase, logical_id, input_kind, expected_hash, requested_hash, requested_input):
+        record = {'code': 'model_input_conflict', 'phase': phase, 'domain_id': self.domain_id,
+                  'logical_id': logical_id, 'input_kind': input_kind, 'expected_sha256': expected_hash,
+                  'requested_sha256': requested_hash, 'requested_input': self._audit(requested_input)}
+        conflict_id = _hash(_json([phase, logical_id, input_kind, expected_hash, requested_hash]))
+        def save(state):
+            conflicts = state.setdefault('input_conflicts', {})
+            prior = conflicts.get(conflict_id)
+            if prior is None:
+                conflicts[conflict_id] = record
+            return state, None, None if prior is not None else {
+                'kind': 'cache_input_conflict', 'stage': 'reviewing' if phase == 'review' else 'extracting',
+                'domain_id': self.domain_id, 'phase': phase, 'logical_id': logical_id,
+                'conflict_ref': self.KEY + '/input_conflicts/' + conflict_id, 'new_physical_model_call': False}
+        self._update(save)
+        raise ModelInputConflict(record)
 
     def _invoke(self, frozen, logical, payload):
         messages = phase_messages(frozen['phase'], frozen['skill_text'], frozen['references'], frozen['contract'], payload)
@@ -720,18 +775,32 @@ class ModelService:
         frozen = self._phase('review')
         logical = logical_candidate_id(candidate)
         cached = self.snapshot()['candidates'].get(logical)
-        if cached is not None and cached['status'] not in {'program_valid', 'review_failed', 'pending'}:
-            return cached
         snapshot = self.pages.read_snapshot(candidate['evidence']['snapshot_id'])
         if chunk is None:
-            candidates = self.pages.chunks(snapshot['snapshot_id'], domain_id=self.domain_id, scope=self.task_scope)['chunks']
-            chunk = next((c for c in candidates if c['start'] <= candidate['evidence']['start'] < c['end']), None)
+            if cached is not None and cached.get('review_chunk') is not None:
+                chunk = cached['review_chunk']
+            else:
+                candidates = self.pages.chunks(snapshot['snapshot_id'], domain_id=self.domain_id, scope=self.task_scope)['chunks']
+                chunk = next((c for c in candidates if c['start'] <= candidate['evidence']['start'] < c['end']), None)
             if chunk is None:
                 raise ValueError('no saved chunk contains candidate evidence')
+        binding = self._review_binding(frozen, snapshot, chunk, identity_context or {})
+        binding_hash = _hash(_json(binding))
+        candidate_hash = self._candidate_signature(candidate)
+        if cached is not None:
+            expected = cached.get('review_binding_sha256')
+            if expected != binding_hash:
+                self._input_conflict('review', logical, 'execution_binding', expected, binding_hash, binding)
+            authorized = {self._candidate_signature(version['candidate']) for version in cached['versions']}
+            if candidate_hash not in authorized:
+                self._input_conflict('review', logical, 'candidate_version', sorted(authorized), candidate_hash, candidate)
+            if cached['status'] not in {'program_valid', 'review_failed', 'pending'}:
+                return cached
         row = cached or {'logical_candidate_id': logical, 'domain_id': self.domain_id, 'original_raw': candidate,
                          'versions': [{'version': 0, 'candidate': candidate}], 'evidence_versions': [candidate],
                          'reviews': [], 'revision_chain': [], 'status': 'program_valid', 'reason': '',
-                         'source': self._page_payload(snapshot, chunk)}
+                         'source': self._page_payload(snapshot, chunk), 'review_chunk': chunk,
+                         'review_binding_sha256': binding_hash}
         while True:
             version = row['versions'][-1]
             current = version['candidate']
@@ -746,6 +815,7 @@ class ModelService:
                 row.update(status='unresolved', reason=program['reason'], missing_conditions=program['missing_conditions'])
                 return self._save_candidate(row)
             payload = self._payload(frozen, snapshot, chunk, identity_context or {}, current)
+            version['input_sha256'] = _hash(_json(payload))
             invocation = self._invoke(frozen, 'review-' + _hash(_json([logical, version['version']])), payload)
             if invocation['status'] != 'completed':
                 row.update(status=invocation['status'] if invocation['status'] in {'pending', 'budget_stopped'} else 'review_failed',
@@ -787,12 +857,15 @@ class ModelService:
         for chunk in chunks:
             key = 'extract-' + _hash(_json([self.domain_id, snapshot_id, chunk['start'], chunk['end']]))
             saved = self.snapshot()['chunks'].get(key)
+            payload = self._payload(frozen, snapshot, chunk, identity_context or {})
+            input_hash = _hash(_json(payload))
+            if saved is not None and saved.get('input_sha256') != input_hash:
+                self._input_conflict('extract', key, 'execution_binding', saved.get('input_sha256'), input_hash, payload)
             if saved is not None and saved.get('status') not in {'pending', 'extract_failed'}:
                 self._mark_coverage(key, snapshot_id, saved)
                 self._record_stages(key, saved)
                 outcomes.append(saved)
                 continue
-            payload = self._payload(frozen, snapshot, chunk, identity_context or {})
             invocation = self._invoke(frozen, key, payload)
             if invocation['status'] != 'completed':
                 outcome = {'chunk': chunk, 'candidate_ids': [], 'status': invocation['status']
@@ -850,6 +923,7 @@ class ModelService:
                                             'budget_stopped' if any(row['status'] == 'budget_stopped' for row in rows) else
                                             'in_progress' if any(row['status'] == 'pending' for row in rows) else
                                             'completed' if any(row['reviews'] for row in rows) else 'not_executed'}
+            outcome['input_sha256'] = input_hash
             def save_chunk(state):
                 state['chunks'][key] = outcome
                 return state, outcome, {'kind': 'model_chunk_outcome', 'stage': 'extracting', 'domain_id': self.domain_id,
