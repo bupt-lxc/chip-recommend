@@ -25,9 +25,11 @@ from .store import _hash, _json, _key
 
 HEALTHY = frozenset({'success', 'healthy_empty'})
 OUTCOMES = HEALTHY | {'network_error', 'http_error', 'parse_error'}
+QUERY_FAILURES = (OUTCOMES - HEALTHY) | {'retry_budget_exhausted'}
 MAX_RESPONSE_CHARS = 12000
 _TRACKING = frozenset({'gclid', 'fbclid', 'msclkid', 'yclid', '_ga', 'mc_cid', 'mc_eid'})
 _SECRET_KEYS = re.compile(r'^(?:api[_-]?key|access[_-]?token|token|authorization|password|secret|credential)$', re.I)
+_URL_CREDENTIALS = re.compile(r'([a-z][a-z0-9+.-]*://)[^/\s@]+@', re.I)
 
 
 class OversizeItemError(ValueError):
@@ -79,9 +81,26 @@ def redact(value):
         return [redact(item) for item in value]
     if not isinstance(value, str):
         return value
+    # Encoded proxy values may nest inside query parameters or error strings.
+    # Retain decoded output only when a sensitive pattern is found; normal
+    # result URL bytes (including encoded SKU parameters) stay untouched.
+    decoded, sensitive = value, False
+    while True:
+        # Scrub each decoding layer before opening the next, so a password's
+        # encoded slash cannot obscure userinfo after further decoding. Mixed
+        # plain and encoded credentials are handled in the same string.
+        cleaned = _redact_plain(decoded)
+        sensitive = sensitive or cleaned != decoded
+        unquoted = unquote(cleaned)
+        if unquoted == cleaned:
+            return cleaned if sensitive else value
+        decoded = unquoted
+
+
+def _redact_plain(value):
     value = re.sub(r'([?&])([^=&#\s]+)=([^&#\s]*)',
                    lambda match: match[1] + match[2] + '=[REDACTED]' if _SECRET_KEYS.fullmatch(unquote(match[2])) else match[0], value)
-    value = re.sub(r'(https?://)[^/\s@]+@', r'\1[REDACTED]@', value, flags=re.I)
+    value = _URL_CREDENTIALS.sub(r'\1[REDACTED]@', value)
     value = re.sub(r'(?i)(bearer\s+)[^\s&,;]+', r'\1[REDACTED]', value)
     return re.sub(r'(?i)((?:api[_-]?key|access[_-]?token|token|authorization|password|secret)\s*[=:]\s*)[^\s&;,]+',
                   r'\1[REDACTED]', value)
@@ -272,7 +291,7 @@ class SearchExecutor:
             replacement = query.get('replaces_query_id')
             if replacement is not None:
                 previous = state['queries'].get(replacement)
-                if previous is None or previous.get('outcome') not in OUTCOMES - HEALTHY:
+                if previous is None or previous.get('outcome') not in QUERY_FAILURES:
                     raise ValueError('replacement must reference a prior failed query intent')
         return None
 
@@ -318,8 +337,10 @@ class SearchExecutor:
             if saved['list_version'] is None:
                 candidates = list(state['candidates'].values())
                 diagnostics = [a['diagnostic'] for q in state['queries'].values() for a in q['attempts']]
+                diagnostics.extend(stop for q in state['queries'].values() for stop in q.get('provider_stops', {}).values())
                 snapshot = {'items': candidates, 'diagnostics': diagnostics,
-                            'incomplete': self._incomplete(state), 'round_number': validated.round_number}
+                            'incomplete': self._incomplete(state), 'round_number': validated.round_number,
+                            'query_count': len(state['queries'])}
                 version = _hash(_json(snapshot))
                 state['versions'][version] = snapshot
                 saved['list_version'] = version
@@ -397,10 +418,21 @@ class SearchExecutor:
         if self._state()['queries'][qid]['outcome'] is not None:
             return True
         for index, provider in enumerate(self.providers):
+            if provider.name in self._state()['queries'][qid].get('provider_stops', {}):
+                continue
             logical = 'search-' + _hash(_json([qid, provider.name]))
             for attempt in range(3):
-                receipt = self.budget.operation(logical, {'stage': 'searching', 'query': query, 'provider': provider.name},
-                                                lambda: self._capture(query, provider, index, attempt), attempt=attempt)
+                try:
+                    receipt = self.budget.operation(logical, {'stage': 'searching', 'query': query, 'provider': provider.name},
+                                                    lambda: self._capture(query, provider, index, attempt), attempt=attempt)
+                except ValueError as exc:
+                    if str(exc) != 'technical retry budget exhausted':
+                        raise
+                    # Recovery can consume physical attempts before logical
+                    # attempt IDs reach 2. This provider is then terminal,
+                    # while fallback and other queries still have their quota.
+                    self._provider_stop(query, provider, index, logical)
+                    break
                 if receipt['state'] in {'running', 'pending'}:
                     return False
                 if receipt['state'] == 'completed':
@@ -410,7 +442,8 @@ class SearchExecutor:
         saved = self._state()['queries'][qid]
         healthy = [a for a in saved['attempts'] if a['diagnostic']['outcome'] in HEALTHY]
         rows = [(a['provider'], row) for a in healthy for row in a['raw_hits']]
-        outcome = ('success' if rows else 'healthy_empty') if healthy else saved['attempts'][-1]['diagnostic']['outcome']
+        outcome = (('success' if rows else 'healthy_empty') if healthy else
+                   saved['attempts'][-1]['diagnostic']['outcome'] if saved['attempts'] else 'retry_budget_exhausted')
         admitted = set()
         for row_index, (provider_name, row) in enumerate(rows):
             try:
@@ -445,16 +478,44 @@ class SearchExecutor:
             state['queries'][qid]['outcome'] = outcome
             for capture in state['queries'][qid]['attempts']:
                 capture['diagnostic']['query_outcome'] = outcome
+            for stop in state['queries'][qid].get('provider_stops', {}).values():
+                stop['query_outcome'] = outcome
             return state, None, {'kind': 'search_query_outcome', 'stage': 'searching', 'query_id': qid, 'outcome': outcome}
         self._update(finish)
         return True
 
+    def _provider_stop(self, query, provider, index, logical):
+        """Audit a denied execution separately from actual provider attempts."""
+        physical_count = self.budget.snapshot()['logical_operations'][logical]['execution_count']
+        diagnostic = redact({'query_id': query['query_id'], 'provider': provider.name, 'language': query['language'],
+                             'original_query': query['text'], 'actual_query': None, 'http_status': None,
+                             'network_status': 'not_executed', 'parse_status': 'not_attempted',
+                             'outcome': 'retry_budget_exhausted', 'query_outcome': None,
+                             'physical_execution_count': physical_count, 'valid_url_count': 0,
+                             'raw_hit_count': 0, 'fallback': index > 0,
+                             'budget_ref': f'{self.budget.KEY}/logical_operations/{logical}'})
+        def stop(state):
+            stops = state['queries'][query['query_id']].setdefault('provider_stops', {})
+            if provider.name in stops:
+                return state, None, None
+            stops[provider.name] = diagnostic
+            return state, None, {'kind': 'search_provider_budget_stopped', 'stage': 'searching', **diagnostic}
+        self._update(stop)
+
     @staticmethod
     def _matches_hint(hint, row):
         tokens = re.findall(r'[a-z0-9]+|[\u3400-\u9fff]+', hint.casefold())
-        pattern = r'(?<![a-z0-9])' + r'[-_\s]*'.join(map(re.escape, tokens)) + r'(?![a-z0-9])'
-        text = unquote(' '.join(str(row.get(k, '')) for k in ('url', 'title', 'snippet'))).casefold()
-        return bool(tokens and re.search(pattern, text))
+        if not tokens:
+            return False
+        pattern = r'(?<![a-z0-9_-])' + r'[-_\s]*'.join(map(re.escape, tokens))
+        for key in ('url', 'title', 'snippet'):
+            text = unquote(str(row.get(key, ''))).casefold()
+            # A slash after a complete URL path segment is navigation, while
+            # a slash in a displayed SKU can introduce another variant.
+            boundary = r'(?![a-z0-9_-])' if key == 'url' else r'(?![a-z0-9_-]|/[a-z0-9])'
+            if re.search(pattern + boundary, text):
+                return True
+        return False
 
     def _exclude(self, qid, provider, index, row, reason):
         record = {'provider': provider, 'raw_index': index, 'url': row['url'], 'reason': reason}
@@ -472,7 +533,7 @@ class SearchExecutor:
         def finish(state):
             failed = state['queries'].get(failed_query_id)
             replacement = state['queries'].get(replacement_query_id)
-            if (failed is None or failed['outcome'] not in OUTCOMES - HEALTHY or replacement is None
+            if (failed is None or failed['outcome'] not in QUERY_FAILURES or replacement is None
                     or replacement['query'].get('replaces_query_id') != failed_query_id or replacement['outcome'] not in HEALTHY):
                 raise ValueError('intent completion requires an explicitly linked healthy replacement of a failed query')
             prior = state['intent_requests'].get(request_id)
@@ -501,7 +562,7 @@ class SearchExecutor:
         diagnostics = snapshot['diagnostics']
         extra = {'status': 'completed', 'incomplete': snapshot['incomplete'],
                  'intent_incomplete': self._incomplete(state),
-                 'query_count': len({d['query_id'] for d in diagnostics}),
+                 'query_count': snapshot.get('query_count', len({d['query_id'] for d in diagnostics})),
                  'round_query_count': len(state['plans'][str(snapshot['round_number'])]['model_payload']['queries']),
                  'round_number': snapshot['round_number'], 'diagnostics': diagnostics,
                  'diagnostics_ref': f'{self.KEY}/versions/{version}/diagnostics'}

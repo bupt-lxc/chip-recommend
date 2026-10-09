@@ -458,3 +458,132 @@ def test_encoded_api_credentials_are_redacted_in_raw_url_and_diagnostics():
     assert 'SECRET' not in json.dumps(redacted)
     assert 'sku=MLU370-S4' in redacted['url']
     assert 'u:p@' not in redacted['error']
+
+
+@pytest.mark.parametrize('fallback', [False, True])
+def test_recovered_unknown_attempt_uses_remaining_physical_retries_then_continues(setup, fallback):
+    from chip_model.pipeline.domain_discovery.budget import RunBudget
+
+    class Crash(Provider):
+        def search(self, query, limit, *, language):
+            raise KeyboardInterrupt('unknown external outcome')
+
+    class OnlyFirstFails(Provider):
+        def search(self, query, limit, *, language):
+            self.outcome = 'network_error' if query.endswith('q0') else 'healthy_empty'
+            return super().search(query, limit, language=language)
+
+    store, budget = setup
+    backup = Provider(outcome='healthy_empty')
+    backup.name = 'backup'
+    providers = (Crash(), backup) if fallback else (Crash(),)
+    with pytest.raises(KeyboardInterrupt):
+        executor(setup, *providers).execute('initial', plan())
+    store.release('run-a', budget.generation)
+    generation = store.claim('run-a', 'recovery', 100000)
+    assert store.recover_operations('run-a', generation) == 1
+    budget = RunBudget(store, 'run-a', generation)
+    primary = OnlyFirstFails()
+    providers = (primary, backup) if fallback else (primary,)
+    search = executor((store, budget), *providers)
+    result = search.execute('initial', plan())
+    assert result['status'] == 'completed'
+    assert result['intent_incomplete'] is (not fallback)
+    state = store.metadata('run-a', search.KEY)
+    assert state['queries']['q0']['outcome'] == ('healthy_empty' if fallback else 'network_error')
+    assert state['queries']['q1']['outcome'] == 'healthy_empty'
+    assert len(state['queries']['q0']['attempts']) == (3 if fallback else 2)
+    stop = state['queries']['q0']['provider_stops']['fixture']
+    assert stop['outcome'] == 'retry_budget_exhausted'
+    assert stop['physical_execution_count'] == 3 and stop['network_status'] == 'not_executed'
+    assert all(op['execution_count'] <= 3 for op in budget.snapshot()['logical_operations'].values())
+    assert sum(call[0].endswith('q0') for call in primary.calls) == 2
+    assert any(r.get('uncertain') for r in budget.snapshot()['reservations'].values())
+    assert budget.stages()['searching']['main']['status'] == ('completed' if fallback else 'partial_failure')
+    call_count = len(primary.calls) + len(backup.calls)
+    assert search.execute('initial', plan()) == result
+    assert len(primary.calls) + len(backup.calls) == call_count
+
+
+def test_three_unknown_crashes_become_explicit_exhaustion_without_invented_network_failure(setup):
+    from chip_model.pipeline.domain_discovery.budget import RunBudget
+
+    class Crash(Provider):
+        def search(self, query, limit, *, language):
+            raise KeyboardInterrupt('unknown')
+
+    store, budget = setup
+    for number in range(3):
+        with pytest.raises(KeyboardInterrupt):
+            executor((store, budget), Crash()).execute('initial', plan())
+        store.release('run-a', budget.generation)
+        generation = store.claim('run-a', f'recovery-{number}', 100000)
+        store.recover_operations('run-a', generation)
+        budget = RunBudget(store, 'run-a', generation)
+    provider = Provider(outcome='healthy_empty')
+    search = executor((store, budget), provider)
+    result = search.execute('initial', plan())
+    assert result['status'] == 'completed' and result['intent_incomplete']
+    state = store.metadata('run-a', search.KEY)
+    assert state['queries']['q0']['outcome'] == 'retry_budget_exhausted'
+    assert state['queries']['q0']['attempts'] == []
+    assert len(provider.calls) == 9
+    assert result['query_count'] == 10
+
+
+@pytest.mark.parametrize('value', [
+    'socks5://user:SECRET@proxy.example:7897',
+    'socks5h://user:SECRET@proxy.example:7897',
+    'http%3A%2F%2Fuser%3ASECRET%40proxy.example%3A7897',
+    'proxy=http%3A%2F%2Fuser%3ASECRET%40proxy.example%3A7897',
+    'https://search.example/?proxy=http%253A%252F%252Fuser%253ASECRET%2540proxy.example%253A7897',
+    'token=OTHER proxy=http%3A%2F%2Fuser%3ASECRET%40proxy.example%3A7897',
+    'http://user:OTHER@proxy.example:7897 proxy=socks5%3A%2F%2Fuser%3ASECRET%40backup.example%3A7897',
+    'http%3A%2F%2Fuser%3ASECRET%252Fpart%40proxy.example%3A7897',
+])
+def test_proxy_credentials_are_redacted_across_schemes_and_nested_encoding(value):
+    from chip_model.pipeline.domain_discovery.search import redact
+    from urllib.parse import unquote
+    result = redact({'error': value, 'nested': [{'proxy': value}]})
+    serialized = json.dumps(result)
+    assert 'SECRET' not in serialized
+    assert 'SECRET' not in unquote(unquote(serialized))
+    assert '[REDACTED]' in serialized
+
+
+@pytest.mark.parametrize('hint,title,expected', [
+    ('MLU370-S4', 'MLU370-S4-Pro', False),
+    ('MLU370-S4', 'MLU370-S4_Pro', False),
+    ('MLU370-S4', 'MLU370-S4/Pro', False),
+    ('MLU370-S4', 'MLU370-S4 GPU specifications', True),
+    ('MLU370-S4-Pro', 'MLU370-S4', False),
+    ('H100 SXM5 80GB', 'H100 SXM5 80GB-Pro', False),
+    ('H100 SXM5 80GB', 'H100 SXM5 80GBX', False),
+    ('H100 SXM5 80GB', 'H100 SXM5 80GB specifications', True),
+    ('H100 SXM5 80GB', 'H100 PCIe 80GB specifications', False),
+    ('H100 SXM5 80GB', 'H100 SXM5 96GB specifications', False),
+])
+def test_hint_requires_complete_sku_capacity_and_form_factor(hint, title, expected):
+    from chip_model.pipeline.domain_discovery.search import SearchExecutor
+    assert SearchExecutor._matches_hint(hint, {'title': title}) is expected
+
+
+def test_total_active_budget_failure_propagates_without_provider_stop_or_fallback(setup):
+    store, budget = setup
+    elapsed = [0.0]
+    budget.monotonic = lambda: elapsed[0]
+    budget.begin_active()
+
+    class Deadline(Provider):
+        def search(self, query, limit, *, language):
+            elapsed[0] = 1800.0
+            return super().search(query, limit, language=language)
+
+    primary, backup = Deadline(outcome='network_error'), Provider()
+    backup.name = 'backup'
+    search = executor(setup, primary, backup)
+    with pytest.raises(ValueError, match='active budget exhausted'):
+        search.execute('initial', plan())
+    state = store.metadata('run-a', search.KEY)
+    assert not state['queries']['q0'].get('provider_stops')
+    assert len(primary.calls) == 1 and backup.calls == []
