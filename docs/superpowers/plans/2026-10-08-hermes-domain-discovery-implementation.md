@@ -585,7 +585,7 @@ selection 的 `action='append'` 每批最多 10 个，先保存并用 request_id
 
 **Files:** `models.py`、`contracts.py`、`store.py`；复用当前 OpenAI-compatible transport 配置、thinking/temperature 适配；测试 `tests/test_domain_models.py`。
 
-- [ ] **Step 1：写独立调用证据、跨实体/跨字段错误和一次修订测试。**
+- [x] **Step 1：写独立调用证据、跨实体/跨字段错误和一次修订测试。**
 
 ```python
 from chip_model.pipeline.domain_discovery.models import validate_quote
@@ -598,8 +598,8 @@ def test_quote_requires_exact_position_in_correct_snapshot():
 ```
 
 用记录请求数组的 `call_model` 替身返回预先写好的提取/复核 JSON，断言提取和复核是两次调用，均包含同一 bundle hash、相应 phase、完整候选/上下文。覆盖错 SKU、版权日期、整机功耗、稀疏冒充稠密、理论冒充实测、存在但无关引文、数值拼接和不在域内字段。复核不可用不能 validated；第一次 revise 经重新校验和一次复核，第二次 revise 拒绝/未解析，换请求 ID/候选版本不能重置上限。
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_models.py -q`。
-- [ ] **Step 3：实现程序证据检查与模型阶段输入。**
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_models.py -q`。
+- [x] **Step 3：实现程序证据检查与模型阶段输入。**
 
 ```python
 def validate_quote(text, evidence):
@@ -623,8 +623,10 @@ def phase_messages(phase, skill_text, references, contract, payload):
 `review_candidate` 使用独立 `load_phase(...,'review')` 调用，读取完整候选、正文相关块、身份上下文和冻结基线。记录模型、调用 ID、阶段、领域、包/参考/合同哈希、耗时、usage、结果。安全脱敏后保存原请求/响应审计引用，凭据不导出。复核修订后先程序检查，再一次独立复核；最终判定始终附版本链与 logical_candidate_id。
 
 候选逻辑 ID 由域、表、实体提示/关系键、字段与快照确定；修订规范值不能创建新逻辑 ID 逃逸额度。程序失败、语义拒绝、模型请求失败分别记录。每个模型操作技术重试至多 2 次，并受累计时限约束。
-- [ ] **Step 4：GREEN。** domain models 与温度回归通过：`python -m pytest tests/test_domain_models.py tests/test_open_web_temperature.py -q`。默认及用户设置温度沿用适配，不在新请求硬编码另一个值。
-- [ ] **Step 5：提交。** 添加 models/合同/store 修改及新测试，`git commit -m "feat: extract and independently review facts with frozen skills"`；温度相关既有改动按其归属单独处理。
+- [x] **Step 4：GREEN。** domain models 与温度回归通过：`python -m pytest tests/test_domain_models.py tests/test_open_web_temperature.py -q`。默认及用户设置温度沿用适配，不在新请求硬编码另一个值。
+- [x] **Step 5：提交。** 添加 models/合同/store 修改及新测试，`git commit -m "feat: extract and independently review facts with frozen skills"`；温度相关既有改动按其归属单独处理。
+
+执行记录：模型实现及规格修复提交 41cb148、a3e9143、0eb3f94；质量修复 0a91d717、a49e5eb。规格审查通过，质量复审 Approved；独立模型/温度/页面/规则测试 198 passed，45.03 秒。跨块新增证据保持未复核标记，缓存输入变化明确冲突，原温度改动保留。
 
 ## Task 10：真实新实体、关系依赖和一层关联
 
