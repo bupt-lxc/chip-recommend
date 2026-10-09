@@ -175,3 +175,51 @@ def test_output_hardlink_to_source_is_rejected_before_provider_without_database_
     assert calls == []
     assert source.read_bytes() == output.read_bytes() == before_bytes
     assert probe.business_digest(source) == before_digest
+
+
+@pytest.mark.parametrize('setting', ['explicit', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY'])
+@pytest.mark.parametrize('prefix', ['//', ''])
+def test_schemeless_proxy_credentials_are_redacted_without_changing_route(
+    tmp_path, monkeypatch, capsys, setting, prefix,
+):
+    password = 'task16_synthetic_proxy_password'
+    raw_proxy = prefix + 'testuser:' + password + '@proxy.example:7897'
+    for name in ('DATA_AGENT_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+                 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy'):
+        monkeypatch.delenv(name, raising=False)
+    if setting != 'explicit':
+        monkeypatch.setenv(setting, raw_proxy)
+    observed = []
+    source = provider('bing-html', '<div id="b_results">no results</div>')
+    def factory(*, proxy):
+        observed.append(proxy)
+        source.adapter.proxies = {'http': proxy, 'https': proxy} if proxy else None
+        return (source,)
+    monkeypatch.setattr(probe, 'default_providers', factory)
+    output = tmp_path / 'route.json'
+    argv = ['--provider', 'bing-html', '--output', str(output)]
+    if setting == 'explicit':
+        argv += ['--proxy', raw_proxy]
+    assert probe.main(argv) == 0
+    assert observed == [raw_proxy if setting == 'explicit' else None]
+    text = output.read_text(encoding='utf-8')
+    assert password not in text + capsys.readouterr().out
+    saved = json.loads(text)
+    assert saved['request_count'] == 3
+    assert saved['status'] == 'healthy'
+    diagnostic = saved['diagnostics'][0]
+    value = diagnostic['explicit_proxy'] if setting == 'explicit' else diagnostic['ambient_proxy_environment'][setting]
+    assert '[REDACTED]' in value and 'proxy.example:7897' in value
+
+
+def test_schemeless_proxy_in_request_error_is_redacted(tmp_path, monkeypatch, capsys):
+    password = 'task16_synthetic_error_proxy_password'
+    raw_proxy = '//testuser:' + password + '@proxy.example:7897'
+    source = provider('bing-html', requests.ConnectionError('Unable to connect via ' + raw_proxy + '; ' + password))
+    source.adapter.proxies = {'http': raw_proxy, 'https': raw_proxy}
+    monkeypatch.setattr(probe, 'default_providers', lambda **kw: (source,))
+    output = tmp_path / 'error.json'
+    assert probe.main(['--proxy', raw_proxy, '--output', str(output)]) == 2
+    text = output.read_text(encoding='utf-8')
+    assert password not in text + capsys.readouterr().out
+    assert {row['outcome'] for row in json.loads(text)['diagnostics']} == {'network_error'}

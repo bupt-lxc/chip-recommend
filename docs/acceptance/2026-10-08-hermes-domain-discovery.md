@@ -94,7 +94,9 @@ Bing 两条开放词返回相同八个泛 AI URL，L40S 词主要返回通用 NV
 | Task16 初次 GREEN + 相关搜索回归 | `.tmp/task16-probe-green.log`：85 passed/24.74s，含 probe/domain_search/search_provider_integrity |
 | Task16 代理路线 RED | `.tmp/task16-probe-route-red.log`：1 failed/7 passed/0.43s，实际发现 trust_env 被修改 |
 | Task16 备份 deadline RED | `.tmp/task16-digest-deadline-red.log`：1 failed/8 passed/0.48s（尚无有界 backup 参数）；添加 progress/monotonic deadline 后 GREEN |
-| Task16 最终窄 GREEN | `.tmp/task16-probe-final.log`：9 passed/1.13s；默认 session 路线不修改、环境/显式代理优先与脱敏、逐源不掩盖失败、健康空/解析/网络、参数拒绝、WAL 全表摘要/无源写入、exclusive lock 的 backup deadline |
+| Task16 首版本窄 GREEN | `.tmp/task16-probe-final.log`：9 passed/1.13s；默认 session 路线不修改、环境/显式代理优先与脱敏、逐源不掩盖失败、健康空/解析/网络、参数拒绝、WAL 全表摘要/无源写入、exclusive lock 的 backup deadline |
+| Task16 输出硬链接别名 RED→GREEN | `.tmp/task16-output-alias-red.log`：2 failed/9 passed/1.14s；`.tmp/task16-output-alias-green.log`：11 passed/1.10s。普通源与 symlink 源指向 output.json 同 inode 时，在 provider 调用前拒绝，源 bytes/六表逻辑摘要不变；修复提交 `134920d1c60d5aaeaa7a00fbbb1b3a092f7d49ba` |
+| Task16 代理格式脱敏 RED→GREEN | `.tmp/task16-schemeless-proxy-red.log`：9 failed/11 passed/1.48s；`.tmp/task16-schemeless-proxy-green.log`：20 passed/1.46s。显式与 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY 的 scheme-less userinfo、错误文本在 stdout/JSON 都脱敏，正常 HTTP 凭证回归通过；仅修改审计副本，实际 transport 参数不变，不改公共业务 redact |
 | Task15 六域/恢复相关 | 94 combined passed/160.33s + final 9 passed/24.81s，提交 `fb55788df6e6864eb1f41517b5fb4c468648c087`（既有执行交接记录） |
 | Task15 唯一全套 pytest | **3 failed / 1304 passed / 662.82s，exit 1**，执行交接记录名 `task15-full.log`；未重复全套，不称 full GREEN |
 | 三个全套失败闭环 | 两个旧 orchestrator 测试要求已禁止的全库/单字段子进程伪成功，一个旧 API 测试期待 422 而 Raw JSON 合同明确 400；修改预期并加强 0 runner/0 queue/六表不变：`task15-full-failure-closure.log` 13 passed/7.16s，PDF 2 passed/7.31s |

@@ -13,6 +13,7 @@ import time
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 import requests
 
@@ -32,6 +33,53 @@ PROBES = (
 PROVIDERS = ('bing-html', 'so360-html', 'duckduckgo-html')
 BUSINESS_TABLES = ('chips', 'models', 'chip_model_benchmarks',
     'chip_model_compatibility', 'deployment_guides', 'field_provenance')
+PROXY_ENVIRONMENT = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+    'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy')
+
+
+def _proxy_parts(value):
+    normalized = requests.utils.prepend_scheme_if_needed(value, 'http')
+    parsed = urlsplit(normalized)
+    # Bare user:password@host can look like an unknown URI scheme to the URL
+    # parser. Treat its userinfo structurally in the audit copy, never rewrite
+    # the actual configured transport value.
+    if not parsed.netloc and '@' in value:
+        parsed = urlsplit('http://' + value.removeprefix('//'))
+    return parsed
+
+
+def _proxy_audit(value):
+    """Sanitize an audit copy of requests-supported proxy URL forms only."""
+    if not isinstance(value, str) or not value:
+        return value
+    parsed = _proxy_parts(value)
+    if parsed.username is not None or parsed.password is not None:
+        safe_netloc = '[REDACTED]@' + parsed.netloc.rsplit('@', 1)[-1]
+        return redact(urlunsplit((parsed.scheme, safe_netloc, parsed.path, parsed.query, parsed.fragment)))
+    return redact(value)
+
+
+def _proxy_error_audit(message, proxies):
+    """Errors can embed raw scheme-less URLs or decoded known credentials."""
+    secrets = set()
+    for proxy in proxies:
+        if not isinstance(proxy, str) or not proxy:
+            continue
+        parsed = _proxy_parts(proxy)
+        normalized = parsed.geturl()
+        if parsed.username is not None or parsed.password is not None:
+            safe = _proxy_audit(proxy)
+            message = message.replace(normalized, safe).replace(proxy, safe)
+            for credential in (parsed.username, parsed.password):
+                while credential:
+                    secrets.add(credential)
+                    decoded = unquote(credential)
+                    if decoded == credential:
+                        break
+                    credential = decoded
+    for secret in sorted(secrets, key=len, reverse=True):
+        message = message.replace(secret, '[REDACTED]')
+    return redact(message)
 
 
 def business_digest(source, *, backup_timeout=5):
@@ -82,6 +130,8 @@ def run_probe(providers, *, proxy=None):
             effective = {**(getattr(provider.adapter.session, 'proxies', {}) or {}),
                 **ambient, **(provider.adapter.proxies or {})}
             effective = {key: value for key, value in effective.items() if value is not None}
+            environment = {name: os.getenv(name) for name in PROXY_ENVIRONMENT if os.getenv(name)}
+            proxy_values = [proxy, *ambient.values(), *effective.values(), *environment.values()]
             urls, rejected = [], []
             for row in response.rows:
                 try:
@@ -97,13 +147,12 @@ def run_probe(providers, *, proxy=None):
                 'endpoint': response.endpoint, 'locale': response.locale,
                 'http_status': response.http_status, 'network_status': response.network_status,
                 'parse_status': response.parse_status, 'outcome': response.outcome,
-                'error': response.error, 'elapsed_ms': response.elapsed_ms,
+                'error': _proxy_error_audit(response.error, proxy_values), 'elapsed_ms': response.elapsed_ms,
                 'raw_result_count': len(response.rows), 'valid_urls': urls,
-                'rejected_urls': rejected, 'explicit_proxy': proxy,
-                'ambient_proxy_environment': {name: os.getenv(name) for name in (
-                    'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
-                    'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy') if os.getenv(name)},
-                'ambient_proxies': ambient, 'effective_proxies': effective,
+                'rejected_urls': rejected, 'explicit_proxy': _proxy_audit(proxy),
+                'ambient_proxy_environment': {key: _proxy_audit(value) for key, value in environment.items()},
+                'ambient_proxies': {key: _proxy_audit(value) for key, value in ambient.items()},
+                'effective_proxies': {key: _proxy_audit(value) for key, value in effective.items()},
                 'session_trust_env': trust_env, 'fallback_used': False,
             }))
     return redact({'diagnostic_only': True, 'production_template': False,
@@ -149,7 +198,8 @@ def main(argv=None):
             if before != after:
                 result.update(status='failed', interference='business content changed; inspect other writers and repeat in a quiet window')
     except (OSError, ValueError, sqlite3.Error) as error:
-        result = {'diagnostic_only': True, 'status': 'failed', 'error': redact(str(error)),
+        result = {'diagnostic_only': True, 'status': 'failed',
+            'error': _proxy_error_audit(str(error), [args.proxy, *(os.getenv(name) for name in PROXY_ENVIRONMENT)]),
             'business_before': before}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(redact(result), ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
