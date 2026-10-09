@@ -266,6 +266,31 @@ class DomainToolService:
             raise ToolProtocolError(error['status_code'], error['detail'])
         return receipt['result']
 
+    @classmethod
+    def selection_progress(cls, search, pages, selection):
+        """Read-only coverage of actual current candidates and saved decisions."""
+        search, selection = search or {}, selection or {}
+        try:
+            version = cls._current(search)
+        except ValueError:
+            version = None
+        items = search.get('versions', {}).get(version, {}).get('items', [])
+        terminal, decisions = cls._visits(pages), selection.get('decisions', {})
+        pending = []
+        for item in items:
+            cid = item['candidate_id']
+            missing = ([] if cid in terminal else ['visit']) + ([] if cid in decisions else ['decision'])
+            if missing:
+                pending.append({'candidate_id': cid, 'url': item['url'],
+                    'stage': 'previewing' if 'visit' in missing else 'selecting',
+                    'reason': 'visit_not_completed' if 'visit' in missing else 'decision_not_submitted'})
+        finalized = bool(selection.get('finalized'))
+        return {'list_version': version, 'candidate_count': len(items), 'decision_count': len(decisions),
+            'pending_count': len(pending), 'pending_candidates': pending, 'finalized': finalized,
+            'selection_finalization': None if finalized else {
+                'stage': 'selecting' if version else 'searching',
+                'reason': 'finalize_not_submitted' if version else 'search_not_completed'}}
+
     def read_run(self, run_id):
         """Readonly status needs no worker lease and never reconstructs old data."""
         run = self.store.get_run(run_id)
@@ -276,19 +301,10 @@ class DomainToolService:
         counts = {}
         for task in tasks:
             counts[task['state']] = counts.get(task['state'], 0) + 1
-        try:
-            version = self._current(search)
-        except ValueError:
-            version = None
-        major_ids = {item['candidate_id'] for item in search.get('versions', {}).get(version, {}).get('items', [])}
-        terminal = self._visits(pages)
-        decided = set(selection.get('decisions', {}))
         return {'run_id': run_id, 'pipeline': run['pipeline'], 'contract_version': run['contract_version'],
                 'domain': run['payload']['domain'], 'scope_type': run['payload']['scope_type'],
                 'chip': run['payload'].get('chip'), 'status': run['status'], 'current_stage': run['stage'],
-                'list_version': version, 'candidate_count': len(search.get('versions', {}).get(version, {}).get('items', [])),
-                'decision_count': len(selection.get('decisions', {})), 'finalized': bool(selection.get('finalized')),
-                'pending_count': len(major_ids - (decided & terminal)),
+                **self.selection_progress(search, pages, selection),
                 'task_counts': counts, 'read_only': True}
 
     def _selection(self, ctx, request, payload):

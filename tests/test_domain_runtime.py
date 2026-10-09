@@ -719,3 +719,157 @@ def test_integrity_failure_on_finalized_resume_is_fatal_before_any_external_call
     assert result['status'] == 'failed', result
     assert deps['hermes_runner'].calls == 1 and not deps['call_model'].calls
     assert store.get_run(run_id)['status'] == 'failed'
+
+
+class CollectionStopsRunner(Runner):
+    preview = True
+    append_count = 0
+
+    def run(self, *, context, service, **kwargs):
+        self.service = service
+        binding = {'contract_version': 3, 'pipeline': 'hermes-open-web-v3', 'run_id': context.run_id,
+            **{key: context.store.get_run(context.run_id)['payload'][key] for key in ('domain', 'scope_type', 'chip')}}
+        searched = service.handle('search', {**binding, 'action': 'execute', 'request_id': 'search', 'plan': plan()})
+        version = searched['list_version']
+        items = service.handle('search', {**binding, 'action': 'results', 'list_version': version})['items']
+        if self.preview:
+            service.handle('preview', {**binding, 'mode': 'initial', 'request_id': 'preview', 'list_version': version})
+        if self.append_count:
+            service.handle('selection', {**binding, 'action': 'append', 'request_id': 'append', 'list_version': version,
+                'decisions': [{'candidate_id': item['candidate_id'], 'decision': 'select', 'reason': '实际预览支持规格',
+                    'expected_info': '规格', 'linked_domains': [], 'entity_clues': [], 'matched_category': None}
+                    for item in items[:self.append_count]]})
+        return SimpleNamespace(returncode=0, stdout='Stopped collecting', stderr='')
+
+
+@pytest.mark.parametrize('preview,stage,reason', [(True, 'selecting', 'decision_not_submitted'),
+                                               (False, 'previewing', 'visit_not_completed')])
+def test_unfinalized_healthy_collection_exports_each_pending_candidate_without_fabricated_decisions(deps, preview, stage, reason):
+    runner = CollectionStopsRunner()
+    runner.preview = preview
+    deps['hermes_runner'] = runner
+    result = run(deps)
+    assert result['status'] == 'partial' and '未完成选择提交' in result['error']
+    pending = result['execution_state'].get('pending_candidates')
+    assert pending and len(pending) == 1
+    assert pending[0]['url'] == 'https://vendor.example/products'
+    assert pending[0]['candidate_id'] and pending[0]['stage'] == stage and pending[0]['reason'] == reason
+    assert deps['store'].metadata(result['run_id'], 'domain_selection.v1') is None
+    assert runner.service.read_run(result['run_id'])['pending_candidates'] == pending
+    manifest = json.loads((Path(result['artifact_path']) / 'manifest.json').read_text(encoding='utf-8'))
+    work = json.loads((Path(result['artifact_path']) / 'work.json').read_text(encoding='utf-8'))
+    assert manifest['execution_state']['pending_candidates'] == pending
+    assert work['metadata']['domain_runtime_result.v1']['execution_state']['pending_candidates'] == pending
+
+
+def test_partial_append_keeps_original_decision_and_lists_only_remaining_candidate(deps):
+    class TwoURLs(Provider):
+        def search(self, query, limit, *, language):
+            return ProviderResponse(rows=[{'url': f'https://vendor.example/{name}', 'title': 'specs'}
+                for name in ('products', 'second')], outcome='success')
+    deps['search_provider'] = [TwoURLs()]
+    runner = CollectionStopsRunner()
+    runner.append_count = 1
+    deps['hermes_runner'] = runner
+    result = run(deps)
+    assert result['status'] == 'partial'
+    saved = deps['store'].metadata(result['run_id'], 'domain_selection.v1')
+    assert len(saved['decisions']) == 1 and saved['finalized'] is False
+    state = result['execution_state']
+    assert state.get('selection') == saved
+    assert len(state['pending_candidates']) == 1 and state['pending_candidates'][0]['url'].endswith('/second')
+    read = runner.service.read_run(result['run_id'])
+    assert read['pending_count'] == len(state['pending_candidates']) and read['decision_count'] == 1
+    assert state['selection_finalization']['reason'] == 'finalize_not_submitted'
+
+
+def test_empty_healthy_search_without_finalize_has_explanation_and_no_invented_candidate(deps):
+    class Empty(Provider):
+        def search(self, query, limit, *, language):
+            return ProviderResponse(rows=[], outcome='healthy_empty')
+    deps['search_provider'] = [Empty()]
+    deps['hermes_runner'] = CollectionStopsRunner()
+    result = run(deps)
+    assert result['status'] == 'partial'
+    state = result['execution_state']
+    assert state.get('pending_candidates') == []
+    assert state['selection_finalization']['reason'] == 'finalize_not_submitted'
+    assert deps['store'].metadata(result['run_id'], 'domain_selection.v1') is None
+
+
+def test_cancel_after_successful_validate_cannot_be_cleared_by_old_preflight_or_fresh_runner(deps, sdk_runner, monkeypatch):
+    import subprocess
+    import threading
+    from chip_model.domain_tool_api import ActiveToolContext
+    entered, release = threading.Event(), threading.Event()
+    validate = ActiveToolContext.validate
+    launched = []
+    popen = subprocess.Popen
+    def pause_after_validate(context):
+        validate(context)
+        if not entered.is_set():
+            entered.set()
+            assert release.wait(15)
+    def actual_launch(*args, **kwargs):
+        launched.append(threading.current_thread().name)
+        return popen(*args, **kwargs)
+    monkeypatch.setattr(ActiveToolContext, 'validate', pause_after_validate)
+    monkeypatch.setattr(subprocess, 'Popen', actual_launch)
+    deps['hermes_runner'] = sdk_runner
+    deps['timeout'] = 1
+    try:
+        stopped = run(deps)
+        assert entered.is_set() and stopped['status'] == 'partial'
+        assert sdk_runner._cancelled.is_set()
+        # A genuinely fresh adapter performs a new run without rearming the
+        # cancelled original instance or its already-paused worker.
+        deps['hermes_runner'] = runtime.HermesRunner(command=sdk_runner.command, python=sdk_runner.python, sdk_root=sdk_runner.sdk_root)
+        deps['timeout'], deps['request_id'] = 1800, 'fresh-adapter-new-run'
+        fresh = run(deps)
+        assert fresh['status'] == 'no_findings', fresh
+        release.set()
+        for thread in threading.enumerate():
+            if thread.name == 'domain-' + stopped['run_id']:
+                thread.join(5)
+        assert 'domain-' + stopped['run_id'] not in launched
+        assert sdk_runner._cancelled.is_set()
+    finally:
+        release.set()
+
+
+def test_spawn_validation_does_not_block_absolute_deadline_cancellation(deps, sdk_runner, monkeypatch):
+    import subprocess
+    import threading
+    import time
+    from chip_model.domain_tool_api import ActiveToolContext
+    entered, release = threading.Event(), threading.Event()
+    validate, popen = ActiveToolContext.validate, subprocess.Popen
+    checks, launched = [], []
+    def pause_second_validation(context):
+        validate(context)
+        checks.append(context.run_id)
+        if len(checks) == 2:
+            entered.set()
+            assert release.wait(10)
+    def actual_launch(*args, **kwargs):
+        launched.append(args)
+        return popen(*args, **kwargs)
+    monkeypatch.setattr(ActiveToolContext, 'validate', pause_second_validation)
+    monkeypatch.setattr(subprocess, 'Popen', actual_launch)
+    deps['hermes_runner'], deps['timeout'] = sdk_runner, 1
+    timer = threading.Timer(4, release.set)
+    timer.start()
+    try:
+        started = time.monotonic()
+        result = run(deps)
+        elapsed = time.monotonic() - started
+        assert entered.is_set() and result['status'] == 'partial'
+        assert elapsed < 2.5, f'cancellation blocked for {elapsed:.2f}s'
+        release.set()
+        for thread in threading.enumerate():
+            if thread.name == 'domain-' + result['run_id']:
+                thread.join(5)
+        assert not launched and sdk_runner._cancelled.is_set()
+    finally:
+        timer.cancel()
+        release.set()

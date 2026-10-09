@@ -198,6 +198,7 @@ def execution_state(store, run_id):
     search = store.metadata(run_id, SearchExecutor.KEY) or SearchExecutor._empty()
     selection = store.metadata(run_id, 'domain_selection.v1') or {}
     pages = store.metadata(run_id, PageService.KEY) or PageService._empty()
+    selection_progress = DomainToolService.selection_progress(search, pages, selection)
     terminal_visits = DomainToolService._visits(pages)
     models = store.metadata(run_id, ModelService.KEY) or {}
     tasks = store.list_tasks(run_id)
@@ -242,6 +243,8 @@ def execution_state(store, run_id):
         'healthy_page_count': len(healthy), 'healthy_pages': list(healthy.values()),
         'recovered_pages': recovered, 'search_failures': search_failures,
         'closed_search_intents': search['intents'],
+        'selection': selection, 'pending_candidates': selection_progress['pending_candidates'],
+        'selection_finalization': selection_progress['selection_finalization'],
         'unfinished_task_ids': unfinished, 'completed_work_count': completed_work,
         'all_model_chains_failed': bool(all_models_failed), 'all_page_chains_failed': bool(all_pages_failed),
         'all_search_chains_failed': bool(all_search_failed),
@@ -554,6 +557,8 @@ class HermesRunner:
         self.process = None
         self._process_lock = threading.Lock()
         self._cancelled = threading.Event()
+        self._context = None
+        self._deadline = None
         self.environment = None
         self.home = None
         self.server = None
@@ -565,6 +570,22 @@ class HermesRunner:
         with self._process_lock:
             if self._cancelled.is_set():
                 raise TimeoutError('Hermes invocation cancelled')
+            context, deadline = self._context, self._deadline
+        if context is None:
+            raise ValueError('Hermes preflight context is required')
+        # Store validation and billing can block. Keep cancellation free to
+        # revoke this fixed execution while they wait, then recheck under the
+        # short spawn guard; no cancelled instance can acquire a new token.
+        context.validate()
+        context.budget.tick()
+        budget = context.budget.snapshot()
+        timeout = min(timeout, (budget['active_limit_ms'] - budget['active_ms']) / 1000)
+        with self._process_lock:
+            if self._cancelled.is_set():
+                raise TimeoutError('Hermes invocation cancelled')
+            timeout = min(timeout, deadline - time.monotonic())
+            if timeout <= 0:
+                raise TimeoutError('Hermes invocation deadline exceeded')
             self.process = subprocess.Popen(command, cwd=self.cwd, env=self.environment,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace',
                 start_new_session=os.name != 'nt', creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
@@ -589,8 +610,14 @@ class HermesRunner:
     def preflight(self, *, bundle_root, context, service, timeout):
         import shutil
         import tempfile
+        with self._process_lock:
+            if self._cancelled.is_set():
+                raise TimeoutError('Hermes invocation cancelled; use a fresh runner')
+            if self._context is not None:
+                raise ValueError('Hermes runner is single-use; use a fresh runner')
+            self._context = context
+            self._deadline = time.monotonic() + timeout
         context.validate()
-        self._cancelled.clear()
         executable = shutil.which(self.command[0]) if self.command else None
         if executable is None:
             raise RuntimeError('Hermes CLI 未安装：无法探测实际安装能力')
@@ -628,9 +655,8 @@ class HermesRunner:
             'PYTHONDONTWRITEBYTECODE': '1', 'TERMINAL_CWD': str(self.cwd)})
         if self.sdk_root:
             self.environment['PYTHONPATH'] = str(Path(self.sdk_root).resolve())
-        started = time.monotonic()
         def remaining():
-            value = timeout - (time.monotonic() - started)
+            value = self._deadline - time.monotonic()
             if value <= 0:
                 raise TimeoutError('Hermes preflight deadline exceeded')
             return value
@@ -651,6 +677,13 @@ class HermesRunner:
         import socket
         import uvicorn
         from chip_model.open_web_tool_server import create_open_web_tool_app
+        deadline = time.monotonic() + timeout
+        with self._process_lock:
+            if self._cancelled.is_set():
+                raise TimeoutError('Hermes invocation cancelled')
+            if context is not self._context:
+                raise ValueError('Hermes runner belongs to its original execution context')
+            self._deadline = deadline
         context.validate()
         if self.home is None or Path(bundle_root).resolve() != self.bundle:
             raise ValueError('Hermes successful preflight required for original frozen bundle')
@@ -662,7 +695,6 @@ class HermesRunner:
         self.server = uvicorn.Server(uvicorn.Config(app, log_level='error', access_log=False, lifespan='off', ws='none'))
         self.server_thread = threading.Thread(target=self.server.run, kwargs={'sockets': [sock]}, daemon=True)
         self.server_thread.start()
-        deadline = time.monotonic() + timeout
         while not self.server.started:
             if not self.server_thread.is_alive() or time.monotonic() >= deadline:
                 self.cancel()
@@ -681,8 +713,8 @@ class HermesRunner:
     def cancel(self):
         import signal
         import subprocess
-        self._cancelled.set()
         with self._process_lock:
+            self._cancelled.set()
             process = self.process
         if process is not None and process.poll() is None:
             if os.name == 'nt':
