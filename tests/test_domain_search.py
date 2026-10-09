@@ -2,6 +2,9 @@
 
 import importlib.util
 import json
+from pathlib import Path
+import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 
@@ -630,3 +633,26 @@ def test_executor_persists_redacted_quoted_payload_and_basic_proxy_header(setup)
     serialized = json.dumps(artifacts, ensure_ascii=False)
     assert 'SECRET' not in serialized and 'dXNlcjpTRUNSRVQ=' not in serialized
     assert '[REDACTED]' in serialized
+
+
+def test_quoted_redaction_is_bounded_for_unterminated_and_long_backslash_values():
+    # A timeout kills and waits for the child, preventing a broken regex from
+    # hanging this pytest process or leaving a runaway helper behind.
+    script = '''
+import json
+from chip_model.pipeline.domain_discovery.search import redact
+slash = chr(92)
+for key in ('api_key', 'password', 'Proxy-Authorization'):
+    malformed = '{"' + key + '":"' + slash * 4096
+    assert isinstance(redact(malformed), str)
+valid = json.dumps({'api_key': slash * 4096, 'sku': 'MLU370-S4'})
+assert json.loads(redact(valid)) == {'api_key': '[REDACTED]', 'sku': 'MLU370-S4'}
+unrelated = '{"description":"' + slash * 4096
+assert redact(unrelated) == unrelated
+'''
+    try:
+        result = subprocess.run([sys.executable, '-c', script], cwd=Path(__file__).parents[1],
+                                capture_output=True, text=True, timeout=5)
+    except subprocess.TimeoutExpired:
+        pytest.fail('quoted redaction exceeded its subprocess deadline on malformed backslashes')
+    assert result.returncode == 0, result.stderr

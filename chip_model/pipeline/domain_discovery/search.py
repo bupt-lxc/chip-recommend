@@ -31,8 +31,10 @@ _TRACKING = frozenset({'gclid', 'fbclid', 'msclkid', 'yclid', '_ga', 'mc_cid', '
 _SECRET_NAME = r'(?:api[_-]?key|access[_-]?token|token|(?:proxy[-_])?authorization|password|secret|credential)'
 _SECRET_KEYS = re.compile(r'^' + _SECRET_NAME + r'$', re.I)
 _URL_CREDENTIALS = re.compile(r'([a-z][a-z0-9+.-]*://)[^/\s@]+@', re.I)
+# Escape and ordinary-character branches are disjoint: an unterminated value
+# cannot backtrack through exponentially many partitions of its backslashes.
 _QUOTED_SECRET = re.compile(
-    r'(?P<prefix>["\']' + _SECRET_NAME + r'["\']\s*:\s*)(?P<quote>["\'])(?:\\.|(?!(?P=quote)).)*(?P=quote)', re.I | re.S)
+    r'(?P<prefix>["\']' + _SECRET_NAME + r'["\']\s*:\s*)(?P<quote>["\'])(?:\\.|(?!(?P=quote))[^\\])*(?P=quote)', re.I | re.S)
 _ESCAPED_QUOTED_SECRET = re.compile(
     r'(?P<prefix>\\["\']' + _SECRET_NAME + r'\\["\']\s*:\s*)(?P<quote>\\["\'])(?:(?!(?P=quote)).)*(?P=quote)', re.I | re.S)
 _AUTHORIZATION_HEADER = re.compile(r'(?<![\w-])((?:proxy[-_])?authorization\s*[:=]\s*)[^\r\n,;"\']+', re.I)
