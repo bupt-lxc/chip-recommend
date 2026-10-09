@@ -632,7 +632,7 @@ def phase_messages(phase, skill_text, references, contract, payload):
 
 **Files:** `entities.py`、`runtime.py`、`contracts.py`；测试 `tests/test_domain_entities.py`、`tests/test_domain_linked.py`。
 
-- [ ] **Step 1：写完整 SKU 与未知依赖保留测试。**
+- [x] **Step 1：写完整 SKU 与未知依赖保留测试。**
 
 ```python
 from chip_model.pipeline.domain_discovery.entities import normalized_sku, temporary_entity_id
@@ -644,8 +644,8 @@ def test_normalization_preserves_capacity_and_board_suffix():
 ```
 
 新增样例：一个页面两 SKU 各自显存不串；主域和关联域第一次发现同一新芯片；同一实体两 URL 合并；系列名不能当具体芯片；厂商别名须有验证映射；整机/集群 out_of_scope；模型不在库的关系保留 dependency_unresolved，不造 model_id 行；关联域不得二次扩域；主域成功、关联失败整体 partial。
-- [ ] **Step 2：RED。** entities/linked 测试失败后再实现。
-- [ ] **Step 3：实现稳定规范化和依赖判定。**
+- [x] **Step 2：RED。** entities/linked 测试失败后再实现。
+- [x] **Step 3：实现稳定规范化和依赖判定。**
 
 ```python
 import hashlib
@@ -664,8 +664,10 @@ def temporary_entity_id(vendor, sku):
 主域选择和提取的关联域合并去重，每 URL×其他六域建立最多一个任务；关联复用同一快照，加载对应 extract/review 包，禁止新搜索和继续派生业务域。身份是公共依赖：关联域出现新型号也可追加 URL×完整实体提示的 identity 核验任务，无业务扩域能力；主域 identity 已处理的实体复用。核验成功后更新候选关联，不覆盖原始提取版本。
 
 实测最低识别条件按 spec §5.5 分任务验证：生成指标需要序列长度及 batch/并发；训练需要对应工作量与硬件范围；非生成任务不强求 token 条件。最低条件不足为 unresolved，不计 validated；有指标证据但旧行比较多义保留审核通过、comparison_unresolved。比较键包含完整测试条件；部署文档身份 URL/title/适用范围，兼容声明等级与验证证据对应。
-- [ ] **Step 4：GREEN。** 六域实体样例与 linked 测试通过；不会调用旧 Publisher 或 HF 同步来“修复”未知依赖。
-- [ ] **Step 5：提交。** 添加实体/runtime/合同与两类测试，`git commit -m "feat: preserve new entities and bounded linked-domain evidence"`。
+- [x] **Step 4：GREEN。** 六域实体样例与 linked 测试通过；不会调用旧 Publisher 或 HF 同步来“修复”未知依赖。
+- [x] **Step 5：提交。** 添加实体/runtime/合同与两类测试，`git commit -m "feat: preserve new entities and bounded linked-domain evidence"`。
+
+执行记录：实体/关联实现 2bc71b0，规格修复 c72481f，质量修复 520cf38、179e338、9df80eb。规格审查 PASS；质量最终 Approved。最终实体/关联独立检查 70 passed，44.32 秒；上一轮实体/关联/合同/模型 206 passed，76.53 秒。保留真实模型证明、独立依赖与比较状态；身份策略版本 2，类型歧义及分列规格重放保持 ID、判定和绑定稳定。
 
 ## Task 11：冻结旧值、来源两维比较和独立计数
 
