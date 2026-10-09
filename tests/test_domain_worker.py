@@ -206,7 +206,8 @@ def test_preflight_verifies_mount_actual_cli_sdk_and_package(deps, monkeypatch):
         return SimpleNamespace(returncode=0,stdout=out,stderr='')
     monkeypatch.setattr(subprocess,'run',probe)
     report = worker_module().check_environment(root)
-    assert report['status'] == 'ready',report
+    assert report['status'] == 'preflight_required',report
+    assert 'sqlite_atomic_write' in report['deferred_checks']
     assert any(c['item'] == 'hermes_sdk' and c['ok'] for c in report['checks'])
     assert report['runtime_preflight_required'] is True
     assert not (root / 'domain_runs').exists()
@@ -286,3 +287,149 @@ def test_cli_waiting_on_other_worker_uses_current_status_not_previous_result(tmp
     assert result['status'] == 'running'
     assert 'previous stopped work' not in result.get('error','')
     store.validate_context(original['run_id'],generation,'other-worker')
+
+@pytest.mark.parametrize('resume', [False, True])
+def test_direct_retry_before_budget_reuses_original_timeout(deps, monkeypatch, resume):
+    from chip_model.pipeline.domain_discovery import runtime, budget
+    request = dict(domain='specs',chip=None,scope_type='discovery',resume_run_id=None)
+    original = budget.RunBudget
+    def fail(*args,**kwargs):
+        raise RuntimeError('before budget record')
+    fail.KEY = original.KEY
+    monkeypatch.setattr(budget,'RunBudget',fail)
+    with pytest.raises(RuntimeError,match='before budget'):
+        runtime.run_domain(request,{**deps,'timeout':1})
+    store = deps['store']
+    with store._connect() as conn:
+        lease = dict(conn.execute('SELECT * FROM leases').fetchone())
+    store.release(lease['run_id'],lease['generation'])
+    monkeypatch.setattr(budget,'RunBudget',original)
+    monkeypatch.setattr(runtime,'_execute_domain',lambda *args: {'status':'no_findings'})
+    retried = {**request,'resume_run_id':lease['run_id']} if resume else request
+    runtime.run_domain(retried,{k:v for k,v in deps.items() if k != 'timeout'})
+    assert store.metadata(lease['run_id'],original.KEY)['active_limit_ms'] == 1000
+    assert store.dispatch_request(lease['run_id'])['timeout'] == 1
+
+
+@pytest.mark.parametrize('payload', [
+    {'domain':'specs','request_id':'new-domain'}, {'chip':'New X'}, {'resume_run_id':'old'},
+    {'scope_type':'discovery'}, {'contract_version':3}])
+def test_old_dispatcher_preserves_unmarked_domain_requests(tmp_path,monkeypatch,payload):
+    from scripts import hermes_manual_run_dispatcher as old
+    path = tmp_path / 'domain.json'
+    raw = json.dumps({'pipeline':'open_web','mode':'test','status':'queued','limit':5,**payload})
+    path.write_text(raw,encoding='utf-8')
+    calls = []
+    from types import SimpleNamespace
+    monkeypatch.setattr(old.subprocess,'run',lambda *a,**k: calls.append(a) or SimpleNamespace(returncode=0,stdout='{}',stderr=''))
+    old.dispatch(path,container='chip-recommend',formal_job_id='',test_job_id='',hermes_python='missing')
+    assert path.read_text(encoding='utf-8') == raw
+    assert calls == []
+
+
+def _healthy_preflight(deps, monkeypatch):
+    import sys, subprocess, shutil
+    root = deps['source_db'].parent
+    shutil.copyfile(deps['source_db'],root / 'data.db')
+    token = root / 'manual_control/admin_token'
+    token.parent.mkdir()
+    token.write_text('fixture',encoding='utf-8')
+    monkeypatch.setenv('HERMES_CLI_COMMAND',sys.executable)
+    monkeypatch.setenv('HERMES_PYTHON',sys.executable)
+    monkeypatch.setenv('AISH_PERF_HERMES_SKILL_ROOT',str(deps['installed_skill_root']))
+    monkeypatch.setenv('AISH_PERF_CONTAINER_DATA_ROOT','/app/data')
+    from types import SimpleNamespace
+    def probe(command,**kwargs):
+        output = json.dumps([{'Source':str(root),'Destination':'/app/data','RW':True}]) if command[:2] == ['docker','inspect'] else '--skills --toolsets'
+        return SimpleNamespace(returncode=0,stdout=output,stderr='')
+    monkeypatch.setattr(subprocess,'run',probe)
+    return root
+
+
+@pytest.mark.parametrize('broken', ['file','corrupt_control','missing_schema','permissions'])
+def test_preflight_rejects_unusable_actual_run_root(deps,monkeypatch,broken):
+    import os
+    root = _healthy_preflight(deps,monkeypatch)
+    runs = root / 'domain_runs'
+    if broken == 'file':
+        runs.write_text('ordinary file',encoding='utf-8')
+    elif broken == 'corrupt_control':
+        runs.mkdir()
+        (runs / 'control.sqlite3').write_text('not sqlite',encoding='utf-8')
+    elif broken == 'missing_schema':
+        import sqlite3
+        runs.mkdir()
+        with sqlite3.connect(runs / 'control.sqlite3') as db:
+            db.execute('CREATE TABLE wrong (id TEXT)')
+    else:
+        runs.mkdir()
+        access = os.access
+        monkeypatch.setattr(os,'access',lambda path,mode: False if Path(path).resolve() == runs else access(path,mode))
+    report = worker_module().check_environment(root)
+    assert report['status'] == 'failed', report
+    assert any(not check['ok'] for check in report['checks'] if check['item'] in {'writable_run_directory','control_database'})
+
+@pytest.mark.parametrize('status', ['queued','running'])
+def test_old_main_loop_skips_unmarked_domain_before_any_state_change(tmp_path,monkeypatch,status):
+    import sys
+    from scripts import hermes_manual_run_dispatcher as old
+    requests = tmp_path / 'manual_control/requests'
+    requests.mkdir(parents=True)
+    path = requests / 'domain.json'
+    raw = json.dumps({'pipeline':'open_web','mode':'test','status':status,'limit':5,
+        'domain':'specs','request_id':'new-domain','started_at':'2000-01-01T00:00:00+00:00'})
+    path.write_text(raw,encoding='utf-8')
+    monkeypatch.setattr(sys,'argv',['old','--data-root',str(tmp_path),'--formal-job-id','formal','--test-job-id','test','--once'])
+    monkeypatch.setattr(old,'dispatch',lambda *a,**k: pytest.fail('new domain entered legacy dispatch'))
+    assert old.main() == 0
+    assert path.read_text(encoding='utf-8') == raw
+
+
+@pytest.mark.parametrize('pipeline', ['known_sources','open_web'])
+def test_request_id_alone_preserves_legacy_dispatch(tmp_path,monkeypatch,pipeline):
+    from scripts import hermes_manual_run_dispatcher as old
+    from types import SimpleNamespace
+    path = tmp_path / 'legacy.json'
+    path.write_text(json.dumps({'pipeline':pipeline,'mode':'test','status':'queued','limit':5,'request_id':'legacy-key'}),encoding='utf-8')
+    calls=[]
+    monkeypatch.setattr(old.subprocess,'run',lambda *a,**k: calls.append(a) or SimpleNamespace(returncode=0,stdout='{}',stderr=''))
+    result = old.dispatch(path,container='chip-recommend',formal_job_id='',test_job_id='',hermes_python='missing',test_job_active=False)
+    assert calls and result['status'] in {'completed','partial'}
+
+
+def test_preflight_existing_control_is_readonly_and_defers_write_transactions(deps,monkeypatch):
+    from chip_model.pipeline.domain_discovery.store import _file_hash
+    root = _healthy_preflight(deps,monkeypatch)
+    store = RunStore(root / 'domain_runs')
+    control = store.root / 'control.sqlite3'
+    before = _file_hash(control)
+    files = {str(p.relative_to(root)) for p in root.rglob('*')}
+    report = worker_module().check_environment(root)
+    assert report['status'] == 'preflight_required'
+    assert next(c for c in report['checks'] if c['item']=='control_database')['ok'] is True
+    assert 'sqlite_atomic_write' in report['deferred_checks']
+    assert _file_hash(control) == before
+    assert {str(p.relative_to(root)) for p in root.rglob('*')} == files
+
+
+def test_worker_before_first_budget_inherits_queued_timeout(deps,monkeypatch):
+    from chip_model.pipeline.domain_discovery import runtime
+    root = deps['source_db'].parent
+    receipt = manual_control.queue_domain_run({'domain':'specs','request_id':'worker-timeout'},data_root=root,timeout=1)
+    monkeypatch.setattr(runtime,'_execute_domain',lambda *a: {'status':'no_findings'})
+    out = worker_module().work_once(root,dependencies={**deps,'timeout':1800})[0]
+    assert out['status'] == 'no_findings'
+    store = RunStore(root / 'domain_runs')
+    assert store.metadata(receipt['run_id'],'domain_budget.v1')['active_limit_ms'] == 1000
+
+def test_preflight_rejects_control_schema_without_required_keys(deps,monkeypatch):
+    import sqlite3
+    from chip_model.pipeline.domain_discovery.store import _CONTROL_DDL
+    root = _healthy_preflight(deps,monkeypatch)
+    runs = root / 'domain_runs'
+    runs.mkdir()
+    with sqlite3.connect(runs / 'control.sqlite3') as db:
+        db.executescript(_CONTROL_DDL.replace(' PRIMARY KEY','').replace(' UNIQUE',''))
+    report = worker_module().check_environment(root)
+    assert report['status'] == 'failed'
+    assert next(c for c in report['checks'] if c['item']=='control_database')['ok'] is False

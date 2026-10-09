@@ -62,6 +62,66 @@ def work_once(data_root, *, executor=None, dependencies=None, run_id=None, stop_
     return results
 
 
+def inspect_run_storage(data_root):
+    """Inspect the exact RunStore location without creating or mutating it.
+
+    Permission bits/access checks are necessary, not proof that SQLite can
+    acquire write locks, create journals or atomically commit attached files.
+    Those transaction capabilities stay explicitly deferred to the runtime.
+    """
+    import sqlite3
+    from contextlib import closing
+    from chip_model.pipeline.domain_discovery.store import _CONTROL_DDL
+    root = Path(data_root).resolve()
+    runs = root / 'domain_runs'
+    checks = []
+    def add(item, ok, detail):
+        checks.append({'item': item, 'ok': ok, 'detail': str(detail)})
+    try:
+        if runs.exists():
+            valid = runs.is_dir() and runs.resolve() == runs and os.access(runs, os.R_OK | os.W_OK | os.X_OK)
+            add('writable_run_directory', valid,
+                f'{runs}: actual directory/type/containment and access checks; transactions not certified')
+        else:
+            ancestor = runs.parent
+            while not ancestor.exists() and ancestor != ancestor.parent:
+                ancestor = ancestor.parent
+            valid = ancestor.is_dir() and os.access(ancestor, os.W_OK | os.X_OK)
+            add('writable_run_directory', valid, f'{runs}: creation access from nearest existing ancestor {ancestor}; no directory created')
+        control = runs / 'control.sqlite3'
+        if not valid:
+            add('control_database', False, 'run root is unusable; control database cannot be safely opened')
+        elif not control.exists():
+            add('control_database', None, f'{control}: absent; schema initialization and actual write transaction deferred')
+        elif not control.is_file() or control.resolve() != control or not os.access(control, os.R_OK | os.W_OK):
+            add('control_database', False, f'{control}: expected contained readable/writable regular file')
+        else:
+            with closing(sqlite3.connect(control.as_uri() + '?mode=ro', uri=True, timeout=3)) as db:
+                db.execute('PRAGMA query_only=ON')
+                if db.execute('PRAGMA quick_check').fetchall() != [('ok',)]:
+                    raise ValueError('control database integrity check failed')
+                # Derive expected storage schema from the sole RunStore DDL,
+                # avoiding a second schema/registry definition in diagnostics.
+                with closing(sqlite3.connect(':memory:')) as expected:
+                    expected.executescript(_CONTROL_DDL)
+                    tables = [row[0] for row in expected.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+                    for table in tables:
+                        required = [row[1:] for row in expected.execute('PRAGMA table_info(' + table + ')')]
+                        actual = [row[1:] for row in db.execute('PRAGMA table_info(' + table + ')')]
+                        if required != actual:
+                            raise ValueError(f'control database schema/column constraints mismatch: {table}')
+                        def unique_keys(connection):
+                            return {(tuple(r[2] for r in connection.execute('PRAGMA index_info(' + row[1] + ')')), row[4])
+                                for row in connection.execute('PRAGMA index_list(' + table + ')') if row[2]}
+                        if not unique_keys(expected) <= unique_keys(db):
+                            raise ValueError(f'control database required unique keys missing: {table}')
+            add('control_database', True, f'{control}: read-only integrity/schema and access checks passed; write transaction deferred')
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        add('control_database', False, str(exc))
+    add('sqlite_atomic_write', None, 'read-only inspection cannot certify journal creation, write locks, disk capacity or attached-database atomic commit; runtime preflight required')
+    return checks
+
+
 def check_environment(data_root):
     """Read-only host topology diagnosis; missing items are explicit failures."""
     import shlex
@@ -73,7 +133,7 @@ def check_environment(data_root):
         checks.append({'item': name, 'ok': bool(ok), 'detail': str(detail)})
     root = Path(data_root).resolve()
     add('shared_data', root.is_dir() and (root / 'data.db').is_file(), root)
-    add('writable_run_directory', root.is_dir() and os.access(root, os.W_OK), root / 'domain_runs')
+    checks.extend(inspect_run_storage(root))
     token = root / 'manual_control/admin_token'
     try:
         token_ok = token.is_file() and bool(token.read_text(encoding='utf-8').strip())
@@ -92,7 +152,7 @@ def check_environment(data_root):
                 for m in mounts)
         except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
             pass
-    add('host_container_path_map', mount_ok, f'{root} -> {container or "missing AISH_PERF_CONTAINER_DATA_ROOT"}; verified docker inspect RW bind mount required')
+    add('host_container_path_map', mount_ok, f'{root}/domain_runs -> {container + "/domain_runs" if container else "missing AISH_PERF_CONTAINER_DATA_ROOT"}; same data-root RW bind verified by docker inspect')
     command = shlex.split(os.getenv('HERMES_CLI_COMMAND', 'hermes'), posix=os.name != 'nt')
     executable = shutil.which(command[0]) if command else None
     add('hermes_cli', bool(executable), executable or 'Hermes CLI missing')
@@ -137,7 +197,8 @@ def check_environment(data_root):
         add('loopback_listener', True, 'host can bind an ephemeral IPv4 loopback listener')
     except OSError as exc:
         add('loopback_listener', False, type(exc).__name__)
-    return {'status': 'ready' if all(c['ok'] for c in checks) else 'failed', 'checks': checks,
+    return {'status': 'failed' if any(c['ok'] is False for c in checks) else 'preflight_required', 'checks': checks,
+        'deferred_checks': [c['item'] for c in checks if c['ok'] is None],
         'runtime_preflight_required': True,
         'runtime_checks': ['actual Hermes resolver/plugin/schema proof',
             'authenticated per-run HTTP health token/run/schema/generation/frozen-bundle/path binding']}

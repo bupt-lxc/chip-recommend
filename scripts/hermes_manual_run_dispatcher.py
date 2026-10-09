@@ -21,11 +21,22 @@ def write_request(path: Path, value: dict) -> None:
     temporary.replace(path)
 
 
+def is_domain_request(value: dict) -> bool:
+    """V3 canonical inputs never enter legacy dispatch, even before stamping.
+
+    request_id alone is a generic legacy idempotency key, not a V3 marker.
+    Legacy skill/chips/queries fields are not new-domain discriminators.
+    """
+    return (value.get('pipeline') == 'hermes-open-web-v3'
+        or value.get('schema_version') == 'hermes-open-web-v3'
+        or any(key in value for key in ('domain', 'chip', 'resume_run_id', 'scope_type', 'contract_version')))
+
+
 def dispatch(path: Path, *, container: str, formal_job_id: str, test_job_id: str,
              hermes_python: str, docker_bin: str = "/usr/bin/docker",
              test_job_active: bool = True) -> dict:
     value = json.loads(path.read_text(encoding="utf-8"))
-    if value.get("pipeline") == "hermes-open-web-v3" or value.get("schema_version") == "hermes-open-web-v3":
+    if is_domain_request(value):
         return value
     if value.get("status") != "queued" or value.get("mode") not in {"formal", "test"}:
         return value
@@ -118,7 +129,7 @@ def main() -> int:
             for path in sorted(requests.glob("*.json")):
                 try:
                     value = json.loads(path.read_text(encoding="utf-8"))
-                    if value.get("pipeline") == "hermes-open-web-v3" or value.get("schema_version") == "hermes-open-web-v3":
+                    if is_domain_request(value):
                         continue
                     if value.get("status") == "queued":
                         dispatch(path, container=args.container, formal_job_id=args.formal_job_id,

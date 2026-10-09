@@ -484,7 +484,8 @@ def run_domain(request, dependencies):
     else:
         owner = 'worker-' + uuid.uuid4().hex
         generation = store.claim(run_id, owner, 5)
-    budget = RunBudget(store, run_id, generation, active_seconds=None if store.metadata(run_id, RunBudget.KEY) else timeout,
+    saved_timeout = store.dispatch_request(run_id)['timeout']
+    budget = RunBudget(store, run_id, generation, active_seconds=None if store.metadata(run_id, RunBudget.KEY) else saved_timeout,
                        monotonic=monotonic, epoch=epoch)
     deps.setdefault('installed_skill_root', Path(os.getenv('AISH_PERF_HERMES_SKILL_ROOT', str(Path.home() / '.hermes/skills'))))
     deps.setdefault('hermes_runner', HermesRunner())
