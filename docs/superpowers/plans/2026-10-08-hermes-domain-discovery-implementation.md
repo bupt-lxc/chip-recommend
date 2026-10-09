@@ -767,7 +767,7 @@ URL×domain 作业复用 RunStore 队列；块、阶段、逻辑候选与修订�
 
 **Files:** `chip_model/server.py`、`chip_model/pipeline/manual_control.py`、`scripts/hermes_domain_worker.py`、`scripts/hermes_manual_run_dispatcher.py`、`scripts/run_hermes_open_web_test.py`、`Dockerfile`、`config/hermes-domain-worker.service`；测试 `tests/test_domain_manual_api.py`、`tests/test_domain_worker.py`。
 
-- [ ] **Step 1：写 API 响应丢失重试和 Worker 领取测试。** FastAPI TestClient 使用临时数据库路径及临时 admin_token，不能读取或打印真实 token。
+- [x] **Step 1：写 API 响应丢失重试和 Worker 领取测试。** FastAPI TestClient 使用临时数据库路径及临时 admin_token，不能读取或打印真实 token。
 
 ```python
 def assert_idempotent_start(client, headers):
@@ -782,8 +782,8 @@ def assert_idempotent_start(client, headers):
 ```
 
 将上面断言放入具有完整临时 app/client fixture 的 `test_manual_api_idempotency`。另外断言未认证 401、formal/queries/target_fields/多芯片/冲突别名 400、同键异体 409、启动后 API 进程退出仍可领取、旧 dispatcher 不领取 v3、同运行两 Worker 只能一个领取、resume 显式域/芯片冲突拒绝、CLI/API payload 与 runtime 完全相同。
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_manual_api.py tests/test_domain_worker.py -q`。
-- [ ] **Step 3：接入唯一启动服务。** 手动 API 沿用管理员鉴权，将新请求先交 `normalize_start`，启动键来自 body request_id 或 Idempotency-Key，冲突拒绝；无键生成后返回并说明不能保证丢响应重试去重。返回 202 前已持久化规范请求、启动键、run_id 绑定与 preparing 状态，准备操作由 Worker 执行。新域请求不能被旧 `ManualRunRequest` 默认 skill/chips/limit 暗中改变。
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_manual_api.py tests/test_domain_worker.py -q`。
+- [x] **Step 3：接入唯一启动服务。** 手动 API 沿用管理员鉴权，将新请求先交 `normalize_start`，启动键来自 body request_id 或 Idempotency-Key，冲突拒绝；无键生成后返回并说明不能保证丢响应重试去重。返回 202 前已持久化规范请求、启动键、run_id 绑定与 preparing 状态，准备操作由 Worker 执行。新域请求不能被旧 `ManualRunRequest` 默认 skill/chips/limit 暗中改变。
 
 ```python
 def start_receipt(binding, state):
@@ -815,8 +815,8 @@ WantedBy=multi-user.target
 这些路径是配置模板，不能直接认定宿主机该 Python 路径存在。环境预检验证 Hermes CLI/Python、共享 data root、宿主机↔容器路径映射、token、实际 loopback 工具 `/health`、规则根/包版本和可写运行目录；不支持时停止并输出具体缺项。env 文件只存部署侧，密钥不提交。v3 复用运行时为单次执行建立的宿主机回环端点及活动预算，旧 5341 服务不作为必需能力；实际端点健康与 Token/运行 ID/合同绑定在运行时预检中核验。API 容器通过共享目录协作，不另起工具注册服务，也不通过放宽公网绑定绕开。
 
 Dockerfile 增加权威 `.hermes-skills` 及必要参考只读打包，运行数据使用同一宿主机 volume；API容器无需安装 Hermes CLI。旧 dispatcher 筛除 schema_version v3，旧安装器/队列不重叠领取。本任务产出服务配置与可运行脚本，部署前检查真实环境并展示具体差异；不自动启用旧 cron 或正式发布器。
-- [ ] **Step 4：GREEN。** domain API/Worker 和现有管理员权限测试通过；模拟 API 重启后同键仍返回同一运行，租约过期 Worker 不能覆盖新结果。
-- [ ] **Step 5：提交。** 明确添加上述文件，`git commit -m "feat: dispatch domain runs through a persistent host worker"`。
+- [x] **Step 4：GREEN。** domain API/Worker 和现有管理员权限测试通过；模拟 API 重启后同键仍返回同一运行，租约过期 Worker 不能覆盖新结果。
+- [x] **Step 5：提交。** 明确添加上述文件，`git commit -m "feat: dispatch domain runs through a persistent host worker"`。
 
 ## Task 14：v3 只读产物与五列界面恢复
 
