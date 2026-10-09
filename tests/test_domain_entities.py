@@ -81,6 +81,8 @@ def env(tmp_path, request):
         db.execute("INSERT INTO chips (vendor,chip_model,vram_gb,form_factor) VALUES ('Vendor A','X80 80GB SXM','80','SXM')")
         db.execute("INSERT INTO chips (vendor,chip_model,vram_gb,form_factor) VALUES ('Vendor A','D80 64GB PCIe','64','PCIe')")
         options = getattr(request, 'param', {})
+        if options.get('baseline_base_sku'):
+            db.execute("UPDATE chips SET chip_model='X80' WHERE id=1")
         if options.get('incomplete_variant'):
             db.execute("INSERT INTO chips (vendor,chip_model) VALUES ('Vendor A','X80 64GB PCIe')")
         if options.get('duplicate_benchmark') or options.get('single_benchmark'):
@@ -691,6 +693,53 @@ def test_later_baseline_kind_ambiguity_keeps_existing_id_and_binding_history(ent
     for identifier in (first_id,chip_id,first_id):
         resolved.register_identity(identifier)
     assert resolved.snapshot()==saved and model.snapshot()==before
+
+
+@pytest.mark.parametrize('env', [{'baseline_base_sku':True}], indirect=True)
+@pytest.mark.parametrize('first_kind', ['board_sku','chip'])
+def test_split_baseline_variants_keep_canonical_and_ids_after_kind_ambiguity_replay(entities, env, first_kind):
+    def candidate(context,kind):
+        return fact(context,sku='X80',scope=kind,entity_hints={'full_sku':'X80','entity_type':kind})
+    first,_ = audit(env,'identity',[candidate(env,first_kind)])
+    first_id = first['candidates'][0]['logical_candidate_id']
+    resolved = resolver(entities,env)
+    existing = resolved.register_identity(first_id)
+    original = resolved.bind_candidate(first_id)
+    assert existing['entity_id']=='1' and existing['hint']['capacity']['value']==80
+    second_kind = 'chip' if first_kind=='board_sku' else 'board_sku'
+    visited = env[4].visit({'candidate_id':'second-kind','url':'https://vendor.example/second-kind'})
+    other_env = (*env[:-1],env[4].read_snapshot(visited['snapshot_id']))
+    second,model = audit(other_env,'identity',[candidate(other_env,second_kind)])
+    second_id = second['candidates'][0]['logical_candidate_id']
+    before = model.snapshot()
+    resolved.register_identity(second_id)
+    fresh = resolved.bind_candidate(first_id)
+    assert fresh['entity']['entity_id']=='1' and fresh['entity']['status']=='ambiguous'
+    saved = resolved.snapshot()
+    restarted = resolver(entities,env)
+    for identifier in (first_id,second_id,first_id,second_id):
+        restarted.register_identity(identifier)
+    assert len(restarted.snapshot()['entities'])==2
+    assert restarted.snapshot()==saved
+    assert restarted.bind_candidate(first_id)==fresh
+    assert restarted.snapshot()['bindings'][first_id][0]==original
+    assert model.snapshot()==before
+
+
+@pytest.mark.parametrize('env', [{'baseline_base_sku':True}], indirect=True)
+def test_same_batch_split_baseline_variants_both_typed_ambiguities_replay(entities, env):
+    result,model = audit(env,'identity',[fact(env,sku='X80',scope=kind,
+                       entity_hints={'full_sku':'X80','entity_type':kind}) for kind in ('board_sku','chip')])
+    resolved = resolver(entities,env)
+    for row in reversed(result['candidates']):
+        resolved.register_identity(row['logical_candidate_id'])
+    saved = resolved.snapshot()
+    assert len(saved['entities'])==2 and saved['new_entity_count']==0
+    assert all(row['status']=='ambiguous' and row['hint']['capacity']['value']==80
+               and row['hint']['form_factor']=='sxm' for row in saved['entities'].values())
+    for row in result['candidates']:
+        resolved.register_identity(row['logical_candidate_id'])
+    assert resolved.snapshot()==saved
 
 
 def test_explicit_generic_model_independent_guide_has_no_fake_dependencies(entities, env):

@@ -255,9 +255,6 @@ class EntityResolver:
         if uncertain or len(matches) > 1:
             return {**result, 'status':'ambiguous', 'reason':'baseline_identity_ambiguous', 'possible_matches':possible}
         if matches:
-            if check_kind_conflict and self._baseline_kind_conflict(normalized, matches[0]):
-                return {**result, 'status':'ambiguous', 'reason':'baseline_entity_kind_ambiguous',
-                        'baseline_row_id':matches[0], 'possible_matches':matches}
             row = next(row for row in chip_rows if row['id'] == matches[0])
             # A uniquely matched immutable row supplies a stable canonical
             # key, whether a particular page restates its variant columns.
@@ -272,8 +269,15 @@ class EntityResolver:
             if row.get('form_factor'):
                 complete_hint['form_factor'] = normalized_sku(row['form_factor'])
             complete_hint, canonical_key = self._hint(complete_hint)
+            # Kind ambiguity changes the decision, never the immutable-row
+            # normalization. Resume must find the same canonical record when
+            # capacity/form were stored in separate baseline columns.
+            result = {**result, 'canonical_key':canonical_key, 'hint':complete_hint,
+                      'identity_key_source':'frozen_baseline_row'}
+            if check_kind_conflict and self._baseline_kind_conflict(normalized, matches[0]):
+                return {**result, 'status':'ambiguous', 'reason':'baseline_entity_kind_ambiguous',
+                        'baseline_row_id':matches[0], 'possible_matches':matches}
             return {**result, 'status':'existing', 'entity_id':str(matches[0]), 'row_id':matches[0],
-                    'canonical_key':canonical_key, 'hint':complete_hint, 'identity_key_source':'frozen_baseline_row',
                     'reason':'exact_verified_identity', 'possible_matches':matches}
         return {**result, 'status':'new', 'reason':'verified_identity_absent_from_baseline'}
 
