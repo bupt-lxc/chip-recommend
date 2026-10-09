@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import sqlite3
 import time
@@ -145,6 +146,18 @@ def decode_content(value, *, allow_fences=True):
 
 class OpenAIModelTransport(OpenAICompatibleExtractor):
     """Reuse existing provider/configuration only, never the legacy extract prompt."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Tracked legacy bases predate the temperature attribute. Preserve a
+        # configured newer base; do not depend on unrelated uncommitted edits.
+        if not hasattr(self, 'temperature'):
+            try:
+                self.temperature = float(os.getenv('DATA_AGENT_LLM_TEMPERATURE', '0.6'))
+            except ValueError as exc:
+                raise ValueError('DATA_AGENT_LLM_TEMPERATURE must be finite in 0..2') from exc
+            if not math.isfinite(self.temperature) or not 0 <= self.temperature <= 2:
+                raise ValueError('DATA_AGENT_LLM_TEMPERATURE must be finite in 0..2')
 
     @property
     def audit_secrets(self):

@@ -1064,3 +1064,46 @@ def test_equal_duplicate_with_changed_semantic_conditions_is_unresolved_without_
     assert result['candidates'][0]['status'] == 'unresolved'
     assert result['candidates'][0]['reason'] == 'duplicate_semantic_inputs_changed'
     assert len(result['chunks']) == 2 and len(client.requests) == 3
+
+@pytest.mark.parametrize('base_value,configured,expected', [(None,None,0.6),(None,'1.7',1.7),(0.4,'1.7',0.4)])
+def test_transport_compatibility_with_legacy_base_temperature(module,monkeypatch,base_value,configured,expected):
+    # Emulate the tracked legacy base, which has no temperature attribute.
+    def legacy_init(self,**kwargs):
+        self.base_url='https://fixture.invalid'
+        self.api_key='fixture-secret'
+        self.model_name='fixture-model'
+        self.timeout=60
+        if base_value is not None:
+            self.temperature=base_value
+    monkeypatch.setattr(module.OpenAICompatibleExtractor,'__init__',legacy_init)
+    if configured is None:
+        monkeypatch.delenv('DATA_AGENT_LLM_TEMPERATURE',raising=False)
+    else:
+        monkeypatch.setenv('DATA_AGENT_LLM_TEMPERATURE',configured)
+    seen=[]
+    class Response:
+        text='{"choices":[{"message":{"content":"{\\"facts\\":[]}"}}]}'
+        def raise_for_status(self):
+            pass
+        def close(self):
+            pass
+    monkeypatch.setattr('requests.post',lambda url,**kwargs:(seen.append(kwargs) or Response()))
+    client=module.OpenAIModelTransport()
+    client.call_model(messages=[],timeout=7)
+    assert seen[0]['json']['temperature']==expected
+    assert seen[0]['json']['thinking']=={'type':'disabled'}
+    assert seen[0]['timeout']==7
+
+
+@pytest.mark.parametrize('configured',['NaN','inf','-1','2.1','not-a-number'])
+def test_legacy_transport_rejects_invalid_temperature_before_request(module,monkeypatch,configured):
+    def legacy_init(self,**kwargs):
+        self.base_url='https://fixture.invalid'
+        self.api_key='fixture-secret'
+        self.model_name='fixture-model'
+        self.timeout=60
+    monkeypatch.setattr(module.OpenAICompatibleExtractor,'__init__',legacy_init)
+    monkeypatch.setenv('DATA_AGENT_LLM_TEMPERATURE',configured)
+    monkeypatch.setattr('requests.post',lambda *args,**kwargs:pytest.fail('invalid configuration must not send request'))
+    with pytest.raises(ValueError,match='TEMPERATURE'):
+        module.OpenAIModelTransport().call_model(messages=[],timeout=7)
