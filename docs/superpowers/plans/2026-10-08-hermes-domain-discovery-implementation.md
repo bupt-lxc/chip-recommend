@@ -861,7 +861,7 @@ JS 在 `hermes-open-web-v3` 分支先处理，再进入旧 startsWith 分支。�
 
 **Files:** `tests/fixtures/domain_discovery/`、`tests/test_domain_acceptance.py`；按失败实际修复前述对应模块，不为通过用宽松检查替代需求。
 
-- [ ] **Step 1：创建可控正向和反向数据集。** 六域各有 HTML/PDF 或文本快照、搜索结果、Hermes 工具调用轨迹、提取与独立复核响应、预期实体/候选/状态。所有材料标记 fixture，厂商/芯片虚构材料不得混入正式数据。集合含已存在 L40S 样例基线、明确标记虚构的 ExampleSilicon X64 新实体、库外模型依赖与双 SKU 页面。至少 23 个主要 URL 测试多页覆盖，部分 URL 健康无字段，部分不可达作为失败路径单独运行。
+- [x] **Step 1：创建可控正向和反向数据集。** 六域各有 HTML/PDF 或文本快照、搜索结果、Hermes 工具调用轨迹、提取与独立复核响应、预期实体/候选/状态。所有材料标记 fixture，厂商/芯片虚构材料不得混入正式数据。集合含已存在 L40S 样例基线、明确标记虚构的 ExampleSilicon X64 新实体、库外模型依赖与双 SKU 页面。至少 23 个主要 URL 测试多页覆盖，部分 URL 健康无字段，部分不可达作为失败路径单独运行。
 
 测试入口通过 `run_domain` 注入 fake search/page/model/hermes runner，Hermes fake 依次调用真实工具端点，并分页至 has_more=false，再 append/finalize，不能直接写 validated 产物。模型 fake 返回预定结构，但程序和复核流程、比较、存储、读取均真实运行。每域至少一次正向完整链路；把真实 Hermes/网络冒烟单独标记。
 
@@ -879,8 +879,8 @@ def assert_complete_positive_run(result, domain_id):
     }
 ```
 
-- [ ] **Step 2：RED。** 在六域全部 fixture 上运行：`python -m pytest tests/test_domain_acceptance.py -q`。失败必须归因到真实缺项，不能只测试 stub 自身输出。
-- [ ] **Step 3：增加以下独立故障样例和断言。**
+- [x] **Step 2：RED。** 在六域全部 fixture 上运行：`python -m pytest tests/test_domain_acceptance.py -q`。失败必须归因到真实缺项，不能只测试 stub 自身输出。
+- [x] **Step 3：增加以下独立故障样例和断言。**
 
 | 样例 | 必须断言 |
 |---|---|
@@ -903,8 +903,8 @@ def assert_complete_positive_run(result, domain_id):
 | v1/v2 历史 | 只读可看，缺旧值/复核不造完成；拒绝 v3 resume |
 
 业务一致性采用 SQLite backup 后逐表、逐列、逐行按稳定键排序的规范内容摘要，对 chips/models/benchmarks/compatibility/deployment_guides/field_provenance 全部核对；SQLite 内部页变化不能替代业务检查。外部其他写入者存在时记录干扰并重做受控核验，不宣称本链路保证了全库静止。
-- [ ] **Step 4：GREEN 与全套回归。** 先运行 `python -m pytest tests/test_domain_acceptance.py -q`，通过后运行一次 `python -m pytest -q`。失败按具体模块修复并跑相关回归；没有新变更/失败不无理由重复全套。保留旧 Python-only 测试用于历史工具回归，不能列作 Hermes v3 实测证据。
-- [ ] **Step 5：提交。** 只添加 fixtures、acceptance 测试和实际修复模块，`git commit -m "test: verify six-domain discovery acceptance and recovery"`。
+- [x] **Step 4：GREEN 与全套回归。** 先运行 `python -m pytest tests/test_domain_acceptance.py -q`，通过后运行一次 `python -m pytest -q`。失败按具体模块修复并跑相关回归；没有新变更/失败不无理由重复全套。保留旧 Python-only 测试用于历史工具回归，不能列作 Hermes v3 实测证据。
+- [x] **Step 5：提交。** 只添加 fixtures、acceptance 测试和实际修复模块，`git commit -m "test: verify six-domain discovery acceptance and recovery"`。
 
 ## Task 16：实际搜索环境、Hermes 六域冒烟与验收材料
 
