@@ -191,7 +191,8 @@ def test_healthy_empty_finalize_records_zero_jobs_without_fake_completion(setup)
     assert setup[1].events('run-a')[-1]['payload']['job_count'] == 0
 
 
-def test_two_step_explicit_intent_closure_does_not_repeat_search(setup):
+@pytest.mark.parametrize('reason_length', [200, 201, 400])
+def test_two_step_explicit_intent_closure_does_not_repeat_search(setup, reason_length):
     first_plan = plan()
     setup[3].failure_text = first_plan['queries'][0]['text']
     first = search(setup)
@@ -203,7 +204,7 @@ def test_two_step_explicit_intent_closure_does_not_repeat_search(setup):
     assert second.json()['intent_incomplete']
     calls = setup[3].calls
     closure = {'action': 'complete_intents', 'request_id': 'closure', 'completions': [
-        {'failed_query_id': 'q0-0', 'replacement_query_id': 'q1-0', 'reason': '已读替代查询的成功响应'}]}
+        {'failed_query_id': 'q0-0', 'replacement_query_id': 'q1-0', 'reason': '已' * reason_length}]}
     ended = post(setup, 'search', **closure)
     assert ended.status_code == 200, ended.text
     assert post(setup, 'search', **closure).json() == ended.json()
@@ -214,6 +215,108 @@ def test_two_step_explicit_intent_closure_does_not_repeat_search(setup):
     assert SearchExecutor._incomplete(state) is False
     assert state['queries']['q0-0']['outcome'] == 'parse_error'
     assert state['intents']['q0-0']['replacement_query_id'] == 'q1-0'
+    assert state['intents']['q0-0']['reason'] == '已' * reason_length
+
+
+@pytest.mark.parametrize('reason', ['', ' ', 'x' * 401, 'bad\nreason'])
+def test_invalid_intent_reason_rejects_replay_without_receipts(setup, reason):
+    payload = {'action':'complete_intents', 'request_id':'bad-reason', 'completions':[
+        {'failed_query_id':'none', 'replacement_query_id':'none', 'reason':reason}]}
+    for _ in range(2):
+        assert post(setup, 'search', **payload).status_code == 422
+    assert not any(r['request_id'] == 'bad-reason' for r in setup[1].list_operations('run-a'))
+
+
+@pytest.mark.parametrize('tool,payload', [
+    ('search', {'action':'complete_intents', 'request_id':'ended-error', 'completions':[
+        {'failed_query_id':'missing','replacement_query_id':'missing','reason':'no linked successful replacement'}]}),
+    ('preview', {'mode':'detail','request_id':'ended-error','snapshot_id':'missing'})])
+def test_finished_business_error_is_replayed_as_same_failure(setup, tool, payload):
+    search(setup)
+    first = post(setup, tool, **payload)
+    assert first.status_code == 409
+    replay = post(setup, tool, **payload)
+    assert replay.status_code == first.status_code, replay.text
+    assert replay.json() == first.json()
+    root = next(r for r in setup[1].list_operations('run-a') if r['request_id'] == 'ended-error')
+    assert root['state'] != 'running'
+
+
+def test_selection_validation_failure_repeats_409_without_partial_receipt(setup):
+    version = search(setup)['list_version']
+    for action, extra in [('append', {'decisions':[decision({'candidate_id':'invented'}, 'reject')]}), ('finalize', {})]:
+        payload = {'action':action, 'request_id':f'bad-{action}', 'list_version':version, **extra}
+        first = post(setup, 'selection', **payload)
+        assert first.status_code == 409
+        assert post(setup, 'selection', **payload).json() == first.json()
+        assert post(setup, 'selection', **payload).status_code == 409
+        assert not any(r['request_id'] == f'bad-{action}' for r in setup[1].list_operations('run-a'))
+
+
+def test_unknown_callback_crash_keeps_root_and_child_running_without_reexecution(setup, monkeypatch):
+    from chip_model.domain_tool_api import DomainToolService
+    class UnknownCrash(BaseException):
+        pass
+    def crash(*args, **kwargs):
+        setup[3].calls += 1
+        raise UnknownCrash('unknown physical result')
+    monkeypatch.setattr(setup[3], 'search', crash)
+    service = DomainToolService(setup[1], lambda _: setup[2])
+    payload = request(action='execute', request_id='unknown-root', plan=plan())
+    with pytest.raises(UnknownCrash):
+        service.handle('search', payload)
+    operations = setup[1].list_operations('run-a')
+    assert len(operations) == 2
+    assert all(op['state'] == 'running' and op['result'] is None for op in operations)
+    assert service.handle('search', payload)['status'] == 'in_progress'
+    assert setup[3].calls == 1
+    assert all(op['state'] == 'running' for op in setup[1].list_operations('run-a'))
+
+
+def test_expired_fence_error_never_becomes_a_completed_business_failure(setup, monkeypatch):
+    from chip_model.domain_tool_api import DomainToolService
+    context, store = setup[2], setup[1]
+    original = context.search.complete_intent
+    def expire_then_execute(*args):
+        store.clock.advance(10001)
+        return original(*args)
+    monkeypatch.setattr(context.search, 'complete_intent', expire_then_execute)
+    service = DomainToolService(store, lambda _: context)
+    payload = request(action='complete_intents', request_id='expired-root', completions=[
+        {'failed_query_id':'missing', 'replacement_query_id':'missing', 'reason':'pure validation'}])
+    with pytest.raises(ValueError):
+        service.handle('search', payload)
+    root = next(op for op in store.list_operations('run-a') if op['request_id'] == 'expired-root')
+    assert root['state'] == 'running' and root['result'] is None
+
+
+def test_intent_completion_before_any_search_is_replayable_409(setup):
+    client = TestClient(setup[0].app, client=('127.0.0.1', 50000), raise_server_exceptions=False)
+    payload = request(action='complete_intents', request_id='before-search', completions=[
+        {'failed_query_id':'missing', 'replacement_query_id':'missing', 'reason':'no saved search yet'}])
+    for _ in range(2):
+        result = client.post('/v1/search', headers={'Authorization':'Bearer test-secret'}, json=payload)
+        assert result.status_code == 409, result.text
+
+
+def test_business_error_with_unknown_running_child_cannot_complete_or_reset_it(setup):
+    from chip_model.domain_tool_api import DomainToolService
+    store, ctx = setup[1], setup[2]
+    class UnknownCrash(BaseException):
+        pass
+    def crash():
+        raise UnknownCrash('unknown child')
+    with pytest.raises(UnknownCrash):
+        store.operation('run-a', ctx.generation, 'unknown-child', {'kind':'physical'}, crash)
+    service = DomainToolService(store, lambda _: ctx)
+    payload = request(action='complete_intents', request_id='blocked-root', completions=[
+        {'failed_query_id':'missing', 'replacement_query_id':'missing', 'reason':'no saved replacement'}])
+    with pytest.raises(ValueError):
+        service.handle('search', payload)
+    operations = store.list_operations('run-a')
+    assert all(op['state'] == 'running' and op['result'] is None for op in operations)
+    assert service.handle('search', payload)['status'] == 'in_progress'
+    assert all(op['state'] == 'running' for op in store.list_operations('run-a'))
 
 
 def test_supplement_retains_visits_decisions_and_old_cursor_is_bound(setup):

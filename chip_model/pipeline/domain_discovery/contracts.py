@@ -8,11 +8,21 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, field_validator, model_validator
 
 
 DOMAINS = ("identity", "specs", "compute", "compatibility", "benchmark", "deployment")
 DomainId = Literal['identity', 'specs', 'compute', 'compatibility', 'benchmark', 'deployment']
+
+
+def _reason_text(value):
+    if not value.strip() or any(unicodedata.category(char) in {'Cc', 'Cs'} for char in value):
+        raise ValueError('reason must be nonblank Unicode without controls')
+    return value
+
+
+TextReason = Annotated[str, Field(min_length=1, max_length=400), AfterValidator(_reason_text)]
+REASON_TEXT = TypeAdapter(TextReason, config=ConfigDict(strict=True))
 # SQL identifier allowlist only. Business field ownership lives in domain.json.
 _TABLES = frozenset({"chips", "chip_model_compatibility", "chip_model_benchmarks", "deployment_guides"})
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -129,14 +139,7 @@ class SearchExecute(MutationBinding):
 class IntentCompletion(StrictToolModel):
     failed_query_id: Annotated[str, Field(min_length=1, max_length=200)]
     replacement_query_id: Annotated[str, Field(min_length=1, max_length=200)]
-    reason: Annotated[str, Field(min_length=1, max_length=400)]
-
-    @field_validator('reason')
-    @classmethod
-    def nonblank_reason(cls, value):
-        if not value.strip():
-            raise ValueError('reason must be nonblank')
-        return value
+    reason: TextReason
 
 
 class SearchCompleteIntents(MutationBinding):

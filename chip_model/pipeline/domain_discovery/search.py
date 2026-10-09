@@ -19,7 +19,7 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit, unquote
 import requests
 from bs4 import BeautifulSoup
 
-from .contracts import DiscoverySearchPlan
+from .contracts import DiscoverySearchPlan, REASON_TEXT
 from .store import _hash, _json, _key
 
 
@@ -541,9 +541,13 @@ class SearchExecutor:
 
     def complete_intent(self, request_id, failed_query_id, replacement_query_id, reason):
         """Hermes explicitly ends an intent after its linked replacement executes."""
-        request_id, failed_query_id, replacement_query_id, reason = map(_key, (request_id, failed_query_id, replacement_query_id, reason))
+        request_id, failed_query_id, replacement_query_id = map(_key, (request_id, failed_query_id, replacement_query_id))
+        # A human explanation is not an idempotency key: preserve its exact
+        # Unicode text and use the same 400-character public reason contract.
+        reason = REASON_TEXT.validate_python(reason)
         payload = {'query_id': failed_query_id, 'replacement_query_id': replacement_query_id, 'reason': reason}
         def finish(state):
+            state = state or self._empty()
             failed = state['queries'].get(failed_query_id)
             replacement = state['queries'].get(replacement_query_id)
             if (failed is None or failed['outcome'] not in QUERY_FAILURES or replacement is None

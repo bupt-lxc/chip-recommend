@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from chip_model.pipeline.domain_discovery import contracts as c
 from chip_model.pipeline.domain_discovery.pages import PageService
 from chip_model.pipeline.domain_discovery.rules import load_phase
-from chip_model.pipeline.domain_discovery.search import SearchExecutor, serialize_page
+from chip_model.pipeline.domain_discovery.search import SearchExecutor, redact, serialize_page
 from chip_model.pipeline.domain_discovery.store import _hash, _json
 
 
@@ -226,14 +226,29 @@ class DomainToolService:
                 return serialize_page(records, offset, {'list_version': request.list_version, 'mode': 'initial',
                                                         'stage': 'previewing'}, limit=request.limit)
             return ctx.pages.preview(request.list_version, cursor=cursor, limit=request.limit)
+        def execute_with_business_failure():
+            try:
+                return execute()
+            except (ValueError, KeyError) as exc:
+                # Only a normally ended local business failure is terminal.
+                # An invalid fence or a still-running child remains unknown;
+                # BaseException/crashes never enter this handler at all.
+                ctx.validate()
+                children = self.store.list_operations(ctx.run_id)
+                if any(item['request_id'] != request.request_id and item['state'] == 'running' for item in children):
+                    raise
+                return {'status': 'rejected', 'tool_error': {'status_code': 409, 'detail': redact(str(exc))[:1000]}}
         receipt = self.store.operation(ctx.run_id, ctx.generation, request.request_id,
-                                       {'tool': tool, 'request': payload}, execute,
+                                       {'tool': tool, 'request': payload}, execute_with_business_failure,
                                        pending_result=lambda result: result.get('status') == 'in_progress'
                                            or any(item.get('status') == 'pending' for item in result.get('items', [])))
         if receipt['state'] == 'pending' and receipt['result'] is not None:
             return receipt['result']
         if receipt['state'] != 'completed':
             return {'status': 'in_progress', 'receipt_id': request.request_id}
+        if receipt['result'].get('status') == 'rejected' and 'tool_error' in receipt['result']:
+            error = receipt['result']['tool_error']
+            raise ToolProtocolError(error['status_code'], error['detail'])
         return receipt['result']
 
     def read_run(self, run_id):
