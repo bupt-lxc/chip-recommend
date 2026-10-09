@@ -1284,15 +1284,28 @@ def api_data_agent_run_detail(session: str, run_id: int = Path(..., ge=1)):
 @app.get('/api/v1/data-agent/open-web-runs')
 def api_open_web_test_runs(final_only: bool = False):
     """List isolated open-web test runs; never reads candidate data from the formal DB."""
-    return {
-        "runs": list_open_web_test_runs(get_db_path(), final_only=final_only)
-    }
+    from chip_model.pipeline.run_history import list_open_web_runs
+    return {"runs": list_open_web_runs(get_db_path(), final_only=final_only)}
+
+
+@app.get('/api/v1/data-agent/domains')
+def api_discovery_domains():
+    """Read-only field display from the sole six-domain business contracts."""
+    from chip_model.pipeline.domain_discovery.contracts import DOMAINS, load_domain
+    root = get_project_root() / '.hermes-skills'
+    try:
+        return {'domains': [dict(domain_id=d.domain_id, label=d.label, fields=d.fields,
+                                rule_version=d.rule_version)
+                            for d in (load_domain(root, name) for name in DOMAINS)]}
+    except (ValueError,OSError) as exc:
+        raise HTTPException(status_code=503,detail='信息域规则暂不可用') from exc
 
 
 @app.get('/api/v1/data-agent/open-web-runs/{session_id}')
 def api_open_web_test_run_detail(session_id: str):
+    from chip_model.pipeline.run_history import read_open_web_run
     try:
-        return read_open_web_test_run(get_db_path(), session_id)
+        return read_open_web_run(get_db_path(), session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (OSError, sqlite3.Error) as exc:

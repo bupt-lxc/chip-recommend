@@ -12,6 +12,35 @@ from chip_model.database import get_db
 TABLES = {'chips', 'models', 'chip_model_benchmarks', 'chip_model_compatibility', 'deployment_guides'}
 
 
+def list_open_web_runs(base, *, final_only=False):
+    """V3 persistent queue and legacy artifacts share one read-only history."""
+    from .domain_discovery.history import list_v3_runs
+    from .open_web_test import list_open_web_test_runs
+    legacy = list_open_web_test_runs(base, final_only=final_only)
+    # final_only was the old latest-success shortcut. V3 never hides failure,
+    # no-findings or a preparing/running receipt that needs inspection.
+    runs = list_v3_runs(Path(base).resolve().parent / 'domain_runs') + legacy
+    return sorted(runs, key=lambda r:r.get('started_at') or '', reverse=True)
+
+
+def read_open_web_run(base, session_id):
+    from .domain_discovery.history import read_v3_run, _readonly
+    from .domain_discovery.contracts import validate_run_id
+    from .open_web_test import read_open_web_test_run
+    validate_run_id(session_id)
+    root = Path(base).resolve().parent / 'domain_runs'
+    if (root / session_id).exists():
+        return read_v3_run(root, session_id)
+    if (root / 'control.sqlite3').is_file():
+        with _readonly(root / 'control.sqlite3') as db:
+            if db.execute('SELECT 1 FROM runs WHERE run_id=?',(session_id,)).fetchone():
+                return read_v3_run(root, session_id)
+    legacy = read_open_web_test_run(base, session_id)
+    legacy['independent_review_status'] = 'not_recorded'
+    legacy['evidence_quality'] = 'unknown'
+    return legacy
+
+
 def decode(value, default=None):
     try:
         return json.loads(value) if value else default
