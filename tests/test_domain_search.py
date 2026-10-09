@@ -229,7 +229,7 @@ def test_cursor_version_offset_and_types_are_validated(setup):
         search.results('unknown')
 
 
-def test_optional_hint_matches_full_sku_without_implicit_model_token_filter(setup):
+def test_optional_hint_audits_metadata_without_excluding_other_full_pages(setup):
     class SKU(Provider):
         def search(self, query, limit, *, language):
             response = super().search(query, limit, language=language)
@@ -244,8 +244,9 @@ def test_optional_hint_matches_full_sku_without_implicit_model_token_filter(setu
     generation = store.claim('run-b', 'other', 100000)
     from chip_model.pipeline.domain_discovery.budget import RunBudget
     hinted = executor((store, RunBudget(store, 'run-b', generation)), SKU()).execute('initial', plan())
-    assert hinted['total'] == 1
-    assert hinted['items'][0]['title'] == 'MLU370-S4'
+    assert hinted['total'] == 3
+    assert {item['title']: item['matches_chip_hint'] for item in hinted['items']} == {
+        'MLU370-S4': True, 'MLU370-S8': False, 'NewUnknown-9': False}
 
 
 def test_concurrent_same_plan_does_not_duplicate_network_or_budget(setup):

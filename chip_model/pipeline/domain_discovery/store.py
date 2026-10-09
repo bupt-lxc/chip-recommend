@@ -326,6 +326,35 @@ class RunStore:
             self._fence(conn, run_id, generation)
             conn.execute('UPDATE leases SET owner=NULL, expires_at=0 WHERE run_id=?', (run_id,))
 
+    def finish_run(self, run_id, generation, result):
+        """Commit terminal snapshot and revoke callback authorization atomically.
+
+        A late callback cannot slip a write between recording the terminal
+        result and revoking its worker. Expired or superseded workers cannot
+        publish a terminal status belonging to a newer generation.
+        """
+        if not isinstance(result, dict) or result.get('status') not in {
+                'success', 'no_findings', 'partial', 'failed', 'interrupted'}:
+            raise ValueError('运行终态无效')
+        _json(result)
+        with self._transaction(run_id) as conn:
+            lease = conn.execute('SELECT * FROM leases WHERE run_id=?', (run_id,)).fetchone()
+            terminal = self._baseline_metadata(conn, 'domain_runtime_terminal.v1')
+            if (type(generation) is int and lease is not None and lease['generation'] == generation
+                    and lease['owner'] is None and terminal and terminal['generation'] == generation):
+                if terminal['result_sha256'] != _hash(_json(result)):
+                    raise ValueError('运行终态快照 payload 冲突')
+                return self._baseline_metadata(conn, 'domain_runtime_result.v1')
+            self._fence(conn, run_id, generation)
+            self._write_metadata(conn, run_id, 'domain_runtime_result.v1', result,
+                {'kind': 'run_terminal', 'stage': 'completed', 'status': result['status'], 'generation': generation})
+            self._write_metadata(conn, run_id, 'domain_runtime_terminal.v1',
+                                 {'generation': generation, 'result_sha256': _hash(_json(result))}, None)
+            self._fence(conn, run_id, generation)
+            conn.execute('UPDATE runs SET status=?,stage=? WHERE run_id=?', (result['status'], 'completed', run_id))
+            conn.execute('UPDATE leases SET owner=NULL,expires_at=0 WHERE run_id=?', (run_id,))
+            return result
+
     @staticmethod
     def _receipt(row):
         item = dict(row)
@@ -499,6 +528,68 @@ class RunStore:
         finally:
             staging.unlink(missing_ok=True)
         return path
+
+    def export_runtime(self, run_id):
+        """Rebuild optional exports from one authoritative SQLite read snapshot.
+
+        Work records retain the original protocols; projection names only
+        translate their states for inspection, never authorize retries.
+        Business rejection/unresolved evidence is completed work, while actual
+        transport/parser failures and interrupted callbacks remain visible.
+        """
+        with self._connect(run_id) as conn:
+            conn.execute('BEGIN')
+            run = dict(self._run(conn, run_id))
+            metadata = {r['key']: json.loads(r['value_json']) for r in conn.execute('SELECT * FROM run.metadata')}
+            operations = [self._receipt(r) for r in conn.execute('SELECT * FROM run.operations ORDER BY rowid')]
+            tasks = [self._receipt(r) for r in conn.execute('SELECT * FROM run.tasks ORDER BY rowid')]
+        models = metadata.get('domain_models.v1', {})
+        terminal = run['status'] in {'partial', 'interrupted', 'failed'}
+        def state(raw):
+            if raw in {'confirmed_failed', 'transport_failed', 'parser_rejected', 'extract_failed', 'review_failed'}:
+                return 'failed'
+            if raw == 'budget_stopped':
+                return 'interrupted'
+            if raw in {'completed', 'validated', 'semantic_rejected', 'program_rejected', 'unresolved'}:
+                return 'completed'
+            if raw in {'pending', 'running'}:
+                return 'interrupted' if terminal else 'queued' if raw == 'pending' else 'running'
+            return 'queued'
+        projected = []
+        for kind, rows, identifier in [('task', tasks, 'task_id'), ('operation', operations, 'request_id'),
+                                      ('model_call', models.get('calls', []), 'execution_id')]:
+            for row in rows:
+                projected.append({'kind': kind, 'id': row[identifier], 'state': state(row['state'] if kind != 'model_call' else row['status']),
+                    'record_state': row.get('state', row.get('status')), 'logical_id': row.get('logical_id'),
+                    'phase': row.get('phase', row.get('stage')), 'generation': row.get('generation'),
+                    'attempts': row.get('attempts', row.get('attempt')), 'record': row})
+        for kind, rows in [('chunk', models.get('chunks', {})), ('candidate', models.get('candidates', {}))]:
+            for identifier, row in rows.items():
+                projected.append({'kind': kind, 'id': identifier, 'state': state(row['status']),
+                                  'record_state': row['status'], 'record': row})
+        budget = metadata.get('domain_budget.v1', {})
+        snapshot = {'run_id': run_id, 'pipeline': PIPELINE, 'contract_version': CONTRACT_VERSION,
+            'status': run['status'], 'current_stage': run['stage'], 'stages': budget.get('stages', {}),
+            'metadata': metadata, 'work_items': projected,
+            'state_mapping': {'pending': 'queued; interrupted in incomplete terminal run',
+                'running': 'running; interrupted in incomplete terminal run',
+                'transport/parser/extract/review failure': 'failed', 'budget_stopped': 'interrupted',
+                'business rejected/unresolved': 'completed; preserve original evidence outcome'},
+            'protocol_basis': 'original ModelService chunk_plans/chunks/candidates/calls and fenced operation receipts'}
+        manifest = {**(metadata.get('domain_runtime_result.v1') or {}), 'run_id': run_id,
+                    'status': run['status'], 'stages': snapshot['stages'], 'work_records_path': 'work.json'}
+        for name, value in [('work.json', snapshot), ('manifest.json', manifest)]:
+            path = self._contained(self.run_path(run_id) / name)
+            staging = self._contained(path.with_name('.export-' + uuid.uuid4().hex + '.tmp'))
+            try:
+                with staging.open('x', encoding='utf-8', newline='\n') as handle:
+                    handle.write(_json(value) + '\n')
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(staging, path)
+            finally:
+                staging.unlink(missing_ok=True)
+        return self.run_path(run_id) / 'manifest.json'
 
     def _baseline_metadata(self, conn, key='baseline'):
         row = conn.execute('SELECT value_json FROM run.metadata WHERE key=?', (key,)).fetchone()

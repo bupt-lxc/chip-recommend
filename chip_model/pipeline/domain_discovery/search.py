@@ -464,9 +464,11 @@ class SearchExecutor:
             except (ValueError, UnicodeError):
                 self._exclude(qid, provider_name, row_index, row, 'unsafe_url')
                 continue
-            if self.chip_hint and not self._matches_hint(self.chip_hint, row):
-                self._exclude(qid, provider_name, row_index, row, 'chip_hint_mismatch')
-                continue
+            # Search metadata is shorter than the actual page. A missing SKU
+            # in title/snippet/URL cannot establish absence from its full body.
+            # Preserve targeted scope and expose the match only as an audit hint
+            # for Hermes' later preview-based selection.
+            hint_match = self._matches_hint(self.chip_hint, row) if self.chip_hint else None
             cid = _hash(url)
             if cid not in admitted and len(admitted) == 10:
                 self._exclude(qid, provider_name, row_index, row, 'per_query_budget')
@@ -483,6 +485,8 @@ class SearchExecutor:
             def merge(state):
                 item = state['candidates'].setdefault(cid, {'candidate_id': cid, 'url': url,
                     'title': row.get('title', ''), 'snippet': row.get('snippet', ''), 'references': []})
+                if hint_match is not None:
+                    item['matches_chip_hint'] = item.get('matches_chip_hint', False) or hint_match
                 if reference not in item['references']:
                     item['references'].append(reference)
                 return state, None, None
