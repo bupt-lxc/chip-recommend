@@ -6,8 +6,9 @@ import sqlite3
 import unicodedata
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, JsonValue, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 
 DOMAINS = ("identity", "specs", "compute", "compatibility", "benchmark", "deployment")
@@ -17,6 +18,58 @@ _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
 _RESERVED_IDS = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))})
 _START_KEYS = frozenset({"domain", "chip", "skill", "chips", "resume_run_id", "request_id", "mode", "pipeline"})
+
+
+class DiscoverySearchQuery(BaseModel):
+    """Hermes supplies the original words; validation never rewrites them."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True, strict=True)
+
+    query_id: str
+    text: Annotated[str, Field(min_length=1, max_length=120)]
+    language: Literal['zh', 'en']
+    reason: Annotated[str, Field(min_length=1, max_length=400)]
+    page_type: Annotated[str, Field(min_length=1, max_length=80)]
+    replaces_query_id: str | None = None
+
+    @field_validator('query_id', 'replaces_query_id')
+    @classmethod
+    def validate_identifier(cls, value):
+        return validate_run_id(value) if value is not None else None
+
+    @field_validator('text', 'reason', 'page_type')
+    @classmethod
+    def validate_text(cls, value):
+        if not value.strip() or any(unicodedata.category(c) in {'Cc', 'Cs'} for c in value):
+            raise ValueError('search text must be nonblank Unicode without controls')
+        return value
+
+
+class DiscoverySearchPlan(BaseModel):
+    """Public search policy is fixed; no fields, provider or quota overrides."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True, strict=True)
+
+    round_number: Annotated[int, Field(ge=0, le=2)]
+    queries: Annotated[list[DiscoverySearchQuery], Field(min_length=1, max_length=10)]
+
+    @model_validator(mode='after')
+    def validate_plan(self):
+        if self.round_number == 0:
+            if len(self.queries) != 10:
+                raise ValueError('initial plan requires exactly 10 queries')
+            for language in ('zh', 'en'):
+                if sum(q.language == language for q in self.queries) < 3:
+                    raise ValueError('initial plan requires at least 3 zh and 3 en queries')
+            if any(q.replaces_query_id is not None for q in self.queries):
+                raise ValueError('initial queries cannot replace an intent')
+        elif len(self.queries) > 5:
+            raise ValueError('supplement requires 1..5 queries')
+        if len({q.query_id for q in self.queries}) != len(self.queries):
+            raise ValueError('duplicate query IDs')
+        if len({' '.join(q.text.split()).casefold() for q in self.queries}) != len(self.queries):
+            raise ValueError('duplicate query text')
+        return self
 
 
 def validate_run_id(value: object) -> str:
