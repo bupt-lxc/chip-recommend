@@ -765,3 +765,75 @@ def test_current_candidate_bytes_are_bound_to_original_producer_review(compariso
     assert result['evidence_verification_status']=='unverifiable'
     assert result['value_change_kind']=='unknown'
     assert compare.statistics()['validated_candidates']==0
+
+@pytest.mark.parametrize('variant',['compat_dict','blank_sku','deployment_dict_model'])
+def test_saved_program_rejections_skip_before_binding_valid_siblings_continue(comparison,factory,variant):
+    ctx=factory()
+    snap=capture(ctx,url='https://vendor.example/guide',text='Vendor A X80 80GB SXM GPU: 80 GB; 400 W. org/Model-7B vendor support. Guide title backend vLLM.')
+    identity(ctx,snap)
+    if variant=='compat_dict':
+        common={'target_table':'chip_model_compatibility','scope':'relation','entity_key':{'chip_model':'X80 80GB SXM','model_id':'org/Model-7B'},'entity_hints':{'vendor':'Vendor A','full_sku':'X80 80GB SXM','entity_type':'board_sku'}}
+        bad=fact(snap,'compatibility',field='compat_status',value={},unit=None,**common)
+        good=fact(snap,'compatibility',field='notes',value='vendor support',unit=None,**common)
+    elif variant=='blank_sku':
+        bad=fact(snap,entity_key={'vendor':'Vendor A','chip_model':' '})
+        good=fact(snap,field='tdp_w',value=400,unit='W')
+    else:
+        common={'target_table':'deployment_guides','scope':'relation','entity_key':{'url':'https://vendor.example/guide','title':'Guide title','chip_model':'X80 80GB SXM','model_id':'org/Model-7B','source_type':'official'},'entity_hints':{'vendor':'Vendor A','full_sku':'X80 80GB SXM','entity_type':'board_sku'}}
+        bad=fact(snap,'deployment',field='backend',value='vLLM',unit=None,**{**common,'entity_key':{**common['entity_key'],'model_id':{}}})
+        good=fact(snap,'deployment',field='notes',value='Guide title backend vLLM',unit=None,**common)
+    rows=audit(ctx,snap,[bad,good])
+    assert rows[0]['status']=='program_rejected' and rows[1]['status']=='validated'
+    compare=service(comparison,ctx)
+    skipped=compare.comparison_input(rows[0]['logical_candidate_id'])
+    assert not skipped['is_comparable'] and skipped['status']=='skipped'
+    assert skipped['candidate_status']=='program_rejected'
+    assert compare.compare_candidate(rows[0]['logical_candidate_id'])==skipped
+    result=compare.compare_candidate(rows[1]['logical_candidate_id'])
+    assert result['validated']
+    stats=compare.statistics()
+    assert stats['rejected_candidates']==1 and stats['validated_candidates']==1
+    assert stats['independent_fields']==1 and stats['source_candidates']==1
+    assert compare.snapshot()['skipped_inputs'][rows[0]['logical_candidate_id']]==skipped
+    assert ctx['store'].metadata(ctx['id'],ModelService.KEY)['candidates'][rows[0]['logical_candidate_id']]==rows[0]
+
+
+def test_program_rejection_does_not_swallow_frozen_baseline_failure(comparison,factory):
+    ctx=factory()
+    snap=capture(ctx)
+    row=audit(ctx,snap,[fact(snap,entity_key={'vendor':'Vendor A','chip_model':' '})])[0]
+    assert row['status']=='program_rejected'
+    compare=service(comparison,ctx)
+    path=ctx['store'].run_path(ctx['id'])/'data.db'
+    path.chmod(stat.S_IWRITE)
+    path.write_bytes(path.read_bytes()+b'tamper')
+    with pytest.raises(ValueError,match='baseline'):
+        compare.compare_candidate(row['logical_candidate_id'])
+
+def test_statistics_retains_pre_skip_rejected_comparison_and_filters_reentry(comparison,factory):
+    ctx=factory()
+    snap=capture(ctx)
+    identity(ctx,snap)
+    row=audit(ctx,snap,[fact(snap,unit='not_a_unit')])[0]
+    assert row['status']=='program_rejected'
+    compare=service(comparison,ctx)
+    identifier=row['logical_candidate_id']
+    original=compare.comparison_input
+    def pre_fix_admission(candidate_id):
+        # The earlier V3 policy admitted structurally complete rejected facts.
+        # Use the actual production comparison path and genuine rejected model
+        # row to capture that legacy audit record; never fake accepted evidence.
+        outcome=original(candidate_id)
+        return {**outcome,'is_comparable':True,'status':'comparable'}
+    compare.comparison_input=pre_fix_admission
+    try:
+        old=compare.compare_candidate(identifier)
+    finally:
+        compare.comparison_input=original
+    assert not old['validated'] and old['evidence_status']=='program_rejected'
+    assert compare.compare_candidate(identifier)['status']=='skipped'
+    stats=compare.statistics()
+    assert stats['rejected_candidates']==1 and stats['validated_candidates']==0
+    assert stats['independent_fields']==stats['source_candidates']==0
+    assert compare.snapshot()['comparisons'][identifier]==[old]
+    assert compare.snapshot()['skipped_inputs'][identifier]['candidate_status']=='program_rejected'

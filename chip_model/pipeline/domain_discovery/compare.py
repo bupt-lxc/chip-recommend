@@ -460,9 +460,13 @@ class ComparisonService:
         frozen = load_phase(self.store.run_path(self.run_id)/'skill_bundle',row['domain_id'],'review')
         if frozen['bundle_sha256'] != baseline['rule_bundle_hash']:
             raise ValueError('frozen comparison rules and baseline mismatch')
-        candidate = row['versions'][-1]['candidate']
+        version = row['versions'][-1]
+        candidate = version['candidate']
+        program = version.get('program',{})
         reason = None
-        if not isinstance(candidate,dict):
+        if row['status']=='program_rejected' or program.get('status')=='rejected':
+            reason = 'saved_program_rejected'
+        elif not isinstance(candidate,dict):
             reason = 'raw_fact_not_an_object'
         elif (any(name not in candidate for name in ('domain_id','target_table','field_name','entity_key','evidence'))
               or any(not isinstance(candidate.get(name),str) for name in ('domain_id','target_table','field_name'))
@@ -478,6 +482,8 @@ class ComparisonService:
         return {'logical_candidate_id':candidate_id, 'is_comparable':reason is None,
                 'status':'comparable' if reason is None else 'skipped',
                 'reason':reason or 'saved_structured_owned_field', 'candidate_status':row['status'],
+                **({'validated':False,'value_change_kind':'unknown','new_source':None,
+                    'program_rejection_reason':program.get('reason',row.get('reason'))} if reason else {}),
                 'source_ref':ModelService.KEY+'/candidates/'+candidate_id}
 
     def compare_candidate(self, candidate_id):
@@ -565,7 +571,10 @@ class ComparisonService:
         Rebind all compared candidates before reporting final validated counts.
         """
         identifiers = list(self.snapshot()['comparisons'])
-        rows = [self.compare_candidate(identifier) for identifier in identifiers]
+        outcomes = [self.compare_candidate(identifier) for identifier in identifiers]
+        # A previously saved rejected comparison may now be a typed skip.
+        # Keep its original audit versions; raw rejections are counted below.
+        rows = [row for row in outcomes if row.get('status')!='skipped']
         models = (self.store.metadata(self.run_id,ModelService.KEY) or {}).get('candidates',{})
         rejected = {}
         for identifier,row in models.items():
