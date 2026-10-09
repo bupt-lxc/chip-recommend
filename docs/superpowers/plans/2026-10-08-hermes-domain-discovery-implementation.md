@@ -715,7 +715,7 @@ def source_summary(membership, quality):
 
 **Files:** `runtime.py`、`rules.py`、`store.py`、`chip_model/pipeline/hermes_open_web_orchestrator.py`；测试 `tests/test_domain_runtime.py`。
 
-- [ ] **Step 1：写进程退出不等于业务完成与恢复范围测试。**
+- [x] **Step 1：写进程退出不等于业务完成与恢复范围测试。**
 
 ```python
 from chip_model.pipeline.domain_discovery.runtime import hermes_completion_error
@@ -727,8 +727,8 @@ def test_exit_zero_without_finalize_is_not_success():
 ```
 
 增加模拟 runner：验证默认只启动一个发现运行，不读取 chips 全表后创建单元；有 chip 只作提示线索；实际加载路径指向冻结包；安装副本在启动后变化不影响 extract/review。选择 finalize 后长提取任务仍从 store 恢复，已完成快照/块/候选不重跑。断线重放返回原操作结果，stale Worker 不可提交，预算已耗尽的操作不可通过新 request_id 执行。
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_runtime.py -q`。
-- [ ] **Step 3：实现启动提示与三类执行者追踪。**
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_runtime.py -q`。
+- [x] **Step 3：实现启动提示与三类执行者追踪。**
 
 ```python
 def hermes_completion_error(return_code, selection_finalized):
@@ -760,8 +760,8 @@ URL×domain 作业复用 RunStore 队列；块、阶段、逻辑候选与修订�
 运行单元不再依 chips 数量膨胀。保留 `run_hermes_open_web_test` Python 函数名作为新版委托适配，但默认调用 v3；target_fields 非空和旧 v2 resume 明确拒绝。旧读取逻辑另行保留，不因新版异常偷偷调用 Python-only runner。stdout 只作诊断，终态读取 store，不用尾部猜测完成。
 
 日志的 executor 固定 `hermes`、`backend_extract`、`backend_review`，各阶段分别记录 loaded/executed/accepted/rejected/failed。Hermes 的加载证明来自预检实际目录与规则哈希，后端来自 load_phase 输入引用；安装成功不能替代执行证明。关联身份任务不产生新的 plan/search 阶段。
-- [ ] **Step 4：GREEN。** runtime、模型、实体/关联和预算测试组合通过；故障注入覆盖 finalize 后 API 重启、模型结果提交前 Worker 重启和租约过期。
-- [ ] **Step 5：提交。** 添加 runtime/适配器/规则/store 与测试，`git commit -m "feat: run resumable Hermes domain discovery stages"`。
+- [x] **Step 4：GREEN。** runtime、模型、实体/关联和预算测试组合通过；故障注入覆盖 finalize 后 API 重启、模型结果提交前 Worker 重启和租约过期。
+- [x] **Step 5：提交。** 添加 runtime/适配器/规则/store 与测试，`git commit -m "feat: run resumable Hermes domain discovery stages"`。
 
 ## Task 13：管理员持久化启动、宿主机 Worker 与容器拓扑
 
