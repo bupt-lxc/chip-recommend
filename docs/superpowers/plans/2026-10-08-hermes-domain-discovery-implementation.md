@@ -531,7 +531,7 @@ def locate_preview(text, core_start):
 
 **Files:** `contracts.py`、`chip_model/domain_tool_api.py`、`chip_model/open_web_tool_server.py`、`.hermes-plugins/aishperf-open-web/__init__.py`、`plugin.yaml`、公共工具参考；测试 `tests/test_domain_tool_api.py`，修改 `tests/test_hermes_open_web_plugin.py`。
 
-- [ ] **Step 1：写协议 Schema 一致、选择不完整和旧版本写入拒绝测试。** 测试采用 FastAPI TestClient 与临时 store，不访问真实网。
+- [x] **Step 1：写协议 Schema 一致、选择不完整和旧版本写入拒绝测试。** 测试采用 FastAPI TestClient 与临时 store，不访问真实网。
 
 ```python
 from chip_model.pipeline.domain_discovery.contracts import validate_decisions
@@ -550,8 +550,8 @@ def test_decision_cannot_use_an_unvisited_or_invented_url():
         validate_decisions({'u1'}, {'u1'}, [decision], finalize=False)
 ```
 
-- [ ] **Step 2：RED。** domain_tool_api/plugin 测试不能在 old v2 endpoint 通过来冒充新协议通过。
-- [ ] **Step 3：建立严格动作联合与决定校验。**
+- [x] **Step 2：RED。** domain_tool_api/plugin 测试不能在 old v2 endpoint 通过来冒充新协议通过。
+- [x] **Step 3：建立严格动作联合与决定校验。**
 
 ```python
 def validate_decisions(major_ids, visited_ids, decisions, finalize):
@@ -578,8 +578,8 @@ def validate_decisions(major_ids, visited_ids, decisions, finalize):
 selection 的 `action='append'` 每批最多 10 个，先保存并用 request_id 去重；调用时校验本批，finalize 时校验数据库中全部已保存决定。上面 visited_ids 只包含已有封存成功/失败结果且与最新执行一致的真实访问；未知或仍在重试/退避的尝试继续 pending，已终结失败仍可拒绝。选择为 select 时还要核对可读正文快照存在；不可达访问记录不能被当作可提取正文。相同 candidate_id 重复追加内容相同不重复写，冲突返回 409。`action='finalize'` 锁定集合与选择并事务 enqueue 按 URL×domain 的后端任务，立即返回 receipt/task_ids/current_stage；HTTP 不等待全文提取，不将“已领取”标为“已完成”。finalize 后禁止新增搜索或改决定。补搜改变集合版本后沿用稳定 URL ID、已保存访问/决定，只补新项；旧游标不得读取新版本。
 
 网页未完成选择时，Worker 能因预算/中断保存未完成项，不能用程序补写 Hermes 拒绝。服务 Bearer 认证、loopback 限制、运行 ID 绑定与路径限制全部保留。历史 v1/v2 请求只允许 GET 查看；v3 resume/write 返回清楚的版本错误。
-- [ ] **Step 4：GREEN。** domain tool/plugin 测试通过；完整 JSON 不截断，分页覆盖整个集合，finalize 进程重启后任务仍能领取。
-- [ ] **Step 5：提交。** 明确添加本任务文件，`git commit -m "feat: version domain tools and persist selection jobs"`。
+- [x] **Step 4：GREEN。** domain tool/plugin 测试通过；完整 JSON 不截断，分页覆盖整个集合，finalize 进程重启后任务仍能领取。
+- [x] **Step 5：提交。** 明确添加本任务文件，`git commit -m "feat: version domain tools and persist selection jobs"`。
 
 ## Task 9：按冻结 Skill 提取、独立复核与修订上限
 
