@@ -241,6 +241,17 @@ class RunBudget:
                                     'attempt': attempt, 'payload': payload}, spend,
                       failed_operation=predecessor)
         def prepare_execution(state, prior_receipt):
+            accounting = {}
+            if self._segment_start is not None:
+                # Sample again in the final fenced execution transaction: a
+                # logically reserved operation may have crossed its deadline
+                # while waiting to acquire this transaction's write lock.
+                elapsed_ms, epoch = self._elapsed()
+                accounting = self._bill_elapsed(state, elapsed_ms, epoch)
+            if state['active_ms'] >= state['active_limit_ms']:
+                return state, {'kind': 'active_budget_stopped', 'reason': 'execution_deadline',
+                               'operation_id': operation_id, 'active_ms': state['active_ms'],
+                               **accounting}, 'active budget exhausted'
             self._available(state)
             logical = state['logical_operations'][logical_id]
             executions = logical['execution_count'] + 1
@@ -254,7 +265,7 @@ class RunBudget:
                     uncertain=True, reason='abandoned callback external outcome unknown')
             return state, {'kind': 'budget_execution', 'logical_id': logical_id,
                            'operation_id': operation_id, 'physical_attempt': executions,
-                           'recovered_unknown': prior_receipt is not None}
+                           'recovered_unknown': prior_receipt is not None, **accounting}
         return self.store.operation(self.run_id, self.generation, operation_id,
                                     payload, execute, confirmed_failure=True,
                                     predecessor=predecessor,
@@ -313,30 +324,37 @@ class RunBudget:
             raise ValueError('clock must return finite seconds')
         return value
 
-    def _tick(self, close):
+    def _elapsed(self):
         if self._segment_start is None:
             raise ValueError('begin_active is required for a local monotonic segment')
         now, epoch = self._clock(self.monotonic), self._clock(self.epoch)
         elapsed_ms = int((now - self._segment_start) * 1000)
         if elapsed_ms < 0:
             raise ValueError('monotonic clock moved backwards')
+        return elapsed_ms, epoch
+
+    def _bill_elapsed(self, state, elapsed_ms, epoch, *, close=False):
+        segment = state['segment']
+        if segment is None or segment['token'] != self.token or segment['generation'] != self.generation:
+            raise ValueError('active segment ownership conflict')
+        # Heartbeat and foreground may sample the same/older monotonic
+        # offset concurrently. Only the durable high-water mark determines
+        # the delta, under the same transaction as the cumulative charge.
+        delta = max(0, elapsed_ms - segment['observed_ms'])
+        charged = min(delta, state['active_limit_ms'] - state['active_ms'])
+        state['active_ms'] += charged
+        segment['observed_ms'] = max(segment['observed_ms'], elapsed_ms)
+        segment['heartbeat_epoch'] = max(segment['heartbeat_epoch'], epoch)
+        if close:
+            state['segment'] = None
+        return {'charged_ms': charged, 'observed_ms': delta, 'active_ms': state['active_ms']}
+
+    def _tick(self, close):
+        elapsed_ms, epoch = self._elapsed()
         def tick(state):
-            segment = state['segment']
-            if segment is None or segment['token'] != self.token or segment['generation'] != self.generation:
-                raise ValueError('active segment ownership conflict')
-            # Heartbeat and foreground may sample the same/older monotonic
-            # offset concurrently. Only the durable high-water mark determines
-            # the delta, under the same transaction as the cumulative charge.
-            delta = max(0, elapsed_ms - segment['observed_ms'])
-            charged = min(delta, state['active_limit_ms'] - state['active_ms'])
-            state['active_ms'] += charged
-            segment['observed_ms'] = max(segment['observed_ms'], elapsed_ms)
-            segment['heartbeat_epoch'] = max(segment['heartbeat_epoch'], epoch)
-            if close:
-                state['segment'] = None
+            accounting = self._bill_elapsed(state, elapsed_ms, epoch, close=close)
             return state, state, {'kind': 'active_end' if close else 'active_heartbeat',
-                                  'charged_ms': charged, 'observed_ms': delta,
-                                  'active_ms': state['active_ms']}
+                                  **accounting}
         result = self._update(tick)
         if close:
             self._segment_start = None

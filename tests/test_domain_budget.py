@@ -548,3 +548,84 @@ def test_specific_quota_exhaustion_does_not_block_other_stage_work(setup):
     assert budget.operation('review-other-page', {}, lambda: 'audited')['state'] == 'completed'
     budget.reserve_revision('revision', 'candidate')
     budget.record_stage('reviewing', 'completed', scope='main', reason='remaining pages reviewed')
+
+
+def test_physical_prepare_bills_deadline_crossed_after_logical_reservation(setup, monkeypatch):
+    budget = make_budget(setup, active_seconds=1)
+    store, generation, clock = setup
+    budget.begin_active()
+    clock.advance(.999)
+    original_operation = store.operation
+    def delayed_operation(*args, **kwargs):
+        clock.advance(.002)  # Crosses deadline after _reserve's last heartbeat.
+        return original_operation(*args, **kwargs)
+    monkeypatch.setattr(store, 'operation', delayed_operation)
+    with pytest.raises(ValueError, match='budget'):
+        budget.operation('crossed-deadline', {}, lambda: pytest.fail('external effect must be denied'))
+    persisted = budget.snapshot()
+    assert persisted['active_ms'] == 1000
+    assert persisted['logical_operations']['crossed-deadline']['execution_count'] == 0
+    assert store.list_operations('run-a') == []
+    stopped = [event['payload'] for event in store.events('run-a')
+               if event['payload']['kind'] == 'active_budget_stopped']
+    assert stopped[-1]['reason'] == 'execution_deadline'
+    assert stopped[-1]['charged_ms'] == 1
+
+
+def test_pending_retry_deadline_denial_retains_receipt_without_increment(setup, monkeypatch):
+    budget = make_budget(setup, active_seconds=1)
+    store, generation, clock = setup
+    with pytest.raises(KeyboardInterrupt):
+        budget.operation('pending', {}, lambda: (_ for _ in ()).throw(KeyboardInterrupt()))
+    store.release('run-a', generation)
+    generation = store.claim('run-a', 'replacement', 100000)
+    store.recover_operations('run-a', generation)
+    budget = make_budget((store, generation, clock))
+    budget.begin_active()
+    clock.advance(.999)
+    original_operation = store.operation
+    def delayed_operation(*args, **kwargs):
+        clock.advance(.002)
+        return original_operation(*args, **kwargs)
+    monkeypatch.setattr(store, 'operation', delayed_operation)
+    with pytest.raises(ValueError, match='budget'):
+        budget.operation('pending', {}, lambda: pytest.fail('retry must be denied'))
+    assert budget.snapshot()['active_ms'] == 1000
+    assert budget.snapshot()['logical_operations']['pending']['execution_count'] == 1
+    receipt = store.list_operations('run-a')[0]
+    assert receipt['state'] == 'pending'
+    assert receipt['attempts'] == 1
+
+
+def test_deadline_prepare_does_not_charge_time_already_billed_by_heartbeat(setup, monkeypatch):
+    budget = make_budget(setup, active_seconds=1)
+    store, generation, clock = setup
+    budget.begin_active()
+    clock.advance(.999)
+    original_operation = store.operation
+    def heartbeat_before_prepare(*args, **kwargs):
+        clock.advance(.002)
+        budget.tick()  # Independent heartbeat wins the high-water update.
+        return original_operation(*args, **kwargs)
+    monkeypatch.setattr(store, 'operation', heartbeat_before_prepare)
+    with pytest.raises(ValueError, match='budget'):
+        budget.operation('heartbeat-race', {}, lambda: pytest.fail('deadline reached'))
+    assert budget.snapshot()['active_ms'] == 1000
+    stopped = store.events('run-a')[-1]['payload']
+    assert stopped['kind'] == 'active_budget_stopped'
+    assert stopped['charged_ms'] == 0
+    assert stopped['observed_ms'] == 0
+
+
+def test_deferred_denial_commit_still_rejects_expired_generation(setup):
+    store, generation, clock = setup
+    def expire(value, receipt):
+        clock.advance(100001)
+        return {'charged': 1}, {'kind': 'must_rollback'}, 'denied'
+    with pytest.raises(ValueError, match='generation'):
+        store.operation('run-a', generation, 'expired-denial', {},
+                        lambda: pytest.fail('expired callback'),
+                        prepare_metadata=('test.denial', expire))
+    assert store.metadata('run-a', 'test.denial') is None
+    assert store.list_operations('run-a') == []
+    assert store.events('run-a') == []

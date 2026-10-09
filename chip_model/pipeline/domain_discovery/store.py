@@ -346,11 +346,15 @@ class RunStore:
         prepare_metadata=(key, pure_callback) atomically reserves the physical
         execution budget with the running receipt. It is skipped on cached or
         unknown-running replay; callback(value, prior_receipt) -> (value,event).
+        An optional third item is a denial message: metadata/event commit under
+        the lease fence, then ValueError is raised without claiming a receipt
+        or executing the callback. This preserves deadline accounting on denial.
         """
         request_id, payload_json = _key(request_id), _json(payload)
         if predecessor is not None:
             predecessor = _key(predecessor)
         payload_hash = _hash(payload_json)
+        denial = None
         with self._transaction(run_id, generation) as conn:
             row = conn.execute('SELECT * FROM run.operations WHERE request_id=?', (request_id,)).fetchone()
             if row is not None:
@@ -358,23 +362,26 @@ class RunStore:
                     raise ValueError('工具请求 payload 冲突')
                 if row['state'] != 'pending':
                     return self._receipt(row)
-                if prepare_metadata is not None:
-                    self._prepare_operation(conn, run_id, prepare_metadata, self._receipt(row))
-                conn.execute("UPDATE run.operations SET state='running', generation=?, attempts=attempts+1 WHERE request_id=?",
-                             (generation, request_id))
             else:
                 if predecessor is not None:
                     previous = conn.execute('SELECT state FROM run.operations WHERE request_id=?',
                                             (predecessor,)).fetchone()
                     if previous is None or previous['state'] != 'confirmed_failed':
                         raise ValueError('重试需要前次已确认结束的失败；running/completed 不能重试')
-                if prepare_metadata is not None:
-                    self._prepare_operation(conn, run_id, prepare_metadata, None)
+            if prepare_metadata is not None:
+                denial = self._prepare_operation(conn, run_id, prepare_metadata,
+                                                  self._receipt(row) if row is not None else None)
+            if denial is None and row is not None:
+                conn.execute("UPDATE run.operations SET state='running', generation=?, attempts=attempts+1 WHERE request_id=?",
+                             (generation, request_id))
+            elif denial is None:
                 stage = payload.get('stage') if isinstance(payload, dict) else None
                 if not isinstance(stage, str):
                     stage = None
                 conn.execute('INSERT INTO run.operations VALUES (?,?,?,?,?,?,?,?)',
                              (request_id, payload_hash, payload_json, 'running', None, stage, 1, generation))
+        if denial is not None:
+            raise ValueError(denial)
         # Exceptions intentionally leave the running receipt for explicit recovery.
         try:
             result_json = _json(execute())
@@ -521,8 +528,16 @@ class RunStore:
     def _prepare_operation(self, conn, run_id, prepare_metadata, receipt):
         key, prepare = prepare_metadata
         key = self._mutable_metadata_key(key)
-        value, event = prepare(self._baseline_metadata(conn, key), receipt)
+        prepared = prepare(self._baseline_metadata(conn, key), receipt)
+        if len(prepared) == 2:
+            value, event = prepared
+            denial = None
+        else:
+            value, event, denial = prepared
+            if denial is not None:
+                denial = _key(denial)
         self._write_metadata(conn, run_id, key, value, event)
+        return denial
 
     def update_metadata(self, run_id, generation, key, update, *, failed_operation=None):
         """Atomically apply pure local math and optionally append an audit event.
