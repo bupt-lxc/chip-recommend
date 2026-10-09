@@ -125,6 +125,15 @@ def main(argv=None):
     output = args.output.resolve()
     if output.suffix.lower() != '.json' or (args.db and output == args.db.resolve()):
         parser.error('--output must be a diagnostic .json file separate from --db')
+    if args.db:
+        try:
+            same_file = output.samefile(args.db)
+        except FileNotFoundError:
+            same_file = False  # A missing path has no file identity to alias.
+        except OSError as error:
+            parser.error('cannot safely compare --output and --db file identity: ' + redact(str(error)))
+        if same_file:
+            parser.error('--output must not alias the --db file through a hard link or symbolic link')
     before = None
     try:
         if args.db:

@@ -1,6 +1,7 @@
 """Probe source diagnostics, not live search accuracy."""
 import hashlib
 import json
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -149,3 +150,28 @@ def test_digest_exclusive_lock_has_bounded_backup_deadline(tmp_path):
         assert time.monotonic() - started < 1.5
         writer.rollback()
     assert probe.business_digest(source)['tables']['chips']['row_count'] == 1
+
+
+@pytest.mark.parametrize('symlink_source', [False, True])
+def test_output_hardlink_to_source_is_rejected_before_provider_without_database_changes(
+    tmp_path, monkeypatch, symlink_source,
+):
+    source = tmp_path / 'source.db'
+    make_db(source)
+    output = tmp_path / 'output.json'
+    os.link(source, output)
+    source_argument = source
+    if symlink_source:
+        source_argument = tmp_path / 'source-alias.db'
+        source_argument.symlink_to(source)
+    before_bytes = source.read_bytes()
+    before_digest = probe.business_digest(source)
+    calls = []
+    monkeypatch.setattr(probe, 'default_providers', lambda **kw: calls.append(kw) or (
+        provider('bing-html', '<div id="b_results">no results</div>'),))
+    with pytest.raises(SystemExit) as rejected:
+        probe.main(['--db', str(source_argument), '--output', str(output)])
+    assert rejected.value.code == 2
+    assert calls == []
+    assert source.read_bytes() == output.read_bytes() == before_bytes
+    assert probe.business_digest(source) == before_digest
