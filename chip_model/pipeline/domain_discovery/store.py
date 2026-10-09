@@ -334,9 +334,22 @@ class RunStore:
             item[name] = json.loads(raw) if raw is not None else None
         return item
 
-    def operation(self, run_id, generation, request_id, payload, execute):
-        """Persist running receipt, release transaction, execute, then fence result."""
+    def operation(self, run_id, generation, request_id, payload, execute, *,
+                  confirmed_failure=False, predecessor=None, prepare_metadata=None):
+        """Execute outside the transaction; replay never executes running work.
+
+        Opt-in confirmed_failure records an Exception only after the callback
+        has exited. BaseException/crash still leaves unknown running work. A
+        predecessor gates a distinct retry attempt on confirmed failure; it
+        never resets a running or completed receipt. External outcomes can
+        remain unknown even when the callback has finished (e.g. a timeout).
+        prepare_metadata=(key, pure_callback) atomically reserves the physical
+        execution budget with the running receipt. It is skipped on cached or
+        unknown-running replay; callback(value, prior_receipt) -> (value,event).
+        """
         request_id, payload_json = _key(request_id), _json(payload)
+        if predecessor is not None:
+            predecessor = _key(predecessor)
         payload_hash = _hash(payload_json)
         with self._transaction(run_id, generation) as conn:
             row = conn.execute('SELECT * FROM run.operations WHERE request_id=?', (request_id,)).fetchone()
@@ -345,19 +358,36 @@ class RunStore:
                     raise ValueError('工具请求 payload 冲突')
                 if row['state'] != 'pending':
                     return self._receipt(row)
+                if prepare_metadata is not None:
+                    self._prepare_operation(conn, run_id, prepare_metadata, self._receipt(row))
                 conn.execute("UPDATE run.operations SET state='running', generation=?, attempts=attempts+1 WHERE request_id=?",
                              (generation, request_id))
             else:
+                if predecessor is not None:
+                    previous = conn.execute('SELECT state FROM run.operations WHERE request_id=?',
+                                            (predecessor,)).fetchone()
+                    if previous is None or previous['state'] != 'confirmed_failed':
+                        raise ValueError('重试需要前次已确认结束的失败；running/completed 不能重试')
+                if prepare_metadata is not None:
+                    self._prepare_operation(conn, run_id, prepare_metadata, None)
                 stage = payload.get('stage') if isinstance(payload, dict) else None
                 if not isinstance(stage, str):
                     stage = None
                 conn.execute('INSERT INTO run.operations VALUES (?,?,?,?,?,?,?,?)',
                              (request_id, payload_hash, payload_json, 'running', None, stage, 1, generation))
         # Exceptions intentionally leave the running receipt for explicit recovery.
-        result_json = _json(execute())
+        try:
+            result_json = _json(execute())
+            state = 'completed'
+        except Exception as exc:
+            if not confirmed_failure:
+                raise
+            # Raw exception strings may contain credentials or full requests.
+            result_json = _json({'error_type': type(exc).__name__, 'outcome_unknown': True})
+            state = 'confirmed_failed'
         with self._transaction(run_id, generation) as conn:
-            conn.execute("UPDATE run.operations SET state='completed', result_json=? WHERE request_id=? AND generation=? AND state='running'",
-                         (result_json, request_id, generation))
+            conn.execute("UPDATE run.operations SET state=?, result_json=? WHERE request_id=? AND generation=? AND state='running'",
+                         (state, result_json, request_id, generation))
             return self._receipt(conn.execute('SELECT * FROM run.operations WHERE request_id=?', (request_id,)).fetchone())
 
     def list_operations(self, run_id):
@@ -461,6 +491,60 @@ class RunStore:
     def _baseline_metadata(self, conn, key='baseline'):
         row = conn.execute('SELECT value_json FROM run.metadata WHERE key=?', (key,)).fetchone()
         return json.loads(row[0]) if row else None
+
+    def metadata(self, run_id, key):
+        """Return a detached JSON metadata value; initialized identity is checked."""
+        key = _key(key)
+        with self._connect(run_id) as conn:
+            return self._baseline_metadata(conn, key)
+
+    @staticmethod
+    def _mutable_metadata_key(key):
+        key = _key(key)
+        if key in {'identity', 'baseline', 'baseline_pending'}:
+            raise ValueError('保留的运行元数据键不能修改')
+        return key
+
+    def _write_metadata(self, conn, run_id, key, value, event):
+        value_json = _json(value)
+        conn.execute('INSERT INTO run.metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json',
+                     (key, value_json))
+        if event is not None:
+            event_json = _json(event)
+            stage = _key(event.get('stage', 'budget'))
+            payload = json.loads(conn.execute('SELECT payload_json FROM starts WHERE run_id=? LIMIT 1', (run_id,)).fetchone()[0])
+            domain_id = payload.get('domain') if isinstance(payload, dict) else None
+            domain_id = event.get('domain_id', domain_id)
+            conn.execute('INSERT INTO run.events(event_id,stage,domain_id,created_at,payload_json) VALUES (?,?,?,?,?)',
+                         (uuid.uuid4().hex, stage, domain_id, self.clock(), event_json))
+
+    def _prepare_operation(self, conn, run_id, prepare_metadata, receipt):
+        key, prepare = prepare_metadata
+        key = self._mutable_metadata_key(key)
+        value, event = prepare(self._baseline_metadata(conn, key), receipt)
+        self._write_metadata(conn, run_id, key, value, event)
+
+    def update_metadata(self, run_id, generation, key, update, *, failed_operation=None):
+        """Atomically apply pure local math and optionally append an audit event.
+
+        update(detached_value) -> (new_value, result, event_or_None). No IO or
+        network belongs in this short callback. Metadata and its event share
+        the same fenced control/run transaction. Reserved baseline/identity
+        keys cannot be changed through this public extension seam.
+        """
+        key = self._mutable_metadata_key(key)
+        if failed_operation is not None:
+            failed_operation = _key(failed_operation)
+        with self._transaction(run_id, generation) as conn:
+            if failed_operation is not None:
+                receipt = conn.execute('SELECT state FROM run.operations WHERE request_id=?',
+                                       (failed_operation,)).fetchone()
+                if receipt is None or receipt['state'] != 'confirmed_failed':
+                    raise ValueError('重试需要前次 confirmed_failed；不能重放 running/completed')
+            value, result, event = update(self._baseline_metadata(conn, key))
+            _json(result)
+            self._write_metadata(conn, run_id, key, value, event)
+            return result
 
     def _verify_baseline(self, metadata, baseline, rule_bundle_hash, manifest):
         if metadata['pipeline'] != PIPELINE or metadata['contract_version'] != CONTRACT_VERSION:
