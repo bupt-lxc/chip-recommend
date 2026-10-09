@@ -210,7 +210,11 @@ SELECTION_TOOL = TypeAdapter(SelectionToolRequest)
 
 
 def validate_decisions(major_ids, visited_ids, decisions, finalize=False, *, current_domain=None):
-    """Validate saved decisions without pretending to validate snapshot IO."""
+    """Validate decisions; visited_ids denotes sealed terminal page-visit results.
+
+    The service matches the latest execution, excludes retry/backoff and
+    unknown work, and validates snapshot IO.
+    """
     if not isinstance(decisions, list) or type(finalize) is not bool:
         raise ValueError('decisions must be a list and finalize a boolean')
     major, visited = set(major_ids), set(visited_ids)
@@ -221,7 +225,7 @@ def validate_decisions(major_ids, visited_ids, decisions, finalize=False, *, cur
     if not set(ids).issubset(major):
         raise ValueError('unknown candidate outside saved major list')
     if not set(ids).issubset(visited):
-        raise ValueError('candidate has no actual visit attempt')
+        raise ValueError('candidate requires an actual visit with a finished result')
     if current_domain and any(current_domain in item['linked_domains'] for item in validated):
         raise ValueError('linked domains must exclude current domain')
     if finalize and (set(ids) != major or not major.issubset(visited)):

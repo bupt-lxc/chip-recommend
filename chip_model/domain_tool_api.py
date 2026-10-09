@@ -139,8 +139,23 @@ class DomainToolService:
 
     @staticmethod
     def _visits(pages):
+        """Only a terminal page outcome matching its latest execution is decidable.
+
+        A recoverable failed attempt may still be in backoff, so it is not a
+        terminal page result until PageService seals visits. A newer unknown
+        execution supersedes any older sealed result.
+        """
         pages = pages or {}
-        return set(pages.get('visits', {})) | {cid for cid, attempts in pages.get('attempts', {}).items() if attempts}
+        visits, attempts = pages.get('visits', {}), pages.get('attempts', {})
+        terminal = set()
+        for cid, visit in visits.items():
+            history = attempts.get(cid, [])
+            latest = history[-1] if history else None
+            if (latest and visit.get('visited') is True and latest.get('visited') is True
+                    and visit.get('status') in {'success', 'failed'} and latest.get('status') == visit['status']
+                    and visit.get('execution_id') and latest.get('execution_id') == visit['execution_id']):
+                terminal.add(cid)
+        return terminal
 
     @staticmethod
     def _unlocked(state):
@@ -256,6 +271,7 @@ class DomainToolService:
         run = self.store.get_run(run_id)
         search = self.store.metadata(run_id, SearchExecutor.KEY) or {}
         selection = self.store.metadata(run_id, SELECTION_KEY) or {}
+        pages = self.store.metadata(run_id, PageService.KEY) or {}
         tasks = self.store.list_tasks(run_id)
         counts = {}
         for task in tasks:
@@ -264,11 +280,15 @@ class DomainToolService:
             version = self._current(search)
         except ValueError:
             version = None
+        major_ids = {item['candidate_id'] for item in search.get('versions', {}).get(version, {}).get('items', [])}
+        terminal = self._visits(pages)
+        decided = set(selection.get('decisions', {}))
         return {'run_id': run_id, 'pipeline': run['pipeline'], 'contract_version': run['contract_version'],
                 'domain': run['payload']['domain'], 'scope_type': run['payload']['scope_type'],
                 'chip': run['payload'].get('chip'), 'status': run['status'], 'current_stage': run['stage'],
                 'list_version': version, 'candidate_count': len(search.get('versions', {}).get(version, {}).get('items', [])),
                 'decision_count': len(selection.get('decisions', {})), 'finalized': bool(selection.get('finalized')),
+                'pending_count': len(major_ids - (decided & terminal)),
                 'task_counts': counts, 'read_only': True}
 
     def _selection(self, ctx, request, payload):
@@ -302,7 +322,7 @@ class DomainToolService:
                         raise ValueError('candidate decision payload conflict')
                     state['decisions'].setdefault(item['candidate_id'], item)
                 result = {'status': 'received_append', 'list_version': version, 'decision_count': len(state['decisions']),
-                          'pending_count': len(ids) - len(state['decisions']), 'current_stage': 'selecting'}
+                          'pending_count': len(set(ids) - (set(state['decisions']) & visited)), 'current_stage': 'selecting'}
                 return {SELECTION_KEY: state}, [], result, {'kind': 'selection_appended', 'stage': 'selecting',
                                                            'list_version': version, 'decisions': decisions,
                                                            'hints_verified': False, 'candidate_ids': [d['candidate_id'] for d in decisions]}

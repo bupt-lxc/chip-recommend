@@ -319,6 +319,140 @@ def test_business_error_with_unknown_running_child_cannot_complete_or_reset_it(s
     assert all(op['state'] == 'running' for op in store.list_operations('run-a'))
 
 
+@pytest.mark.parametrize('older_finished_failure', [False, True])
+def test_unknown_latest_page_visit_stays_pending_until_explicit_recovery(setup, monkeypatch, older_finished_failure):
+    from chip_model.domain_tool_api import DomainToolService, SELECTION_KEY
+    from chip_model.pipeline.domain_discovery.pages import PageService
+    from chip_model.pipeline.domain_discovery.search import SearchExecutor
+    from chip_model.pipeline.domain_discovery.budget import RunBudget
+    setup[3].count = 1
+    version = search(setup)['list_version']
+    item = all_items(setup, version)[0]
+    store, ctx, session = setup[1], setup[2], setup[4]
+    original_get = session.get
+    class UnknownCrash(BaseException):
+        pass
+    def unknown_get(url, **kwargs):
+        session.calls.append((url, kwargs))
+        if older_finished_failure and len(session.calls) == 1:
+            return Response(status=500)
+        raise UnknownCrash('page fetch outcome unknown')
+    monkeypatch.setattr(session, 'get', unknown_get)
+    service = DomainToolService(store, lambda _: ctx)
+    preview_payload = request(mode='initial', request_id='unknown-page', list_version=version, limit=1)
+    with pytest.raises(UnknownCrash):
+        service.handle('preview', preview_payload)
+    before = store.metadata('run-a', PageService.KEY)
+    attempts = before['attempts'][item['candidate_id']]
+    assert attempts[-1]['status'] == 'in_progress'
+    if older_finished_failure:
+        assert attempts[0]['status'] == 'failed'
+    rejected = post(setup, 'selection', action='append', request_id='cannot-decide-unknown', list_version=version,
+                    decisions=[decision(item, 'reject')])
+    assert rejected.status_code == 409, rejected.text
+    assert post(setup, 'selection', action='finalize', request_id='cannot-finalize-unknown', list_version=version).status_code == 409
+    state = store.metadata('run-a', SELECTION_KEY) or {}
+    assert not state.get('finalized') and not state.get('decisions')
+    assert store.list_tasks('run-a') == []
+    assert store.metadata('run-a', PageService.KEY) == before
+    assert len([op for op in store.list_operations('run-a') if op['state'] == 'running']) >= 2
+    read_state = setup[0].get('/v1/runs/run-a?contract_version=3', headers={'Authorization':'Bearer test-secret'}).json()
+    assert read_state['pending_count'] == 1
+    if older_finished_failure:
+        # Simulate a reject stored by the buggy pre-fix API. Keep it, but never
+        # let a full saved decision set conceal the latest unknown execution.
+        store.update_metadata('run-a', ctx.generation, SELECTION_KEY, lambda _: (
+            {'decisions':{item['candidate_id']:decision(item, 'reject')}, 'finalized':False}, None, None))
+        read_state = setup[0].get('/v1/runs/run-a?contract_version=3', headers={'Authorization':'Bearer test-secret'}).json()
+        assert read_state['decision_count'] == 1 and read_state['pending_count'] == 1
+        assert post(setup, 'selection', action='finalize', request_id='pre-fix-choice-final', list_version=version).status_code == 409
+        assert not store.metadata('run-a', SELECTION_KEY)['finalized']
+        assert store.list_tasks('run-a') == []
+    store.release('run-a', ctx.generation)
+    ctx.generation = store.claim('run-a', 'recovered', 10000)
+    ctx.owner = 'recovered'
+    ctx.budget = RunBudget(store, 'run-a', ctx.generation, monotonic=store.clock, epoch=store.clock)
+    ctx.budget.begin_active()
+    ctx.search = SearchExecutor(store, ctx.budget, providers=[setup[3]], backoff=lambda _: None)
+    ctx.pages = PageService(store, 'run-a', ctx.generation, ctx.budget, session=session,
+                           resolver=lambda _: ['93.184.216.34'], monotonic=store.clock, backoff=lambda _: None)
+    assert store.recover_operations('run-a', ctx.generation) >= 2
+    monkeypatch.setattr(session, 'get', original_get)
+    completed = post(setup, 'preview', mode='initial', request_id='unknown-page', list_version=version, limit=1)
+    assert completed.status_code == 200, completed.text
+    assert completed.json()['items'][0]['status'] == 'success'
+    choice = decision(item, 'reject' if older_finished_failure else 'select')
+    appended = post(setup, 'selection', action='append', request_id='finished-choice', list_version=version, decisions=[choice])
+    assert appended.status_code == 200 and appended.json()['pending_count'] == 0
+    finalized = post(setup, 'selection', action='finalize', request_id='finished-final', list_version=version)
+    assert finalized.status_code == 200 and len(finalized.json()['task_ids']) == (0 if older_finished_failure else 2)
+
+
+def test_retry_backoff_is_not_a_terminal_page_visit(setup):
+    """Backend visits must be safe even without the HTTP context's mutex."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from chip_model.domain_tool_api import SELECTION_KEY
+    from chip_model.pipeline.domain_discovery.pages import PageService
+    setup[3].count = 1
+    version = search(setup)['list_version']
+    item = all_items(setup, version)[0]
+    setup[4].responses[0] = Response(status=500)
+    entered, release = Event(), Event()
+    def pause_backoff(seconds):
+        entered.set()
+        assert release.wait(10), 'controlled backoff was not released'
+    setup[2].pages.backoff = pause_backoff
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(setup[2].pages.preview, version, limit=1)
+        try:
+            assert entered.wait(5)
+            state = setup[1].metadata('run-a', PageService.KEY)
+            latest = state['attempts'][item['candidate_id']][-1]
+            assert latest['status'] == 'failed' and latest['diagnostic']['recoverable'] is True
+            assert item['candidate_id'] not in state['visits']
+            append = post(setup, 'selection', action='append', request_id='backoff-choice', list_version=version,
+                          decisions=[decision(item, 'reject')])
+            assert append.status_code == 409, append.text
+            assert post(setup, 'selection', action='finalize', request_id='backoff-final', list_version=version).status_code == 409
+            saved = setup[1].metadata('run-a', SELECTION_KEY) or {}
+            assert not saved.get('finalized') and not saved.get('decisions')
+            assert setup[1].list_tasks('run-a') == []
+            assert not future.done()
+        finally:
+            release.set()
+        assert future.result(timeout=5)['items'][0]['status'] == 'success'
+    assert post(setup, 'selection', action='append', request_id='after-backoff-choice', list_version=version,
+                decisions=[decision(item)]).status_code == 200
+    final = post(setup, 'selection', action='finalize', request_id='after-backoff-final', list_version=version)
+    assert final.status_code == 200 and len(final.json()['task_ids']) == 2
+
+
+def test_older_sealed_visit_cannot_mask_newer_unknown_execution():
+    from chip_model.domain_tool_api import DomainToolService
+    old = {'visited':True, 'status':'failed', 'execution_id':'old'}
+    unknown = {'visited':True, 'status':'in_progress', 'execution_id':'new'}
+    assert DomainToolService._visits({'visits':{'candidate':old}, 'attempts':{'candidate':[old, unknown]}}) == set()
+    assert DomainToolService._visits({'visits':{'candidate':old}, 'attempts':{'candidate':[old]}}) == {'candidate'}
+
+
+def test_known_terminal_fetch_deadline_failure_can_be_rejected(setup):
+    setup[3].count = 1
+    version = search(setup)['list_version']
+    item = all_items(setup, version)[0]
+    setup[4].responses[0] = Response(step=lambda: setup[1].clock.advance(31))
+    result = post(setup, 'preview', mode='initial', request_id='deadline-page', list_version=version, limit=1)
+    assert result.status_code == 200, result.text
+    assert result.json()['items'][0]['status'] == 'failed'
+    assert result.json()['items'][0]['diagnostic']['error_category'] == 'deadline'
+    choice = post(setup, 'selection', action='append', request_id='deadline-reject', list_version=version,
+                  decisions=[decision(item, 'reject')])
+    assert choice.status_code == 200 and choice.json()['pending_count'] == 0
+    final = post(setup, 'selection', action='finalize', request_id='deadline-final', list_version=version)
+    assert final.status_code == 200 and final.json()['task_ids'] == []
+    assert len(setup[4].calls) == 1
+
+
 def test_supplement_retains_visits_decisions_and_old_cursor_is_bound(setup):
     first = search(setup)
     old = first['list_version']
