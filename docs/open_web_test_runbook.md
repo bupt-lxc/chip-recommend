@@ -253,6 +253,45 @@ print({key: receipt[key] for key in ('request_id', 'run_id', 'status')})
 
 后端 extract/review 加载当前域冻结的完整 Skill、合同和全部参考。程序校验通过后独立模型语义复核；每个逻辑候选至多一次修订，不能换 ID 重置。一层关联域复用快照，不搜索、不进一步派生业务域；必要身份判定由主/关联域共用，身份证据不充分不能统计新芯片。库外模型只保存未解析关系依赖，不自动创建正式模型。
 
+## 只读查询实际 Skill 使用审计
+
+在结果页或直接 GET `/api/v1/data-agent/open-web-runs/<run_id>` 获取同一历史投影。先确认返回 `schema_version=hermes-open-web-v3`，再检查 `actual_skill_usage`；这段读取代码可用于已存在的真实或 fixture run_id，不会补写历史或启动任务：
+
+```python
+import requests
+run_id = '替换为已有运行ID'
+domain = 'specs'
+response = requests.get(
+    'http://127.0.0.1:8000/api/v1/data-agent/open-web-runs/' + run_id,
+    timeout=20)
+response.raise_for_status()
+detail = response.json()
+assert detail.get('schema_version') == 'hermes-open-web-v3'
+events = {event['sequence']: event for event in detail.get('raw_records', {}).get('events', [])}
+for observation in detail.get('actual_skill_usage', []):
+    usage = observation.get('domain_usage', {}).get(domain, {})
+    print({'executor': observation['executor'], 'domain': domain,
+           'loaded': usage.get('loaded'), 'executed': usage.get('executed'),
+           'scope': observation.get('scope'),
+           'verification': observation.get('verification')})
+    for load in observation.get('loads', []):
+        if load.get('domain_id') not in (None, domain):
+            continue
+        ref = load['evidence_ref']  # events/<sequence>
+        original = events.get(int(ref.split('/')[1]))
+        print({key: load.get(key) for key in
+               ('phase', 'domain_id', 'bundle_sha256', 'input_sha256', 'files', 'evidence_ref')})
+        print({'raw_event_sequence': original.get('sequence') if original else None})
+```
+
+逐 executor（hermes、backend_extract、backend_review）核对 `domain_usage[domain].loaded/executed`，值只有 true 或 null；缺该 domain、缺该 executor 或 null 表示未记录/未知，不能当 false，也不能当完成。`actual_skill_usage[].loaded/executed` 是 `scope="executor_observations"` 的总体观察，可能来自不同域或不同事件，不能跨域合并后判定当前域两阶段完成。`verification="recorded_audit_only"` 表示保存的审计观察，不能当实际 installed SDK 的独立验证，尤其不能把 fixture 轨迹冒充真实环境。
+
+`loads[]` 保留 phase、domain_id、bundle_sha256、input_sha256、files、evidence_ref。`loads[].evidence_ref`、每行及逐域 `evidence_refs` 的 `events/<sequence>` 都应在 `raw_records.events` 按 sequence 找对应原始事件，核对 payload.executor/kind/domain_id/phase 及当次引用；查不到或缺 phase/domain_id 就保留未知，不从 Skill 名、当前主域或别的记录补推。executed 观察仅证明执行调用已记录，最终是否完成还须核对 model_calls、真实阶段状态、覆盖/失败和独立复核结果，不能用 loaded 代替 executed 或 success。
+
+Hermes 的 loaded 事件 `resolver.files` 是完整 20 文件闭包，各项 `{path, sha256}` 应逐一匹配本运行 skill_bundle manifest 的绝对冻结路径与 hash；同时核对原始预检来源和实际 SDK/插件/工具 schema 证明。backend_extract 与 backend_review 是两次独立阶段调用，其 loads.files 来自对应 loaded 事件的 reference_hashes，不能要求或冒充 Hermes 的完整 resolver 路径表；分别检查 phase/domain_id、bundle_sha256、对应输入摘要、引用 hash 和 model_calls 的执行/响应/独立复核绑定。输入 hash 以原记录的计算范围为准（例如 executor loaded 的 input_sha256 是完整 messages 摘要，model_calls 的 input_sha256 是 payload 摘要），不同命名空间不能直接强行对等。
+
+该 API 从原始事件生成只读投影，不打开当前正式库补齐旧值，不补写缺失的规则加载/执行证据。不要在共享日志输出整个 raw_records 或模型私密请求；按上述引用在受保护结果中定位即可。
+
 ## 宿主机预检与运行边界
 
 API 容器只共享 data root。HermesRunner 在宿主机每次建立临时 IPv4 loopback 工具服务、临时令牌和独立 SDK cwd/home，与活动 generation、工具 schema、冻结包 hash 和绝对路径绑定。旧固定 5341 服务不是 V3 的前提；不用公网工具服务绕过容器回环限制。

@@ -65,6 +65,8 @@ Bing 两条开放词返回相同八个泛 AI URL，L40S 词主要返回通用 NV
 
 官方能力参考入口：[CLI commands](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/reference/cli-commands.md)、[Skills](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills/)、[Tools](https://hermes-agent.nousresearch.com/docs/user-guide/features/tools/)。这些文档不能替代实际安装能力探针。新版 safe-mode/ignore-rules 的影响与当前 adapter 的隔离方式见 runbook，不自行追加 flags 改变生产 runner。
 
+实际 Skill 审计的逐域查询与事件回溯方法见 [runbook 的只读 Skill 使用审计](../open_web_test_runbook.md#只读查询实际-skill-使用审计)：`recorded_audit_only` 只表示已保存观察，不升级为真实 SDK 验证；缺 loaded/executed 保留未知。
+
 取得可信连接且经授权核对具体环境后，按 [runbook](../open_web_test_runbook.md) 保存启动键，顺序执行六个无 chip 域；响应丢失同键重试、显式 resume 已有 run_id，不重置来源/预算/规则/修订次数。每域仅 success 或诊断完整的 no_findings 能通过该次网络检查；partial/failed 定位并重验，interrupted 使用原 ID 恢复。真实候选每域最多五个（不足五个全部）、对应拒绝/仅来源变化/新实体/条件未解析及 UI 引用都**未抽查**。真实网络/模型耗时、调用数和覆盖统计为**未测**，不能用候选数量充当准确率。
 
 ## 正式库只读核验
