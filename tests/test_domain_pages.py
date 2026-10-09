@@ -471,6 +471,36 @@ def test_spaced_and_inline_marker_notes_survive_snapshot_detail_and_chunk_contex
     assert any(snapshot['text'][r['start']:r['end']] == note for r in sku['context_refs'])
 
 
+@pytest.mark.parametrize('wrapper', ['body', 'section', 'article', 'main', 'table'])
+def test_footer_marker_references_cover_all_retained_body_entry_points(setup, wrapper):
+    note = '* TDP values are per accelerator, not server total.'
+    inner = '<h1>X100 specifications</h1><p>TDP 150<sup>*</sup> W</p><p>GPU memory 24 GB.</p>'
+    if wrapper == 'table':
+        content = '<table><tr><th>SKU</th><th>TDP(W)</th><th>Memory(GB)</th></tr><tr><td>X100</td><td>150<sup>*</sup></td><td>24</td></tr></table>'
+    else:
+        content = inner if wrapper == 'body' else f'<{wrapper}>{inner}</{wrapper}>'
+    html = f'<body>{content}<footer><p>{note}</p><p>Copyright 2026. Contact us.</p></footer></body>'
+    reader, session = service(setup, [Response(body=html.encode())])
+    item = reader.preview(save_list(setup))['items'][0]
+    snapshot = reader.read_snapshot(item['snapshot_id'])
+    assert note in snapshot['text'] and 'Copyright' not in snapshot['text']
+    block = next(b for b in snapshot['blocks'] if b['kind'] == 'footnote')
+    assert snapshot['text'][block['start']:block['end']] == note
+    assert reader.detail('footer-detail', item['snapshot_id'], offset=block['start'], length=len(note))['items'][0]['text'] == note
+    chunks = reader.chunks(item['snapshot_id'], max_chars=40)['chunks']
+    assert any(any(snapshot['text'][r['start']:r['end']] == note for r in chunk['context_refs']) for chunk in chunks)
+    assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize('chrome', ['', '<nav>Products *</nav>', '<script>const marker = "*";</script>', '<style>/* * */</style>'])
+def test_footer_chrome_and_footer_itself_cannot_supply_marker_reference(chrome):
+    from chip_model.pipeline.domain_discovery.pages import render_html
+    result = render_html(f'<body><main>{chrome}<section><h1>X100 specifications</h1><p>TDP 150 W</p></section></main><footer><p>* Unreferenced footer note.</p><p>Copyright 2026.</p></footer></body>'.encode(), 'utf-8')
+    assert 'Unreferenced footer note' not in result['text']
+    assert 'Copyright' not in result['text']
+    assert 'X100 specifications' in result['text']
+
+
 def test_thead_td_header_retains_units_for_every_sku_chunk():
     from chip_model.pipeline.domain_discovery.pages import render_html, chunk_text
     result = render_html(b'<main><h1>GPU</h1><table><thead><tr><td>SKU</td><td>Memory(GB)</td><td>TDP(W)</td></tr></thead><tbody><tr><td>X100-A</td><td>24</td><td>150</td></tr><tr><td>X100-B</td><td>48</td><td>300</td></tr></tbody></table></main>', 'utf-8')

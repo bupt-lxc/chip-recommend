@@ -66,11 +66,21 @@ def render_html(raw, encoding):
     core = root.find('main') or root.find('article')
     linked_notes = {unquote(str(a['href'])[1:]) for a in root.find_all('a', href=True)
                     if str(a['href']).startswith('#')}
-    retained_text = ' '.join(tag.get_text(' ', strip=True) for tag in root.find_all(['main', 'article', 'table']))
+    # Marker references belong to retained body text, including section/div
+    # fallback pages. Footer notes cannot reference themselves, and removed
+    # navigation or executable/style content cannot make a note necessary.
+    excluded_marker_ancestors = {'footer', 'nav', 'script', 'style', 'noscript',
+                                 'template', 'svg', 'iframe', 'form', 'button', 'head'}
+    retained_text = ' '.join(str(node) for node in root.strings
+                            if not isinstance(node, Comment) and not any(
+                                parent.name in excluded_marker_ancestors or
+                                (parent.name == 'header' and parent is not core
+                                 and core not in parent.descendants and not parent.find(['h1', 'h2', 'h3']))
+                                for parent in node.parents))
     # Inline markup (especially <sup>) and ordinary typesetting can insert
     # whitespace before a marker. Associate a visible footer note by its exact
     # marker token, rather than requiring adjacency to a preceding value.
-    referenced_markers = set(re.findall(r'[*†‡]+|\[\d+\]', retained_text))
+    referenced_markers = set(re.findall(r'[*†‡]+|\[\d+\]', _clean(retained_text)))
     def is_note(tag):
         marker = ' '.join([str(tag.get('id', '')), ' '.join(tag.get('class', [])), str(tag.get('role', ''))])
         return bool(re.search(r'footnote|endnote|doc-note|(?:^|[-_\s])notes?(?:$|[-_\s])', marker, re.I)
