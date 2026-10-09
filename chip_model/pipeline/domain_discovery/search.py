@@ -28,8 +28,14 @@ OUTCOMES = HEALTHY | {'network_error', 'http_error', 'parse_error'}
 QUERY_FAILURES = (OUTCOMES - HEALTHY) | {'retry_budget_exhausted'}
 MAX_RESPONSE_CHARS = 12000
 _TRACKING = frozenset({'gclid', 'fbclid', 'msclkid', 'yclid', '_ga', 'mc_cid', 'mc_eid'})
-_SECRET_KEYS = re.compile(r'^(?:api[_-]?key|access[_-]?token|token|authorization|password|secret|credential)$', re.I)
+_SECRET_NAME = r'(?:api[_-]?key|access[_-]?token|token|(?:proxy[-_])?authorization|password|secret|credential)'
+_SECRET_KEYS = re.compile(r'^' + _SECRET_NAME + r'$', re.I)
 _URL_CREDENTIALS = re.compile(r'([a-z][a-z0-9+.-]*://)[^/\s@]+@', re.I)
+_QUOTED_SECRET = re.compile(
+    r'(?P<prefix>["\']' + _SECRET_NAME + r'["\']\s*:\s*)(?P<quote>["\'])(?:\\.|(?!(?P=quote)).)*(?P=quote)', re.I | re.S)
+_ESCAPED_QUOTED_SECRET = re.compile(
+    r'(?P<prefix>\\["\']' + _SECRET_NAME + r'\\["\']\s*:\s*)(?P<quote>\\["\'])(?:(?!(?P=quote)).)*(?P=quote)', re.I | re.S)
+_AUTHORIZATION_HEADER = re.compile(r'(?<![\w-])((?:proxy[-_])?authorization\s*[:=]\s*)[^\r\n,;"\']+', re.I)
 
 
 class OversizeItemError(ValueError):
@@ -98,11 +104,16 @@ def redact(value):
 
 
 def _redact_plain(value):
+    # Only named credential fields/headers are removed. Preserve unrelated
+    # JSON/repr fields and punctuation so diagnostic context stays useful.
+    for pattern in (_QUOTED_SECRET, _ESCAPED_QUOTED_SECRET):
+        value = pattern.sub(lambda match: match['prefix'] + match['quote'] + '[REDACTED]' + match['quote'], value)
+    value = _AUTHORIZATION_HEADER.sub(r'\1[REDACTED]', value)
     value = re.sub(r'([?&])([^=&#\s]+)=([^&#\s]*)',
                    lambda match: match[1] + match[2] + '=[REDACTED]' if _SECRET_KEYS.fullmatch(unquote(match[2])) else match[0], value)
     value = _URL_CREDENTIALS.sub(r'\1[REDACTED]@', value)
     value = re.sub(r'(?i)(bearer\s+)[^\s&,;]+', r'\1[REDACTED]', value)
-    return re.sub(r'(?i)((?:api[_-]?key|access[_-]?token|token|authorization|password|secret)\s*[=:]\s*)[^\s&;,]+',
+    return re.sub(r'(?i)(' + _SECRET_NAME + r'\s*[=:]\s*)[^\s&;,]+',
                   r'\1[REDACTED]', value)
 
 

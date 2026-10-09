@@ -587,3 +587,46 @@ def test_total_active_budget_failure_propagates_without_provider_stop_or_fallbac
     state = store.metadata('run-a', search.KEY)
     assert not state['queries']['q0'].get('provider_stops')
     assert len(primary.calls) == 1 and backup.calls == []
+
+
+@pytest.mark.parametrize('value', [
+    'request failed: {"api_key":"SECRET"}',
+    "request failed: {'api_key': 'SECRET', 'sku': 'MLU370-S4'}",
+    'Authorization: Basic dXNlcjpTRUNSRVQ=',
+    'Proxy-Authorization: Basic dXNlcjpTRUNSRVQ=',
+    'request failed: {"api_key":"SECRET"}; Proxy-Authorization: Basic dXNlcjpTRUNSRVQ=',
+    "headers={'Proxy-Authorization': 'Basic dXNlcjpTRUNSRVQ=', 'Authorization': 'Bearer SECRET'}",
+    'Proxy-Authorization: Bearer SECRET',
+    'Authorization=Basic dXNlcjpTRUNSRVQ=',
+    r'request failed: {\"api_key\":\"SECRET\"}',
+])
+def test_quoted_credentials_and_complete_authorization_values_are_redacted(value):
+    from chip_model.pipeline.domain_discovery.search import redact
+    result = redact(value)
+    assert 'SECRET' not in result and 'dXNlcjpTRUNSRVQ=' not in result
+    assert '[REDACTED]' in result
+    if 'sku' in value:
+        assert 'MLU370-S4' in result
+    structured = redact({'Proxy-Authorization': 'Basic dXNlcjpTRUNSRVQ=', 'sku': 'MLU370-S4'})
+    assert structured['Proxy-Authorization'] == '[REDACTED]'
+    assert structured['sku'] == 'MLU370-S4'
+    harmless = '{"sku":"MLU370-S4","note":"Basic authentication documentation"}'
+    assert redact(harmless) == harmless
+
+
+def test_executor_persists_redacted_quoted_payload_and_basic_proxy_header(setup):
+    from chip_model.pipeline.domain_discovery.search import ProviderResponse
+
+    class Credentials(Provider):
+        def search(self, query, limit, *, language):
+            return ProviderResponse(outcome='network_error',
+                error='request failed: {"api_key":"SECRET"}; Proxy-Authorization: Basic dXNlcjpTRUNSRVQ=') if query.endswith('q0') else ProviderResponse()
+
+    search = executor(setup, Credentials())
+    response = search.execute('initial', plan())
+    store, _ = setup
+    artifacts = {'metadata': store.metadata('run-a', search.KEY), 'events': store.events('run-a'),
+                 'operations': store.list_operations('run-a'), 'response': response}
+    serialized = json.dumps(artifacts, ensure_ascii=False)
+    assert 'SECRET' not in serialized and 'dXNlcjpTRUNSRVQ=' not in serialized
+    assert '[REDACTED]' in serialized
