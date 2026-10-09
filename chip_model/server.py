@@ -1392,28 +1392,47 @@ def api_data_agent_save_seed(
 
 
 @app.post("/api/v1/data-agent/manual-run")
-def api_data_agent_manual_run(
-    request: ManualRunRequest,
+async def api_data_agent_manual_run(
     http_request: Request,
-    background_tasks: BackgroundTasks,
     admin_token: str | None = Header(None, alias="X-Data-Agent-Admin"),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ):
-    _require_data_agent_admin(admin_token, http_request)
+    # Authentication precedes normalization and any persistent start. The raw
+    # object avoids legacy defaults leaking into V3 requests.
+    _require_secure_admin_transport(http_request)
+    authenticated = admin_token_valid(admin_token)
+    if not authenticated:
+        # Keep the separate known_sources legacy endpoint semantics.
+        raw = await http_request.body()
+        try:
+            hint = json.loads(raw)
+        except ValueError:
+            hint = {}
+        legacy = isinstance(hint, dict) and hint.get('pipeline', 'known_sources') == 'known_sources' and not any(
+            k in hint for k in ('domain', 'chip', 'request_id', 'resume_run_id', 'skill', 'chips', 'queries', 'target_fields')) and idempotency_key is None
+        raise HTTPException(status_code=403 if legacy else 401, detail="需要数据更新管理员口令。")
     try:
-        queued = queue_manual_run(
-            request.mode,
-            request.limit,
-            pipeline=request.pipeline,
-            skill=request.skill,
-            chips=request.chips,
-            queries=request.queries,
-            target_fields=request.target_fields,
-        )
-        if request.pipeline == "open_web":
-            background_tasks.add_task(execute_open_web_manual_request, queued["id"])
-        return queued
+        payload = await http_request.json()
+        if not isinstance(payload, dict):
+            raise ValueError('启动请求必须为对象')
+        is_v3 = payload.get('pipeline') != 'known_sources' if 'pipeline' in payload else False
+        is_v3 = is_v3 or idempotency_key is not None or any(
+            k in payload for k in ('domain', 'chip', 'request_id', 'resume_run_id', 'skill', 'chips', 'queries', 'target_fields'))
+        if is_v3:
+            from chip_model.pipeline.manual_control import queue_domain_run, DomainStartConflict
+            try:
+                receipt = queue_domain_run(payload, idempotency_key=idempotency_key)
+            except DomainStartConflict as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            return Response(content=json.dumps(receipt, ensure_ascii=False), media_type='application/json', status_code=202)
+        # Existing known-source queue is independent; no V3 input reaches it.
+        request = ManualRunRequest.model_validate(payload)
+        return queue_manual_run(request.mode, request.limit, pipeline=request.pipeline,
+            skill=request.skill, chips=request.chips, queries=request.queries, target_fields=request.target_fields)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (OSError, sqlite3.Error) as exc:
+        raise HTTPException(status_code=503, detail=f'持久运行队列不可用：{exc}') from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

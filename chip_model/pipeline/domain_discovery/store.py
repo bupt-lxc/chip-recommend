@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS runs (
     pipeline TEXT NOT NULL, contract_version INTEGER NOT NULL,
     status TEXT NOT NULL, stage TEXT NOT NULL, initialized INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS dispatches (
+    run_id TEXT PRIMARY KEY, request_key TEXT NOT NULL, timeout_seconds INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS leases (
     run_id TEXT PRIMARY KEY, owner TEXT, generation INTEGER NOT NULL DEFAULT 0,
     expires_at REAL NOT NULL DEFAULT 0
@@ -244,12 +247,14 @@ class RunStore:
                 'created_at': row['created_at'], 'status': run['status'], 'stage': run['stage'],
                 'pipeline': run['pipeline'], 'contract_version': run['contract_version']}
 
-    def start(self, key, payload, run_id):
+    def start(self, key, payload, run_id, *, timeout=1800):
         """Bind normalized business payload before initialization; replay its ID.
 
         The caller separates the idempotency key from its normalized payload.
         This store hashes that payload verbatim without dropping any fields.
         """
+        if type(timeout) is not int or not 1 <= timeout <= 1800:
+            raise ValueError('timeout 必须为 1..1800 秒整数')
         path = self.run_path(run_id)
         key = _key(key)
         payload_json = _json(payload)
@@ -270,11 +275,55 @@ class RunStore:
                 conn.execute('INSERT INTO runs VALUES (?,?,?,?,?,?,?)',
                              (run_id, run_id.casefold(), PIPELINE, CONTRACT_VERSION, 'preparing', 'preparing', 0))
                 conn.execute('INSERT INTO leases(run_id) VALUES (?)', (run_id,))
+                conn.execute('INSERT INTO dispatches VALUES (?,?,?)', (run_id, key, timeout))
                 binding = self._binding(conn, conn.execute('SELECT * FROM starts WHERE request_key=?', (key,)).fetchone())
         # A crash here leaves the original durable binding. Bootstrap repair is
         # allowed only until the run schema and initialized marker commit together.
         self._ensure_run(binding['run_id'])
         return binding
+
+    def queue_resume(self, key, payload):
+        """Bind an explicit resume, preserving all original budget/configuration."""
+        key = _key(key)
+        run_id = payload['resume_run_id']
+        original = self.get_run(run_id)['payload']
+        chip = payload['chip'] if payload['chip'] is not None else original['chip']
+        canonical = {**payload, 'chip': chip, 'scope_type': 'chip' if chip else 'discovery'}
+        encoded = _json(canonical)
+        with self._transaction(run_id) as conn:
+            existing = conn.execute('SELECT * FROM starts WHERE request_key=?', (key,)).fetchone()
+            if existing is not None:
+                if existing['payload_hash'] != _hash(encoded):
+                    raise ValueError('启动请求幂等键 payload 冲突')
+                return self._binding(conn, existing)
+            if original['domain'] != payload['domain'] or (payload['chip'] is not None and payload['chip'] != original['chip']):
+                raise ValueError('续跑数据域或最初芯片线索与原运行不一致')
+            lease = conn.execute('SELECT * FROM leases WHERE run_id=?', (run_id,)).fetchone()
+            if lease['owner'] is not None and lease['expires_at'] > self.clock():
+                raise ValueError('运行已有有效租约，不能续跑')
+            conn.execute('INSERT INTO starts VALUES (?,?,?,?,?)', (key, _hash(encoded), encoded, run_id, self.clock()))
+            config = conn.execute('SELECT * FROM dispatches WHERE run_id=?', (run_id,)).fetchone()
+            timeout = config['timeout_seconds'] if config is not None else 1800
+            conn.execute('INSERT OR REPLACE INTO dispatches VALUES (?,?,?)', (run_id, key, timeout))
+            conn.execute("UPDATE runs SET status='preparing',stage='preparing' WHERE run_id=?", (run_id,))
+            return self._binding(conn, conn.execute('SELECT * FROM starts WHERE request_key=?', (key,)).fetchone())
+
+    def dispatch_request(self, run_id):
+        with self._connect() as conn:
+            self._run(conn, run_id)
+            row = conn.execute('SELECT * FROM dispatches WHERE run_id=?', (run_id,)).fetchone()
+            if row is None:
+                return {'request_id': self.get_run(run_id)['request_key'], 'timeout': 1800}
+            binding = conn.execute('SELECT * FROM starts WHERE request_key=?', (row['request_key'],)).fetchone()
+            return {'request_id': row['request_key'], 'timeout': row['timeout_seconds'], 'payload': json.loads(binding['payload_json'])}
+
+    def dispatchable_runs(self):
+        """Only queued or crashed workers; terminal runs need explicit resume."""
+        with self._connect() as conn:
+            return [row['run_id'] for row in conn.execute(
+                "SELECT r.run_id FROM runs r JOIN leases l ON l.run_id=r.run_id "
+                "WHERE r.pipeline=? AND r.contract_version=3 AND r.status IN ('preparing','running') "
+                "AND (l.owner IS NULL OR l.expires_at<=?) ORDER BY r.run_id", (PIPELINE, self.clock()))]
 
     def _ensure_run(self, run_id):
         path = self.run_path(run_id)
@@ -296,14 +345,16 @@ class RunStore:
         self.run_path(run_id)
         with self._connect() as conn:
             self._run(conn, run_id)
-            row = conn.execute('SELECT * FROM starts WHERE run_id=? ORDER BY created_at LIMIT 1', (run_id,)).fetchone()
+            row = conn.execute('SELECT * FROM starts WHERE run_id=? ORDER BY created_at,rowid LIMIT 1', (run_id,)).fetchone()
             return self._binding(conn, row)
 
-    def claim(self, run_id, owner, lease_seconds):
+    def claim(self, run_id, owner, lease_seconds, *, dispatch=False):
         self.run_path(run_id)
         owner, lease_seconds = _key(owner), _seconds(lease_seconds)
         with self._transaction() as conn:
-            self._run(conn, run_id)
+            run = self._run(conn, run_id)
+            if dispatch and run['status'] not in {'preparing', 'running'}:
+                raise ValueError('运行不在可领取队列')
             row = conn.execute('SELECT * FROM leases WHERE run_id=?', (run_id,)).fetchone()
             now = self.clock()
             if row['owner'] is not None and row['expires_at'] > now:
@@ -311,6 +362,8 @@ class RunStore:
             generation = row['generation'] + 1
             conn.execute('UPDATE leases SET owner=?, generation=?, expires_at=? WHERE run_id=?',
                          (owner, generation, now + lease_seconds, run_id))
+            if dispatch:
+                conn.execute("UPDATE runs SET status='running' WHERE run_id=?", (run_id,))
         return generation
 
     def renew(self, run_id, generation, lease_seconds):

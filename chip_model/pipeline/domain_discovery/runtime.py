@@ -473,10 +473,17 @@ def run_domain(request, dependencies):
             raise ValueError('续跑数据域或最初芯片线索与原运行不一致')
         run_id = resume
     else:
-        started = store.start(request_id, canonical, 'run-' + uuid.uuid4().hex)
+        started = store.start(request_id, canonical, 'run-' + uuid.uuid4().hex, timeout=timeout)
         run_id = started['run_id']
-    owner = 'worker-' + uuid.uuid4().hex
-    generation = store.claim(run_id, owner, 5)
+    preclaimed = deps.get('preclaimed')
+    if preclaimed is not None:
+        if preclaimed.get('run_id') != run_id:
+            raise ValueError('preclaimed run_id 不匹配')
+        owner, generation = preclaimed['owner'], preclaimed['generation']
+        store.validate_context(run_id, generation, owner)
+    else:
+        owner = 'worker-' + uuid.uuid4().hex
+        generation = store.claim(run_id, owner, 5)
     budget = RunBudget(store, run_id, generation, active_seconds=None if store.metadata(run_id, RunBudget.KEY) else timeout,
                        monotonic=monotonic, epoch=epoch)
     deps.setdefault('installed_skill_root', Path(os.getenv('AISH_PERF_HERMES_SKILL_ROOT', str(Path.home() / '.hermes/skills'))))
@@ -496,6 +503,8 @@ def run_domain(request, dependencies):
             raise TimeoutError('active budget exhausted')
         threading.Thread(target=worker, daemon=True, name='domain-' + run_id).start()
         while not done.wait(0.05):
+            if deps.get('stop_event') is not None and deps['stop_event'].is_set():
+                raise KeyboardInterrupt('worker shutdown')
             _remaining(budget, 1800)
             store.renew(run_id, generation, 5)
         _remaining(budget, 1800)
@@ -538,6 +547,31 @@ def run_domain(request, dependencies):
     store.export_events(run_id)
     store.export_runtime(run_id)
     return result
+
+
+def verify_loopback_bridge(url, token, context, *, timeout):
+    """Probe the actual ephemeral HTTP app, bypassing external proxy settings."""
+    from urllib.request import Request, build_opener, ProxyHandler
+    from urllib.parse import urlsplit
+    parts = urlsplit(url)
+    if parts.scheme != 'http' or parts.hostname != '127.0.0.1':
+        raise ValueError('Hermes bridge must be local loopback HTTP')
+    context.validate()
+    request = Request(url + '/v1/health/' + context.run_id,
+        headers={'Authorization': 'Bearer ' + token})
+    with build_opener(ProxyHandler({})).open(request, timeout=timeout) as response:
+        health = json.load(response)
+    from .rules import load_phase
+    run = context.store.get_run(context.run_id)
+    proof = load_phase(context.bundle_root, run['payload']['domain'], 'plan')
+    expected = {'status': 'ok', 'run_id': context.run_id, 'pipeline': 'hermes-open-web-v3',
+        'contract_version': 3, 'generation': context.generation,
+        'run_path': str(context.store.run_path(context.run_id)), 'bundle_path': str(context.bundle_root.resolve()),
+        'bundle_sha256': proof['bundle_sha256']}
+    if _json(health) != _json(expected):
+        raise ValueError('Hermes bridge health run/schema/generation/path binding mismatch')
+    context.validate()
+    return health
 
 
 class HermesRunner:
@@ -700,10 +734,11 @@ class HermesRunner:
                 self.cancel()
                 raise RuntimeError('Hermes loopback tool service failed to start')
             time.sleep(.01)
-        self.environment.update({'AISH_PERF_OPEN_WEB_TOOL_URL': f'http://127.0.0.1:{port}',
-                                 'AISH_PERF_OPEN_WEB_TOOL_TOKEN': token})
-        (self.home / 'prompt.json').write_text(_json({'prompt': prompt, 'timeout': timeout}), encoding='utf-8')
         try:
+            url = f'http://127.0.0.1:{port}'
+            verify_loopback_bridge(url, token, context, timeout=min(5, max(.001, deadline - time.monotonic())))
+            self.environment.update({'AISH_PERF_OPEN_WEB_TOOL_URL': url, 'AISH_PERF_OPEN_WEB_TOOL_TOKEN': token})
+            (self.home / 'prompt.json').write_text(_json({'prompt': prompt, 'timeout': timeout}), encoding='utf-8')
             return self._bootstrap('execute', max(.001, deadline - time.monotonic()))
         finally:
             self.server.should_exit = True

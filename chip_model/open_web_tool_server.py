@@ -481,6 +481,22 @@ def create_open_web_tool_app(
     def health() -> dict[str, Any]:
         return {"status": "ok", "loopback_only": True}
 
+    @app.get('/v1/health/{run_id}', dependencies=[Depends(authorize)])
+    def v3_health(run_id: str, request: Request):
+        import ipaddress
+        try:
+            local = request.client is not None and ipaddress.ip_address(request.client.host).is_loopback
+        except ValueError:
+            local = False
+        if not local:
+            raise HTTPException(403, '工具服务仅允许 loopback 客户端。')
+        if domain_service is None:
+            raise HTTPException(503, 'v3 runtime service not configured')
+        try:
+            return domain_service.health(run_id)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
     @app.get('/v1/runs/{run_id}', dependencies=[Depends(authorize)])
     def read_tool_run(run_id: str, request: Request, unit_id: str = '', contract_version: int | None = None):
         import ipaddress

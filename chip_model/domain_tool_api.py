@@ -291,6 +291,19 @@ class DomainToolService:
                 'stage': 'selecting' if version else 'searching',
                 'reason': 'finalize_not_submitted' if version else 'search_not_completed'}}
 
+    def health(self, run_id):
+        """Authenticated bridge probe requires this exact live execution lease."""
+        ctx = self.context_resolver(run_id)
+        if ctx is None or ctx.store is not self.store or ctx.run_id != run_id:
+            raise ValueError('active runtime context missing or mismatched')
+        ctx.validate()
+        run = self.store.get_run(run_id)
+        proof = load_phase(ctx.bundle_root, run['payload']['domain'], 'plan')
+        return {'status': 'ok', 'run_id': run_id, 'pipeline': run['pipeline'],
+            'contract_version': run['contract_version'], 'generation': ctx.generation,
+            'run_path': str(self.store.run_path(run_id)), 'bundle_path': str(ctx.bundle_root.resolve()),
+            'bundle_sha256': proof['bundle_sha256']}
+
     def read_run(self, run_id):
         """Readonly status needs no worker lease and never reconstructs old data."""
         run = self.store.get_run(run_id)

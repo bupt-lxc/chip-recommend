@@ -182,3 +182,34 @@ def latest_manual_result(mode: str) -> dict[str, Any] | None:
         if item.get("mode") == mode:
             results.append(item)
     return max(results, key=lambda item: item.get("created_at", "")) if results else None
+
+
+class DomainStartConflict(ValueError):
+    """The request key already binds a different canonical request."""
+
+
+def queue_domain_run(payload, *, idempotency_key=None, data_root=None, timeout=1800):
+    """Shared CLI/API V3 entry; never starts an in-process background task."""
+    from chip_model.pipeline.domain_discovery.contracts import normalize_start, _start_request_id
+    from chip_model.pipeline.domain_discovery.store import RunStore
+    canonical = normalize_start(payload, idempotency_key)
+    key = _start_request_id(payload.get('request_id')) or _start_request_id(idempotency_key)
+    generated = key is None
+    key = key or uuid.uuid4().hex
+    root = Path(data_root) if data_root is not None else get_db_path().resolve().parent
+    store = RunStore(root / 'domain_runs')
+    try:
+        if canonical['resume_run_id']:
+            binding = store.queue_resume(key, canonical)
+        else:
+            binding = store.start(key, canonical, 'run-' + uuid.uuid4().hex, timeout=timeout)
+    except ValueError as exc:
+        if '幂等键 payload 冲突' in str(exc):
+            raise DomainStartConflict(str(exc)) from exc
+        raise
+    receipt = {'schema_version': 'hermes-open-web-v3', 'request_id': binding['request_key'],
+        'run_id': binding['run_id'], 'session_id': binding['run_id'],
+        'status': binding['status'], 'stage': binding['stage'], 'idempotency_key_generated': generated}
+    if generated:
+        receipt['idempotency_notice'] = 'Save request_id for retry; retry after a lost response cannot guarantee deduplication without the original key.'
+    return receipt

@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Start one domain discovery test; production v3 wiring arrives in Task 12."""
+"""Start and execute one persistent V3 domain discovery test."""
 
 from __future__ import annotations
 
 import argparse
-import importlib
 import json
 import sys
-import uuid
 from pathlib import Path
 
 
@@ -34,21 +32,6 @@ def _timeout(value: str) -> int:
     return timeout
 
 
-def _execute_domain(request: dict, dependencies: dict) -> dict:
-    module_name = "chip_model.pipeline.domain_discovery.runtime"
-    try:
-        runtime = importlib.import_module(module_name)
-    except ModuleNotFoundError as error:
-        if error.name != module_name:
-            raise
-        return {
-            "run_id": None, "request_id": dependencies["request_id"],
-            "status": "runtime_unavailable", "artifact_path": None,
-            "error": "v3 数据域执行器尚未接线",
-        }
-    return runtime.run_domain(request, dependencies)
-
-
 def main(argv: list[str] | None = None, *, executor=None) -> int:
     parser = argparse.ArgumentParser(description="Hermes 数据域开放互联网发现隔离测试", allow_abbrev=False)
     parser.add_argument("--db", default=str(get_db_path()), help="只读来源数据库")
@@ -65,19 +48,31 @@ def main(argv: list[str] | None = None, *, executor=None) -> int:
     if "resume" in values:
         payload["resume_run_id"] = values["resume"]
     try:
-        request = normalize_start(payload)
+        normalize_start(payload)
     except ValueError as error:
         parser.error(str(error))
-    request_id = payload["request_id"].strip() if payload.get("request_id") is not None else uuid.uuid4().hex
-    dependencies = {"source_db": Path(args.db), "timeout": args.timeout, "request_id": request_id}
+    from chip_model.pipeline.manual_control import queue_domain_run
+    from chip_model.pipeline.domain_discovery.store import RunStore
+    from scripts.hermes_domain_worker import work_once
+    receipt = None
     try:
-        result = dict((executor if executor is not None else _execute_domain)(request, dependencies))
+        source = Path(args.db).resolve()
+        receipt = queue_domain_run(payload, data_root=source.parent, timeout=args.timeout)
+        results = work_once(source.parent, run_id=receipt['run_id'], executor=executor,
+            dependencies={'source_db': source})
+        if results:
+            result = dict(results[0])
+        else:
+            store = RunStore(source.parent / 'domain_runs')
+            current = store.get_run(receipt['run_id'])
+            if current['status'] in {'success','no_findings','partial','failed','interrupted'}:
+                result = store.metadata(receipt['run_id'], 'domain_runtime_result.v1') or receipt
+            else:
+                result = {**receipt, 'status': current['status'], 'stage': current['stage']}
+        result = {**receipt, **result, 'request_id': receipt['request_id'], 'run_id': receipt['run_id']}
+        result.setdefault('artifact_path', str(source.parent / 'domain_runs' / receipt['run_id']))
     except Exception as error:
-        result = {"run_id": None, "request_id": request_id, "status": "error", "artifact_path": None, "error": str(error)}
-    result["request_id"] = request_id
-    result.setdefault("run_id", None)
-    result.setdefault("artifact_path", None)
-    result.setdefault("status", "error")
+        result = {**(receipt or {}), 'request_id': payload.get('request_id'), 'status': 'failed', 'error': str(error)}
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("status") in {"success", "no_findings"} else 2
 

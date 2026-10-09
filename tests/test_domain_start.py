@@ -13,6 +13,11 @@ from chip_model.pipeline.domain_discovery import contracts
 from scripts import run_hermes_open_web_test as cli
 
 
+@pytest.fixture(autouse=True)
+def isolated_cli_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, 'get_db_path', lambda: tmp_path / 'data.db')
+
+
 def normalize(payload, **kwargs):
     normalizer = getattr(contracts, "normalize_start", None)
     assert callable(normalizer), "normalize_start must provide the shared start contract"
@@ -123,35 +128,42 @@ def test_body_and_header_keys_must_match():
 def capturing_executor(calls, status="success"):
     def execute(request, dependencies):
         calls.append((request, dependencies))
-        return {"run_id": "run-1", "request_id": dependencies["request_id"], "status": status, "artifact_path": "结果/run-1"}
+        rid = dependencies['preclaimed']['run_id']
+        result = {"run_id": rid, "request_id": dependencies["request_id"], "status": status, "artifact_path": "结果/" + rid}
+        dependencies['store'].finish_run(rid, dependencies['preclaimed']['generation'], result)
+        return result
     return execute
 
 
-def test_cli_normalizes_discovery_and_separates_runtime_options(capsys):
+def test_cli_normalizes_discovery_and_separates_runtime_options(capsys, tmp_path):
     calls = []
-    assert cli.main(["--domain", "specs", "--db", "not-opened.db"], executor=capturing_executor(calls)) == 0
+    source = tmp_path / 'source.db'
+    assert cli.main(["--domain", "specs", "--db", str(source)], executor=capturing_executor(calls)) == 0
     request, dependencies = calls[0]
     assert request == expected()
-    assert dependencies["source_db"] == Path("not-opened.db")
+    assert dependencies["source_db"] == source.resolve()
     assert dependencies["timeout"] == 1800
-    assert isinstance(dependencies["request_id"], str) and dependencies["request_id"].strip()
-    assert set(dependencies) == {"source_db", "timeout", "request_id"}
-    output = capsys.readouterr().out
-    assert "结果" in output
-    assert json.loads(output) == {"run_id": "run-1", "request_id": dependencies["request_id"], "status": "success", "artifact_path": "结果/run-1"}
+    assert dependencies['preclaimed']['generation'] == 1
+    assert dependencies['store'].root == (tmp_path / 'domain_runs').resolve()
+    output = json.loads(capsys.readouterr().out)
+    assert output['run_id'] == dependencies['preclaimed']['run_id']
+    assert output['session_id'] == output['run_id']
+    assert output['request_id'] == dependencies['request_id']
 
 
-def test_cli_old_skill_is_only_a_domain_alias(capsys):
+def test_cli_old_skill_is_only_a_domain_alias(capsys, tmp_path):
+    from chip_model.pipeline.manual_control import queue_domain_run
     calls = []
-    argv = ["--skill", "chip-specs", "--domain", "specs", "--chip", "  Novel-X 64GB  ", "--resume", "run-old", "--request-id", " request-1 ", "--timeout", "1"]
+    receipt = queue_domain_run({'domain':'specs','chip':'Novel-X 64GB','request_id':'original'}, data_root=tmp_path, timeout=1)
+    argv = ["--skill", "chip-specs", "--domain", "specs", "--chip", "  Novel-X 64GB  ", "--resume", receipt['run_id'], "--request-id", " request-1 "]
     assert cli.main(argv, executor=capturing_executor(calls)) == 0
-    assert calls[0][0] == expected(chip="Novel-X 64GB", resume="run-old")
+    assert calls[0][0] == expected(chip="Novel-X 64GB", resume=receipt['run_id'])
     assert calls[0][1]["request_id"] == "request-1"
     assert calls[0][1]["timeout"] == 1
     assert json.loads(capsys.readouterr().out)["request_id"] == "request-1"
 
 
-@pytest.mark.parametrize("status, code", [("success", 0), ("no_findings", 0), ("partial", 2), ("failed", 2), ("interrupted", 2), ("error", 2)])
+@pytest.mark.parametrize("status, code", [("success", 0), ("no_findings", 0), ("partial", 2), ("failed", 2), ("interrupted", 2)])
 def test_cli_exit_code_reflects_executor_status(capsys, status, code):
     assert cli.main(["--domain", "specs"], executor=capturing_executor([], status)) == code
     assert json.loads(capsys.readouterr().out)["status"] == status
@@ -174,13 +186,15 @@ def test_cli_generated_request_key_is_preserved_when_executor_omits_it(capsys):
         keys.append(dependencies["request_id"])
         return {"status": "no_findings"}
     assert cli.main(["--domain", "specs"], executor=execute) == 0
-    assert json.loads(capsys.readouterr().out) == {"run_id": None, "request_id": keys[0], "status": "no_findings", "artifact_path": None}
+    result = json.loads(capsys.readouterr().out)
+    assert result['request_id'] == keys[0] and result['status'] == 'no_findings'
+    assert result['run_id'].startswith('run-') and result['artifact_path']
 
 
 def test_cli_malformed_executor_result_returns_structured_error(capsys):
     assert cli.main(["--domain", "specs", "--request-id", "request-1"], executor=lambda request, dependencies: None) == 2
     response = json.loads(capsys.readouterr().out)
-    assert response["status"] == "error"
+    assert response["status"] == "failed"
     assert response["request_id"] == "request-1"
 
 
@@ -222,32 +236,33 @@ def test_cli_executor_exception_is_structured_json(capsys):
         raise RuntimeError("执行失败")
     assert cli.main(["--domain", "specs", "--request-id", "request-1"], executor=failing_executor) == 2
     result = json.loads(capsys.readouterr().out)
-    assert result["status"] == "error"
+    assert result["status"] == "failed"
     assert result["request_id"] == "request-1"
-    assert result["run_id"] is None
-    assert result["artifact_path"] is None
+    assert result['run_id'].startswith('run-')
+    assert result['artifact_path']
     assert "执行失败" in result["error"]
 
 
-def test_production_default_is_structured_unavailable_until_v3_runtime_exists(monkeypatch, capsys):
+def test_production_missing_runtime_is_a_durable_failed_run(monkeypatch, capsys, tmp_path):
     runtime_name = "chip_model.pipeline.domain_discovery.runtime"
     monkeypatch.setitem(sys.modules, runtime_name, None)
     assert cli.main(["--domain", "specs", "--request-id", "request-1"]) == 2
     result = json.loads(capsys.readouterr().out)
-    assert result["status"] == "runtime_unavailable"
-    assert result["request_id"] == "request-1"
-    assert result["run_id"] is None and result["artifact_path"] is None
-    assert "Task 12" not in result["error"]
+    assert result['status'] == 'failed'
+    assert result['request_id'] == 'request-1'
+    from chip_model.pipeline.domain_discovery.store import RunStore
+    assert RunStore(tmp_path / 'domain_runs').get_run(result['run_id'])['status'] == 'failed'
 
 
 def test_production_default_delegates_only_to_v3_runtime(monkeypatch, capsys):
     calls = []
     module = ModuleType("chip_model.pipeline.domain_discovery.runtime")
     module.run_domain = capturing_executor(calls)
+    module.HermesRunner = lambda: object()
     monkeypatch.setitem(sys.modules, module.__name__, module)
     assert cli.main(["--domain", "compute", "--request-id", "request-1"]) == 0
     assert calls[0][0] == expected(domain="compute")
-    assert json.loads(capsys.readouterr().out)["run_id"] == "run-1"
+    assert json.loads(capsys.readouterr().out)["run_id"] == calls[0][1]['preclaimed']['run_id']
 
 
 def test_cli_import_does_not_import_legacy_orchestrator(monkeypatch):
