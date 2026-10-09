@@ -53,6 +53,17 @@ def fixture_server(tmp_path,monkeypatch):
     assert conflict_result['source_quality_kind']=='conflict'
     conflict['store'].finish_run(conflict['id'],conflict['gen'],{'status':'partial','statistics':conflict_service.statistics()})
     conflict['store'].export_runtime(conflict['id']);conflict['store'].export_events(conflict['id'])
+    raw=build('fixture-raw-invalid')
+    raw_snap=capture(raw)
+    good=fact(raw_snap)
+    invalids=[{**good,'entity_key':'malformed'},{**good,'evidence':'malformed'},
+              {**good,'entity_key':{'vendor':'Vendor A','chip_model':123}},
+              {**good,'entity_key':{'vendor':'Vendor A','chip_model':{'name':'<script>invalid</script>'}},'source_url':['javascript:alert(1)']},
+              {**good,'field_name':'unowned-field'},'raw scalar',False]
+    rows=audit(raw,raw_snap,[good,*invalids])
+    assert sum(r['status']=='program_rejected' for r in rows)==len(invalids)
+    raw['store'].finish_run(raw['id'],raw['gen'],{'status':'partial'})
+    raw['store'].export_runtime(raw['id']);raw['store'].export_events(raw['id'])
     # All handles are closed. Only this temp fixture tree is relocated.
     (tmp_path/'runs').rename(tmp_path/'domain_runs')
     fixture_run(tmp_path,'partial')
@@ -60,6 +71,25 @@ def fixture_server(tmp_path,monkeypatch):
     source=tmp_path/'data.db'
     with sqlite3.connect(source) as db:
         db.executescript((ROOT/'tests/fixtures/domain_discovery/business_schema.sql').read_text(encoding='utf-8'))
+    from chip_model.pipeline.open_web_test import _ensure_test_tables
+    from chip_model.pipeline.test_workspace import runs_root
+    def legacy(run_id,version='hermes-open-web-v2',**extra):
+        folder=runs_root(source)/run_id;folder.mkdir(parents=True)
+        _ensure_test_tables(folder/'data.db')
+        (folder/'test_mode.json').write_text(json.dumps({'mode':'test','pipeline':'hermes-open-web'}))
+        (folder/'manifest.json').write_text(json.dumps({'schema_version':version,'session_id':run_id,
+            'skill':'chip-specs','skill_label':'基础参数','status':'failed','counts':{},'units':[],
+            'started_at':'2026-01-01T00:00:00Z','finished_at':'2026-01-01T00:01:00Z',**extra}))
+        return folder
+    legacy('fixture-legacy-failed')
+    old=legacy('fixture-legacy-positive','hermes-open-web-v1',status='partial')
+    (old/'hermes_search_plan.json').write_text(json.dumps({'queries':[{'query':'Fixture X80 specifications'}]}))
+    (old/'hermes_tool_trace.jsonl').write_text(json.dumps({'tool':'open_web_search','status':'success','started_at':'2026-01-01T00:00:00Z','finished_at':'2026-01-01T00:00:01Z','output_summary':{'unique_candidates':1}})+'\n')
+    (old/'search_results.jsonl').write_text(json.dumps({'status':'candidate','candidate_id':'legacy-candidate','url':'https://fixture.example/spec','mentions':[]})+'\n')
+    (old/'url_previews.jsonl').write_text(json.dumps({'candidate_id':'legacy-candidate','access_status':'reachable','http_status':200})+'\n')
+    (old/'events.jsonl').write_text(json.dumps({'stage':'extract','status':'failed','message':'Fixture extraction failed'})+'\n')
+    old_audit=legacy('fixture-legacy-audit','open-web-test-v2',skill='all-skills')
+    (old_audit/'full_audit_report.json').write_text(json.dumps({'existing':{},'new':{},'outcomes':{}}))
     token=tmp_path/'manual_control/admin_token';token.parent.mkdir();token.write_text('fixture-admin-only')
     old=get_db_path();set_db_path(source)
     app=FastAPI()
@@ -207,4 +237,57 @@ def test_actual_chromium_five_columns_filters_refresh_and_manual_retry(fixture_s
                 'desktop':[1715,924],'narrow':[390,844],'manual_requests':posted,
                 'page_errors':errors,'no_formal_writes':True},ensure_ascii=False,indent=2),encoding='utf-8')
             assert errors==[]
+        finally:browser.close()
+
+
+def test_actual_chromium_rejected_raw_shapes_and_legacy_phase_records(fixture_server):
+    playwright=pytest.importorskip('playwright.sync_api')
+    from tests.test_domain_history import digest_tree
+    url,data_root=fixture_server
+    before=digest_tree(data_root)
+    artifacts=ROOT/'.tmp/task14-ui';artifacts.mkdir(parents=True,exist_ok=True)
+    with playwright.sync_playwright() as p:
+        browser=p.chromium.launch(headless=True)
+        page=browser.new_page(viewport={'width':1715,'height':924})
+        errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
+        try:
+            page.goto(url+'/status')
+            raw=page.locator('[data-open-web-session="fixture-raw-invalid"]')
+            raw.locator(':scope > summary').click();raw.locator('tbody').wait_for(timeout=5000)
+            assert raw.locator('tbody tr').count()==8
+            assert raw.locator('.run-badge').filter(has_text='程序拒绝').count()==7
+            raw.locator('[data-v3-filter="entity"]').fill('123')
+            assert raw.locator('tbody tr:visible').count()==1
+            assert '程序拒绝' in raw.locator('tbody tr:visible').inner_text()
+            raw.locator('[data-v3-filter="entity"]').fill('script')
+            assert raw.locator('tbody tr:visible').count()==1
+            assert raw.locator('tbody tr:visible a').count()==0
+            assert raw.locator('script').count()==0
+            raw.locator('[data-v3-filter="entity"]').fill('')
+            raw.locator('[data-v3-filter="review"]').select_option('not_executed')
+            assert raw.locator('tbody tr:visible').count()==7
+            raw.locator('[data-run-section="v3-fields"]').evaluate('(el)=>window.scrollTo({top:scrollY+el.getBoundingClientRect().top-80,behavior:"instant"})')
+            page.screenshot(path=str(artifacts/'raw-rejections.png'))
+            failed=page.locator('[data-open-web-session="fixture-legacy-failed"]')
+            failed.locator(':scope > summary').click();failed.locator('.audit-step').first.wait_for()
+            states=failed.locator('.audit-step em').all_text_contents()
+            assert len(states)==6 and all(s=='未记录 / 无法核验' for s in states)
+            failed.locator('[data-run-section="hermes-tools"] > summary').click()
+            assert '本轮没有工具调用记录' in failed.inner_text()
+            positive=page.locator('[data-open-web-session="fixture-legacy-positive"]')
+            positive.locator(':scope > summary').click();positive.locator('.audit-step').first.wait_for()
+            actual=positive.locator('.audit-step em').all_text_contents()
+            assert actual[0]=='已保存记录 · 完成状态未记录'
+            assert actual[1]=='已记录工具调用完成'
+            assert actual[2]=='已保存记录 · 完成状态未记录'
+            assert actual[3]=='未记录 / 无法核验'
+            assert actual[4]=='已记录失败'
+            assert actual[5]=='未记录 / 无法核验'
+            old_audit=page.locator('[data-open-web-session="fixture-legacy-audit"]')
+            old_audit.locator(':scope > summary').click();old_audit.locator('.audit-step').first.wait_for()
+            assert old_audit.locator('.audit-step em').all_text_contents()==['未记录 / 无法核验']*6
+            failed.locator('.audit-overview').scroll_into_view_if_needed()
+            page.screenshot(path=str(artifacts/'legacy-failed-stages.png'))
+            assert errors==[]
+            assert digest_tree(data_root)==before
         finally:browser.close()

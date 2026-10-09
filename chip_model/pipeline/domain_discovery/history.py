@@ -257,11 +257,16 @@ def _project_field(identifier,model,saved,entities):
     """Adapt business names while retaining all evidence and condition objects."""
     versions=model.get('versions') or []
     version=versions[-1] if versions else {}
-    candidate=copy.deepcopy(saved.get('candidate') or version.get('candidate') or model.get('original_raw') or {})
+    # Raw program rejections are arbitrary JSON, including falsey scalars and
+    # malformed nested objects. Keep the original separate from display access.
+    raw_candidate=(saved['candidate'] if 'candidate' in saved else version['candidate']
+                   if 'candidate' in version else model.get('original_raw'))
+    candidate=copy.deepcopy(raw_candidate)
     if not isinstance(candidate,dict):
         candidate={'raw_value':candidate}
+    mapping=lambda item:item if isinstance(item,dict) else {}
     row=copy.deepcopy(saved)
-    entity=copy.deepcopy(row.get('entity') or {})
+    entity=copy.deepcopy(mapping(row.get('entity')))
     # An identity-domain candidate can have registered, independently reviewed
     # identity proof before a value comparison exists. Show that actual gate.
     identity=next((e for e in entities.values() if any(p.get('logical_candidate_id')==identifier
@@ -269,7 +274,7 @@ def _project_field(identifier,model,saved,entities):
     if not entity and identity is not None:
         entity=copy.deepcopy(identity)
         row['model_proof']=copy.deepcopy(next(p for p in identity['identity_proofs'] if p.get('logical_candidate_id')==identifier))
-    key=candidate.get('entity_key') or {}
+    key=mapping(candidate.get('entity_key'))
     current=next((e for e in entities.values() if e.get('canonical_key') is not None
                   and e.get('canonical_key')==entity.get('canonical_key')),None)
     if current is not None:
@@ -277,15 +282,17 @@ def _project_field(identifier,model,saved,entities):
         if current.get('status') not in {'existing','new','not_applicable'}:
             row.update(validated=False,update_eligible=False,value_change_kind='unknown')
     entity.update({k:v for k,v in key.items() if k not in entity})
-    hint=entity.get('hint') or {}
+    hint=mapping(entity.get('hint'))
     if not entity.get('chip_model') and hint.get('full_sku'):
         entity['chip_model']=hint['full_sku']
-    evidence=candidate.get('evidence') or {}
-    source=row.get('new_source') or {}
-    pagesource=model.get('source') or {}
+    evidence=mapping(candidate.get('evidence'))
+    source=mapping(row.get('new_source'))
+    pagesource=mapping(model.get('source'))
     reviews=model.get('reviews') or []
     review=next((r for r in reversed(reviews) if r.get('version')==version.get('version')), {})
+    program=mapping(version.get('program'))
     row.update(id=identifier,logical_candidate_id=identifier,candidate=candidate,entity=entity,
+        raw_candidate=copy.deepcopy(raw_candidate),candidate_source_ref=copy.deepcopy(model.get('source')),
         domain_id=candidate.get('domain_id',model.get('domain_id')),
         target_table=candidate.get('target_table'),field_name=candidate.get('field_name'),
         owner_skill='chip-'+str(candidate.get('domain_id',model.get('domain_id') or 'unknown')),
@@ -296,8 +303,8 @@ def _project_field(identifier,model,saved,entities):
         conditions=copy.deepcopy(candidate.get('conditions') or {}),
         review_status=review.get('verdict',model.get('final_verdict','not_executed')),
         review_reason=review.get('reason'),
-        program_status=(version.get('program') or {}).get('status','not_recorded'),
-        program_reason=(version.get('program') or {}).get('reason'),
+        program_status=program.get('status','not_recorded'),
+        program_reason=program.get('reason'),
         status=model.get('status',row.get('evidence_status','not_recorded')),
         rejection_reason=(model.get('reason') if model.get('status') in {'program_rejected','semantic_rejected','rejected','unresolved','review_failed','extract_failed'} else None) or row.get('program_rejection_reason'),published=False,
         domain_contract_ref=model.get('domain_contract_ref') or row.get('domain_contract_ref'),

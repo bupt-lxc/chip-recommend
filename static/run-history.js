@@ -10,11 +10,13 @@
   }
   addEventListener('pagehide',saveView);
   const labels={preparing:'准备中',running:'进行中',in_progress:'进行中',queued:'等待',pending:'待处理',retry_wait:'待重试',awaiting_agent:'等待提取',awaiting_publish:'等待保存测试结果',success:'完成',no_findings:'未发现可用信息',succeeded:'可用',partial:'部分完成',failed:'失败',rejected:'拒绝',program_rejected:'程序拒绝',semantic_rejected:'语义拒绝',interrupted:'已中断',not_run:'未执行',ready_to_publish:'已保存到测试区',published:'已保存',new:'新网页'};
-  const txt=v=>esc(v==null?'未记录':String(v));
+  const safeDisplayString=v=>v==null?'未记录':typeof v==='object'?JSON.stringify(v):String(v);
+  const txt=v=>esc(safeDisplayString(v)).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   const badge=s=>`<span class="run-badge ${txt(s)}">${txt(labels[s]||s)}</span>`;
   const value=v=>v==null?'未记录':v===''?'空值':typeof v==='object'?JSON.stringify(v):String(v);
   function link(url){
-    if(!url)return '<span>来源未记录</span>';
+    if(url==null||url==='')return '<span>来源未记录</span>';
+    if(typeof url!=='string')return txt(url);
     try{const u=new URL(url);if(!['http:','https:'].includes(u.protocol))return txt(url);return `<a href="${txt(redactDataAgentUrl(u.href))}" target="_blank" rel="noopener noreferrer">${txt(redactDataAgentUrl(u.href))}</a>`}catch(_){return txt(url)}
   }
   const duration=r=>{const a=Date.parse(r.started_at),b=r.active?Date.now():Date.parse(r.finished_at);return Number.isFinite(a)&&Number.isFinite(b)?Math.max(0,(b-a)/1000).toFixed(1)+' 秒':'未记录'};
@@ -25,15 +27,15 @@
     return '<p class="run-table-hint">窄屏可左右滑动查看全部五列</p><div class="run-field-scroll" tabindex="0" aria-label="字段比较五列表格"><table class="run-field-table"><colgroup><col><col><col><col><col></colgroup><thead><tr><th>实体 / 字段</th><th>原值与原来源</th><th>候选新值与新来源</th><th>原文证据</th><th>变更与状态</th></tr></thead><tbody>'+rows.map(c=>{
       const v3=Boolean(c.baseline_display),ev=c.candidate?.evidence||{};
       const old=c.baseline_display||{value:value(c.old_value),basis_label:basis[c.old_value_basis]||'旧值未记录',time:null};
-      const identity=c.entity?.chip_model||c.entity?.model_name||c.entity?.name||'实体未确认';
-      return `<tr data-v3-row data-entity="${txt(identity.toLowerCase())}" data-domain="${txt(c.domain_id||'')}" data-value-change="${txt(c.value_change_kind||'unknown')}" data-source-change="${txt(c.source_change_kind||'unknown')}" data-review="${txt(c.review_status||'not_executed')}"><td><b>${txt(identity)}</b><br>${txt(c.target_table)}.<wbr>${txt(c.field_name)}<div class="run-note">${txt(c.entity?.vendor||c.entity?.hint?.vendor||'')}<br>候选 <span title="${txt(c.id)}">${txt(v3?String(c.id).slice(-8):c.id)}</span> · ${txt(v3?(domainNames[c.domain_id]||c.domain_id):c.owner_skill)}</div>${v3?section('field-entity-'+c.id,'完整实体与关系',jsonBlock({entity:c.entity,entity_key:c.candidate?.entity_key,conditions:c.conditions,comparison_key:c.comparison_key})):''}</td><td><div class="run-value">${txt(old.value)}</div><div class="run-note">${txt(old.basis_label)}${old.time?'<br>快照时间 '+txt(old.time):''}</div>${(c.old_sources||[]).map(s=>`<div class="run-links">${link(s.source_url||s.url)}<br>${txt(s.source_type)} · ${txt(s.updated_at||s.verified_evidence?.captured_at)}${v3?'<br>旧证据：'+txt(s.evidence_status||s.verified_evidence?.status||'未记录（质量未知）'):''}</div>`).join('')||'<div class="run-note">原来源未记录</div>'}</td><td><div class="run-value run-new-value">${txt(value(c.proposed_value))}</div><div class="run-links">${link(c.source_url)}</div><div class="run-note">${txt(c.source_type)} · 置信度 ${txt(c.confidence)}</div>${v3?section('field-normalized-'+c.id,'原值、单位与换算',jsonBlock({raw_value:c.candidate?.raw_value,normalized_value:c.proposed_value,unit:c.candidate?.unit,conversion:c.candidate?.conversion})):''}</td><td>${renderEvidence(c)}${v3?`${section('field-proof-'+c.id,'证据与规则记录',jsonBlock({evidence:ev,context_refs:c.candidate?.context_refs,evidence_kind:c.candidate?.evidence_kind,logical_candidate_id:c.id,model_proof:c.model_proof,revision_chain:c.revision_chain,domain_contract_ref:c.domain_contract_ref,evidence_versions:c.evidence_versions,phase_refs:c.phase_refs}))}`:''}</td><td>${v3?'<span class="run-badge">已保存到隔离区，未发布</span>'+fieldOutcomes(c):badge(c.published?'published':c.status)+`<div class="run-note">${txt({added:'填补空值',changed:'值有变化',unchanged:'值相同',unknown:'无法比较'}[c.change_kind])}${c.published?'':' · 尚未写入业务表'}</div>`}${c.rejection_reason?'<div class="run-rejection">'+txt(c.rejection_reason)+'</div>':''}</td></tr>`;
+      const identity=safeDisplayString(c.entity?.chip_model??c.entity?.model_name??c.entity?.name??'实体未确认');
+      return `<tr data-v3-row data-entity="${txt(identity.toLowerCase())}" data-domain="${txt(c.domain_id||'')}" data-value-change="${txt(c.value_change_kind||'unknown')}" data-source-change="${txt(c.source_change_kind||'unknown')}" data-review="${txt(c.review_status||'not_executed')}"><td><b>${txt(identity)}</b><br>${txt(c.target_table)}.<wbr>${txt(c.field_name)}<div class="run-note">${txt(c.entity?.vendor||c.entity?.hint?.vendor||'')}<br>候选 <span title="${txt(c.id)}">${txt(v3?String(c.id).slice(-8):c.id)}</span> · ${txt(v3?(domainNames[c.domain_id]||c.domain_id):c.owner_skill)}</div>${v3?section('field-entity-'+c.id,'完整实体与关系',jsonBlock({entity:c.entity,entity_key:c.candidate?.entity_key,conditions:c.conditions,comparison_key:c.comparison_key})):''}</td><td><div class="run-value">${txt(old.value)}</div><div class="run-note">${txt(old.basis_label)}${old.time?'<br>快照时间 '+txt(old.time):''}</div>${(c.old_sources||[]).map(s=>`<div class="run-links">${link(s.source_url||s.url)}<br>${txt(s.source_type)} · ${txt(s.updated_at||s.verified_evidence?.captured_at)}${v3?'<br>旧证据：'+txt(s.evidence_status||s.verified_evidence?.status||'未记录（质量未知）'):''}</div>`).join('')||'<div class="run-note">原来源未记录</div>'}</td><td><div class="run-value run-new-value">${txt(value(c.proposed_value))}</div><div class="run-links">${link(c.source_url)}</div><div class="run-note">${txt(c.source_type)} · 置信度 ${txt(c.confidence)}</div>${v3?section('field-normalized-'+c.id,'原值、单位与换算',jsonBlock({raw_value:c.candidate?.raw_value,normalized_value:c.proposed_value,unit:c.candidate?.unit,conversion:c.candidate?.conversion})):''}</td><td>${renderEvidence(c)}${v3?`${section('field-proof-'+c.id,'证据与规则记录',jsonBlock({raw_candidate:c.raw_candidate,candidate_source_ref:c.candidate_source_ref,evidence:ev,context_refs:c.candidate?.context_refs,evidence_kind:c.candidate?.evidence_kind,logical_candidate_id:c.id,model_proof:c.model_proof,revision_chain:c.revision_chain,domain_contract_ref:c.domain_contract_ref,evidence_versions:c.evidence_versions,phase_refs:c.phase_refs}))}`:''}</td><td>${v3?'<span class="run-badge">已保存到隔离区，未发布</span>'+fieldOutcomes(c):badge(c.published?'published':c.status)+`<div class="run-note">${txt({added:'填补空值',changed:'值有变化',unchanged:'值相同',unknown:'无法比较'}[c.change_kind])}${c.published?'':' · 尚未写入业务表'}</div>`}${c.rejection_reason?'<div class="run-rejection">'+txt(c.rejection_reason)+'</div>':''}</td></tr>`;
     }).join('')+'</tbody></table></div>';
   }
   const jsonBlock=v=>`<pre class="run-json">${txt(JSON.stringify(v,null,2))}</pre>`;
   const outcomeLabels={unknown:'未知',unchanged:'无变化',added:'新增',changed:'值有变化',new_entity:'新实体',upgraded:'提升',conflict:'冲突',accept:'接受',reject:'拒绝',revise:'修订',unresolved:'待确认',not_executed:'未执行',not_recorded:'未记录',accepted:'接受',verified:'已核验',unverifiable:'无法核验',program_rejected:'程序拒绝',semantic_rejected:'语义拒绝',pending:'待处理',existing:'已有实体',new:'新实体',ambiguous:'有歧义',out_of_scope:'不在范围内',resolved:'已解决',dependency_unresolved:'依赖未满足',ready:'条件齐备',matched:'关系已匹配',new_relation:'新关系',not_applicable:'无需比较',comparison_unresolved:'关系条件未确认',validated:'模型已接受',program_valid:'程序校验通过',partial_failure:'部分失败',completed:'完成',running:'进行中',queued:'等待'};
   const outcome=v=>txt(outcomeLabels[v]||labels[v]||v||'未记录');
   function renderEvidence(c){
-    const quote=String(c.evidence_text??'未记录');
+    const quote=safeDisplayString(c.evidence_text);
     if(quote.length<=240)return `<div class="run-value run-evidence">${txt(quote)}</div>`;
     return `<div class="run-value run-evidence">${txt(quote.slice(0,240))}…</div>`+section('field-quote-'+c.id,`展开完整引文 · ${quote.length} 字符`,`<div class="run-value run-evidence-full">${txt(quote)}</div>`);
   }
@@ -286,6 +288,28 @@
       }).join(''):'<div class="run-note">本次搜索没有返回结果，或旧记录未保存结果明细。</div>'}</div></details>`;
     }).join('')}</div>`;
   }
+  function legacyPhaseState(d,phase,artifacts=[]){
+    // Historical run-level success/finish markers cannot prove each phase.
+    // Qualify successful calls/results by their recorded evidence, and keep
+    // absence distinct from an explicit not-executed decision.
+    const stages={plan:['plan','planning','search_plan'],search:['search','searching','coarse_filter','search_provider'],
+      visit:['visit','preview','previewing','fetch'],select:['select','selecting','selection','url_selection'],
+      extract:['extract','extracting','model_extract'],record:['record_url','record_urls','save_urls','asset_saved','linked_tasks']};
+    const tools={search:['open_web_search'],visit:['open_web_preview'],select:['open_web_submit_selection']};
+    const list=value=>Array.isArray(value)?value.filter(x=>x&&typeof x==='object'):[];
+    const events=list(d.events).filter(x=>(stages[phase]||[]).includes(x.stage));
+    const calls=list(d.model_calls||d.calls).filter(x=>x.phase===phase||x.phase==='extract'&&phase==='extract');
+    const traces=list(d.tool_trace).filter(x=>(tools[phase]||[]).includes(x.tool));
+    const records=[...events,...calls,...traces],status=x=>String(x.status||x.outcome||'');
+    if(records.some(x=>['failed','error','partial','interrupted','transport_failed','parser_rejected'].includes(status(x))))return '已记录失败';
+    if(records.some(x=>status(x)==='rejected'))return '已记录拒绝';
+    if(traces.some(x=>['success','completed','succeeded'].includes(status(x))))return '已记录工具调用完成';
+    if(calls.some(x=>['success','completed','succeeded'].includes(status(x))))return '已记录模型调用完成';
+    if(events.some(x=>['success','completed','succeeded'].includes(status(x))))return '已记录成功事件';
+    if(records.some(x=>['running','in_progress','pending','queued'].includes(status(x))))return '已记录进行中状态';
+    if(records.some(x=>status(x)==='not_run'||status(x)==='not_executed'))return '已明确记录未执行';
+    return records.length||Array.isArray(artifacts)&&artifacts.length?'已保存记录 · 完成状态未记录':'未记录 / 无法核验';
+  }
   function renderAuditRun(d){
     const report=d.audit_report||{},existing=report.existing||{},fresh=report.new||{},outcomes=report.outcomes||{};
     const urls=d.urls||[],assets=d.url_assets||[];
@@ -301,12 +325,12 @@
     const newAssets=assets.filter(a=>a.search_provider!=='link_library'&&(a.query_strategy||'')!=='已有资产复查').map(asset=>({...asset,discovery_skills:[...new Set([...(asset.discovery_skills||[]),...Array.from(discoverySkillsByUrl.get(auditUrlKey(asset.url))||[]),asset.skill].filter(Boolean))]}));
     const uniqueNew=mergeAuditLinkAssets(newAssets);
     const stages=[
-      ['生成搜索词',`6 类 Skill 共生成 ${num(fresh.queries)} 组搜索词`,'完成'],
-      ['搜索并去重',`返回 ${num(fresh.search_mentions)} 条结果，形成 ${num(fresh.selected_unique_skill_urls)} 条 Skill 候选`,'完成'],
-      ['网页访问',`检查已有链接 ${num(existing.safe_unique_urls)} 个，并访问新增网址 ${num(fresh.visited_unique_urls)} 个`,'完成'],
-      ['大模型选择 URL',`已有链接可用 ${num(existing.reachable)} 个，新增网址可用 ${num(fresh.reachable)} 个`,'完成'],
-      ['字段提取',`提取 ${num(d.counts?.extracted)} 个候选字段，校验通过 ${num(d.counts?.validated)} 个`,'完成'],
-      ['记录 URL',`形成 ${existingAssets.length} 条已有链接记录和 ${uniqueNew.length} 条新增链接记录`,'完成'],
+      ['生成搜索词',`6 类 Skill 共生成 ${num(fresh.queries)} 组搜索词`,legacyPhaseState(d,'plan',d.search_plan)],
+      ['搜索并去重',`返回 ${num(fresh.search_mentions)} 条结果，形成 ${num(fresh.selected_unique_skill_urls)} 条 Skill 候选`,legacyPhaseState(d,'search',d.search_results)],
+      ['网页访问',`检查已有链接 ${num(existing.safe_unique_urls)} 个，并访问新增网址 ${num(fresh.visited_unique_urls)} 个`,legacyPhaseState(d,'visit',urls.filter(x=>x.fetch_status&&x.fetch_status!=='not_run'))],
+      ['URL 选择判断',`已有链接可用 ${num(existing.reachable)} 个，新增网址可用 ${num(fresh.reachable)} 个`,legacyPhaseState(d,'select',d.url_decisions)],
+      ['字段提取',`提取 ${num(d.counts?.extracted)} 个候选字段，校验通过 ${num(d.counts?.validated)} 个`,legacyPhaseState(d,'extract',d.facts)],
+      ['记录 URL',`形成 ${existingAssets.length} 条已有链接记录和 ${uniqueNew.length} 条新增链接记录`,legacyPhaseState(d,'record',assets)],
     ];
     return `<div class="audit-overview">${renderFlowSteps(stages)}</div>`+
       section('audit-search-results',`搜索新网址明细 · ${num(fresh.queries)} 次 / ${num(fresh.search_mentions)} 条结果`,auditSearchDetails(d))+
@@ -342,12 +366,12 @@
     const target=`<div class="run-parameters"><div><b>目标 Skill</b>${txt(auditSkillName(d.skill))}</div><div><b>目标芯片</b>${txt(d.target_chip||(d.chips||[]).join('、'))}</div><div><b>目标字段</b>${txt((d.target_fields||[]).map(field=>auditFieldLabels[field]||field).join('、'))}</div></div>`;
     const c=d.counts||{};
     const flow=[
-      ['生成搜索词',`${num(c.queries||plan.length)} 组搜索词`,'完成'],
-      ['搜索并去重',`${num(c.search_results)} 条搜索结果，去重后 ${num(c.unique_candidates)} 个候选 URL`,'完成'],
-      ['网页访问',`访问 ${num(c.previewed)} 个候选 URL，其中 ${num(c.reachable)} 个可访问`,'完成'],
-      ['Hermes 选择 URL',`选择 ${num(c.selected)} 个，排除 ${num(c.rejected_urls)} 个`,'完成'],
-      ['字段提取',`提取 ${num(c.extracted)} 个候选字段，校验通过 ${num(c.validated)} 个`,'完成'],
-      ['记录 URL 与关联 Skill',`记录选择结果，并生成 ${num(c.linked_tasks)} 个关联任务`,'完成'],
+      ['生成搜索词',`${num(c.queries||plan.length)} 组搜索词`,legacyPhaseState(d,'plan',plan)],
+      ['搜索并去重',`${num(c.search_results)} 条搜索结果，去重后 ${num(c.unique_candidates)} 个候选 URL`,legacyPhaseState(d,'search',results)],
+      ['网页访问',`访问 ${num(c.previewed)} 个候选 URL，其中 ${num(c.reachable)} 个可访问`,legacyPhaseState(d,'visit',d.url_previews)],
+      ['Hermes 选择 URL',`选择 ${num(c.selected)} 个，排除 ${num(c.rejected_urls)} 个`,legacyPhaseState(d,'select',d.url_decisions)],
+      ['字段提取',`提取 ${num(c.extracted)} 个候选字段，校验通过 ${num(c.validated)} 个`,legacyPhaseState(d,'extract',d.facts)],
+      ['记录 URL 与关联 Skill',`记录选择结果，并生成 ${num(c.linked_tasks)} 个关联任务`,legacyPhaseState(d,'record',[...(d.url_assets||[]),...(d.url_decisions||[]),...(d.linked_tasks||[])])],
     ];
     const units=Array.isArray(d.unit_details)?d.unit_details:[];
     const unitList=units.length?`<div class="run-toolbar"><input type="search" data-hermes-unit-filter placeholder="按芯片名称筛选"></div><div data-hermes-unit-list>${units.map(unit=>`<div class="run-source" data-hermes-unit-row data-hermes-unit-search="${txt(String(unit.target_chip||'开放发现').toLowerCase())}"><div class="run-source-title"><b>${txt(unit.target_chip||'开放发现')}</b>${badge(unit.status)}</div><div class="run-note">${txt(unit.scope_type==='discovery'?'新芯片与新来源':'已有芯片')} · 尝试 ${num(unit.attempts)} 次 · 搜索词 ${num(unit.counts?.queries)} · 候选 ${num(unit.counts?.unique_candidates)} · 可访问 ${num(unit.counts?.reachable)} · 有效字段 ${num(unit.counts?.validated)}</div>${unit.error?`<div class="error">${txt(unit.error)}</div>`:''}</div>`).join('')}</div>`:'';
@@ -435,7 +459,7 @@
   async function loadOpenWebHistory(){
     let box=$('open-web-test-history');
     if(!box){box=document.createElement('div');box.id='open-web-test-history';$('run-history')?.before(box)}
-    const data=await fetchJSON(`${API}/data-agent/open-web-runs?final_only=true`);
+    const data=await fetchJSON(`${API}/data-agent/open-web-runs?final_only=false`);
     if(data._error){box.innerHTML='';return}
     const runs=data.runs||[];if(!runs.length){box.innerHTML='';return}
     if(!box.querySelector('.open-web-history-list'))box.innerHTML='<div class="run-history-header"><div><h3 style="margin:0">最新检查结果</h3></div></div><div class="open-web-history-list"></div>';

@@ -231,3 +231,59 @@ def test_preparing_control_receipt_is_visible_even_before_folder_initialization(
     monkeypatch.setattr(server,'get_db_path',lambda:tmp_path/'no-business-db.db')
     assert TestClient(server.app).get('/api/v1/data-agent/open-web-runs/not-initialized').status_code==200
     assert digest_tree(root)==before
+
+
+@pytest.mark.parametrize('bad',[
+    {'entity_key':'malformed'}, {'entity_key':['malformed']},
+    {'evidence':'malformed'}, {'evidence':['malformed']},
+    {'entity_key':{'vendor':'Vendor A','chip_model':123}},
+    {'entity_key':{'vendor':['Vendor A'],'chip_model':{'name':'<script>invalid</script>'}}},
+    {'field_name':'tdp_w','conditions':'malformed','context_refs':'malformed','source_url':['javascript:alert(1)']},
+    {'domain_id':['specs'],'field_name':['vram_gb']},
+    {'field_name':'unowned-field'}, 'raw scalar', ['raw','array'], None,False,0,[],{},
+])
+def test_actual_model_raw_rejection_shapes_are_readable_without_losing_siblings(tmp_path,bad):
+    from tests.test_domain_compare import factory,capture,fact,audit
+    build=factory.__wrapped__(tmp_path)
+    ctx=build('raw-invalid-fixture')
+    snap=capture(ctx)
+    good=fact(snap)
+    invalid={**good,**bad} if isinstance(bad,dict) and bad else bad
+    produced=audit(ctx,snap,[good,invalid])
+    rejected=next(r for r in produced if r['status']=='program_rejected')
+    before=digest_tree(ctx['store'].root)
+    result=history.read_v3_run(ctx['store'].root,ctx['id'])
+    assert len(result['field_changes'])==2
+    projected=next(r for r in result['field_changes'] if r['id']==rejected['logical_candidate_id'])
+    assert projected['status']=='program_rejected'
+    assert projected['rejection_reason']==rejected['reason']
+    assert projected['raw_candidate']==invalid
+    assert projected['candidate_source_ref']['snapshot_id']==snap['snapshot_id']
+    assert projected['program_status']=='rejected'
+    assert projected['review_status']=='not_executed'
+    assert projected['update_eligible'] is False
+    assert result['raw_records']['metadata']['domain_models.v1']['candidates'][rejected['logical_candidate_id']]['original_raw']==invalid
+    assert history.list_v3_runs(ctx['store'].root)[0]['run_id']==ctx['id']
+    assert digest_tree(ctx['store'].root)==before
+
+
+def test_legacy_failed_run_is_inspectable_in_default_ui_list(tmp_path,monkeypatch):
+    from chip_model.pipeline.open_web_test import _ensure_test_tables
+    from chip_model.pipeline.test_workspace import runs_root
+    from chip_model import server
+    from fastapi.testclient import TestClient
+    source=tmp_path/'never-open-business.db'
+    folder=runs_root(source)/'legacy-failed';folder.mkdir(parents=True)
+    _ensure_test_tables(folder/'data.db')
+    (folder/'test_mode.json').write_text(json.dumps({'mode':'test','pipeline':'hermes-open-web'}))
+    (folder/'manifest.json').write_text(json.dumps({'schema_version':'hermes-open-web-v2',
+        'session_id':'legacy-failed','skill':'chip-specs','status':'failed',
+        'started_at':'2026-01-01','finished_at':'2026-01-01','units':[]}))
+    before=digest_tree(tmp_path)
+    monkeypatch.setattr(server,'get_db_path',lambda:source)
+    api=TestClient(server.app)
+    listed=api.get('/api/v1/data-agent/open-web-runs?final_only=false').json()['runs']
+    assert any(r['session_id']=='legacy-failed' and r['status']=='failed' for r in listed)
+    assert api.get('/api/v1/data-agent/open-web-runs/legacy-failed').status_code==200
+    assert not source.exists()
+    assert digest_tree(tmp_path)==before
