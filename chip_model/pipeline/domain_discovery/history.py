@@ -7,28 +7,53 @@ from contextlib import closing
 from decimal import Decimal, InvalidOperation
 
 from .store import _file_hash
+from .rules import load_phase
 
 
-def normalized_stored_value(value):
-    """Lossless scalar equivalence; no implicit unit/scope/basis conversion."""
+def normalized_stored_value(value, *, policy='opaque'):
+    """Preserve opaque text/types; normalize only explicit field semantics."""
+    if policy not in {'opaque','numeric_quantity','sku_identity'}:
+        raise ValueError('unsupported value normalization policy')
     if value is None:
         return None
     if isinstance(value, bool):
         return ('boolean', value)
-    if isinstance(value, (str, int, float)):
-        text = str(value).strip()
+    if policy == 'numeric_quantity' and isinstance(value, (str,int,float)):
         try:
-            number = Decimal(text)
+            number = Decimal(str(value).strip())
             if number.is_finite():
                 return ('number', number)
         except InvalidOperation:
             pass
-        return ('text', ' '.join(text.split()).casefold())
-    return ('structured', value)
+    if isinstance(value,str):
+        return ('text', ' '.join(value.split()).casefold() if policy=='sku_identity' else value)
+    if isinstance(value,dict):
+        return ('object', {key:normalized_stored_value(item) for key,item in value.items()})
+    if isinstance(value,list):
+        return ('array', [normalized_stored_value(item) for item in value])
+    return (type(value).__name__, value)
 
 
-def same_value(left, right):
-    return normalized_stored_value(left) == normalized_stored_value(right)
+def same_value(left, right, *, policy='opaque'):
+    return normalized_stored_value(left,policy=policy) == normalized_stored_value(right,policy=policy)
+
+
+def field_normalization(candidate, contract):
+    """Quantity ownership comes from frozen unit rules, not a second registry.
+
+    Only the explicit vendor/full-SKU identity policy folds case and spacing.
+    Units, URL paths, commands, notes and opaque configuration labels do not.
+    """
+    table,field = candidate['target_table'],candidate['field_name']
+    if field not in contract['fields'].get(table,[]):
+        raise ValueError('normalization field outside frozen ownership')
+    if table=='chips' and field in {'vendor','chip_model'}:
+        return 'sku_identity'
+    rule = contract['units'].get(field)
+    unit = rule if isinstance(rule,str) else rule.get('unit') if isinstance(rule,dict) else None
+    if unit and unit not in {'source_date','explicit_source_format'}:
+        return 'numeric_quantity'
+    return 'opaque'
 
 
 def frozen_baseline(store, run_id):
@@ -47,9 +72,13 @@ def baseline_projection(store, run_id, binding):
     """
     path, metadata = frozen_baseline(store, run_id)
     candidate, entity = binding['candidate'], binding['entity']
+    frozen = load_phase(store.run_path(run_id)/'skill_bundle',candidate['domain_id'],'review')
+    if frozen['bundle_sha256'] != metadata['rule_bundle_hash']:
+        raise ValueError('frozen normalization rules and baseline mismatch')
+    policy = field_normalization(candidate,frozen['contract'])
     table, field = candidate['target_table'], candidate['field_name']
     result = {'old_value':None, 'old_sources':[], 'old_source_references':[], 'source_membership_recorded':False,
-              'old_value_basis':'entity_unresolved', 'baseline_time':metadata['created_at'],
+              'old_value_basis':'entity_unresolved', 'normalization_policy':policy, 'baseline_time':metadata['created_at'],
               'baseline_sha256':metadata['baseline_sha256'], 'baseline_ref':'data.db',
               'baseline_row_id':None}
     if table == 'chips':
@@ -84,7 +113,7 @@ def baseline_projection(store, run_id, binding):
             references = [dict(p) for p in db.execute('SELECT * FROM field_provenance WHERE table_name=? AND CAST(row_id AS TEXT)=? AND field_name=?', (table,str(row_id),field))]
             result['old_source_references'] = references
             if old not in (None,''):
-                result['old_sources'] = [p for p in references if 'new_value' in p and same_value(p['new_value'], old)]
+                result['old_sources'] = [p for p in references if 'new_value' in p and same_value(p['new_value'], old,policy=policy)]
     return result
 
 

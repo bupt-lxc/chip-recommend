@@ -194,7 +194,7 @@ class ComparisonService:
                     raise ValueError('archived evidence full entity mismatch')
                 if candidate['target_table']!='chips' and self._field_key(bound)!=self._field_key(binding):
                     raise ValueError('archived relation comparison scope mismatch')
-                if not same_value(candidate['normalized_value'],baseline['old_value']):
+                if not same_value(candidate['normalized_value'],baseline['old_value'],policy=baseline['normalization_policy']):
                     raise ValueError('archived evidence does not support frozen old value')
                 evidence = _evidence(self.store,ref['run_id'],candidate,bound['model_proof'])
                 if evidence['url'] != canonical_url(source['source_url']):
@@ -227,7 +227,7 @@ class ComparisonService:
         return 'unchanged','normalized URL already present; old document version is unavailable'
 
     @staticmethod
-    def _quality(binding, new, sources):
+    def _quality(binding, new, sources, normalization_policy):
         if new is None:
             return 'unknown','new archived supported evidence unavailable'
         verified = [source for source in sources if source.get('verified_evidence')]
@@ -247,7 +247,7 @@ class ComparisonService:
                     return 'conflict','verified old and new evidence have incompatible explicit measurement bases'
                 unknown = True
                 continue
-            if not same_value(old['normalized_value'],current['normalized_value']):
+            if not same_value(old['normalized_value'],current['normalized_value'],policy=normalization_policy):
                 return 'conflict','comparable verified evidence supports different values; neither side was overwritten'
             old_support,new_support = _support(old,binding['entity']),_support(current,binding['entity'])
             if new_support > old_support:
@@ -340,11 +340,11 @@ class ComparisonService:
             # GB baseline merely because normalized magnitudes are identical.
             conversion = binding['candidate'].get('conversion',{})
             binary_unknown = conversion.get('basis')=='binary' and not any(s.get('archived_candidate',{}).get('conversion',{}).get('basis')=='binary' for s in old_sources)
-            value_kind = 'unknown' if binary_unknown else 'unchanged' if same_value(baseline['old_value'],binding['candidate']['normalized_value']) else 'changed'
+            value_kind = 'unknown' if binary_unknown else 'unchanged' if same_value(baseline['old_value'],binding['candidate']['normalized_value'],policy=baseline['normalization_policy']) else 'changed'
         else:
             value_kind = 'unknown'
         membership,membership_reason = self._membership(new,old_sources,baseline)
-        quality,quality_reason = self._quality(binding,new,old_sources)
+        quality,quality_reason = self._quality(binding,new,old_sources,baseline['normalization_policy'])
         result = {**baseline, **binding, 'old_sources':old_sources, 'new_source':new,
                   'field_key':self._field_key(binding), 'task_scopes':self._task_scopes(binding),
                   'value_change_kind':value_kind, 'source_membership_kind':membership,

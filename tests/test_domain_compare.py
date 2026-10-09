@@ -466,3 +466,56 @@ def test_one_sided_unknown_measurement_basis_is_unknown_not_conflict(comparison,
     result=service(comparison,ctx).compare_candidate(row['logical_candidate_id'])
     assert result['source_quality_kind']=='unknown'
     assert result['candidate']['conversion']['direction']=='unidirectional'
+
+@pytest.mark.parametrize('old,new,expected',[('Python run.py','python run.py','changed'),("print('A  B')","print('a b')",'changed'),('Python run.py','Python run.py','unchanged')])
+def test_deployment_notes_preserve_command_case_and_internal_whitespace(comparison,factory,old,new,expected):
+    prep=factory('prepare')
+    with closing(sqlite3.connect(prep['source'])) as db,db:
+        db.execute("INSERT INTO deployment_guides(chip_model,model_id,url,title,source_type,notes) VALUES ('X80 80GB SXM','org/Model-7B','https://vendor.example/guide','Guide title','official',?)",(old,))
+    ctx=factory('new-run',provenance=[{'table_name':'deployment_guides','field_name':'notes','new_value':old,'source_url':'https://old.example/notes'},{'table_name':'deployment_guides','field_name':'notes','new_value':new,'source_url':'https://other.example/notes'}])
+    snap=capture(ctx,text=f'Vendor A X80 80GB SXM GPU; org/Model-7B Guide title; commands: {old}; {new}.')
+    identity(ctx,snap)
+    row=audit(ctx,snap,[fact(snap,'deployment',field='notes',value=new,unit=None,target_table='deployment_guides',scope='relation',entity_key={'url':'https://vendor.example/guide','title':'Guide title','chip_model':'X80 80GB SXM','model_id':'org/Model-7B','source_type':'official'},entity_hints={'vendor':'Vendor A','full_sku':'X80 80GB SXM','entity_type':'board_sku'})])[0]
+    result=service(comparison,ctx).compare_candidate(row['logical_candidate_id'])
+    assert result['validated']
+    assert result['value_change_kind']==expected
+    assert len(result['old_sources'])==(2 if expected=='unchanged' else 1)
+    assert result['old_value']==old and result['candidate']['normalized_value']==new
+
+
+@pytest.mark.parametrize('old,new,expected',[('https://reports.example/reports/A','https://reports.example/reports/a','changed'),('https://reports.example/reports/A','https://reports.example/reports/A','unchanged')])
+def test_benchmark_reference_url_path_case_is_opaque(comparison,factory,old,new,expected):
+    prep=factory('prepare')
+    with closing(sqlite3.connect(prep['source'])) as db,db:
+        db.execute("INSERT INTO chip_model_benchmarks(chip_model,model_id,suite_name,workload_type,chip_count,precision,hardware_config,batch_size,input_seq_length,output_seq_length,reference_url) VALUES ('X80 80GB SXM','org/Model-7B','suite-A','inference','2','BF16','config-A','4','128','256',?)",(old,))
+    ctx=factory('new-run',provenance=[{'table_name':'chip_model_benchmarks','field_name':'reference_url','new_value':old,'source_url':'https://old.example/capital'},{'table_name':'chip_model_benchmarks','field_name':'reference_url','new_value':new,'source_url':'https://other.example/lower'}])
+    snap=capture(ctx,text=f'Vendor A X80 80GB SXM GPU; org/Model-7B suite-A inference 2 cards BF16 config-A batch 4 input 128 output 256: 100 tokens/s. References {old} and {new}.')
+    identity(ctx,snap)
+    base={'target_table':'chip_model_benchmarks','scope':'relation','evidence_kind':'measured','entity_key':{'chip_model':'X80 80GB SXM','model_id':'org/Model-7B','suite_name':'suite-A','workload_type':'inference','chip_count':2,'precision':'BF16'},'entity_hints':{'vendor':'Vendor A','full_sku':'X80 80GB SXM','entity_type':'board_sku'},'conditions':{'hardware_config':'config-A','metric_class':'generative_throughput','batch_size':4,'input_seq_length':128,'output_seq_length':256}}
+    rows=audit(ctx,snap,[fact(snap,'benchmark',field='throughput_tok_s',value=100,unit='tokens/s',**base),fact(snap,'benchmark',field='reference_url',value=new,unit=None,**base)])
+    result=service(comparison,ctx).compare_candidate(rows[1]['logical_candidate_id'])
+    assert result['validated']
+    assert result['value_change_kind']==expected
+    assert len(result['old_sources'])==(2 if expected=='unchanged' else 1)
+
+
+def test_default_opaque_values_do_not_merge_numeric_skus_or_structured_types():
+    from chip_model.pipeline.domain_discovery.history import same_value
+    assert not same_value('00123','123')
+    assert not same_value({'value':1},{'value':'1'})
+    assert not same_value({'GB':80},{'Gb':80})
+    assert not same_value('GB','Gb')
+
+@pytest.mark.parametrize('field,new',[('vendor','VENDOR A'),('chip_model','x80 80gb sxm')])
+def test_identity_field_case_normalization_remains_explicit(comparison,factory,field,new):
+    ctx=factory()
+    snap=capture(ctx,text=f'Vendor A X80 80GB SXM GPU; identity label {new}.')
+    rows=audit(ctx,snap,[fact(snap,'identity',field='chip_type',value='GPU',unit=None),fact(snap,'identity',field=field,value=new,unit=None)])
+    resolver=EntityResolver(ctx['store'],ctx['id'],ctx['gen'])
+    for row in rows:
+        resolver.register_identity(row['logical_candidate_id'])
+    result=service(comparison,ctx).compare_candidate(rows[1]['logical_candidate_id'])
+    assert result['normalization_policy']=='sku_identity'
+    assert result['value_change_kind']=='unchanged'
+    from chip_model.pipeline.domain_discovery.history import same_value
+    assert not same_value('00123','123',policy='sku_identity')
