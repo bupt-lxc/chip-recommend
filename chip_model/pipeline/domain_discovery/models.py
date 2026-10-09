@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from ..candidate_validation import validate_fact_value
 from ..open_web_test import OpenAICompatibleExtractor
-from .contracts import DOMAINS, DomainContract, _reject_duplicate_keys
+from .contracts import DOMAINS, DomainContract, _reject_duplicate_keys, benchmark_metric_kind
 from .rules import load_phase
 from .search import canonical_url, redact
 from .store import _file_hash, _hash, _json
@@ -445,7 +445,7 @@ def validate_candidate(candidate, contract, snapshot, chunk):
         return {'status': 'unresolved', 'reason': 'incomplete_evidence', 'missing_conditions': missing_identity}
     if domain.domain_id == 'benchmark':
         missing = missing_identity
-        if not fact.unit:
+        if benchmark_metric_kind(fact.field_name, domain) is not None and not fact.unit:
             missing.append('absolute_metric_and_unit')
         conditions = domain.conditions
         source_text = '\n'.join(snapshot['text'][start:end] for start, end in ranges)

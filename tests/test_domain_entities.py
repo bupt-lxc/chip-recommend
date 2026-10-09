@@ -93,6 +93,7 @@ def env(tmp_path, request):
             'org/Model-7B inference BF16 2 cards suite-report-A configuration-A '
             'batch 4 input 128 output 256 100 tokens/s; PyTorch 2.5 vendor support; '
             'Guide title backend vLLM; training 1000 tokens 2 cards 10 GPU-hours.')
+    text += ' org/Model-7B non-generation inference BF16 2 cards suite-report-A configuration-A: 200 samples/s.'
     pages = PageService(store, 'run-a', gen, budget, session=Session(text),
                         resolver=lambda _: ['93.184.216.34'], monotonic=lambda: 1000, backoff=lambda _: None)
     visited = pages.visit({'candidate_id': 'page-a', 'url': Response.url})
@@ -293,6 +294,159 @@ def test_same_existing_sku_with_optional_variant_details_merges_proofs(entities,
     assert first['canonical_key'] == second['canonical_key']
     assert first['entity_id'] == second['entity_id']
     assert len(second['identity_proofs']) == 2
+
+
+def test_same_new_complete_sku_redundant_variants_count_once(entities, env):
+    candidates = [fact(env), fact(env, entity_hints={'full_sku':'X80 64GB PCIe','entity_type':'board_sku',
+                                                  'capacity':'64GB','form_factor':'PCIe'})]
+    result, _ = audit(env, 'identity', candidates)
+    resolved = resolver(entities, env)
+    first, second = [resolved.register_identity(row['logical_candidate_id']) for row in result['candidates']]
+    assert first['canonical_key'] == second['canonical_key']
+    assert first['entity_id'] == second['entity_id']
+    assert resolved.snapshot()['new_entity_count'] == 1
+    assert len(second['identity_proofs']) == 2
+
+
+def test_condition_scalar_is_not_an_absolute_performance_metric(entities, env):
+    identity, _ = audit(env, 'identity', [fact(env)])
+    candidate = relation(env, field_name='batch_size', raw_value=4, normalized_value=4, unit='samples_per_batch',
+                         conditions={'hardware_config':'configuration-A','metric_class':'nongenerative'})
+    benchmark, _ = audit(env, 'benchmark', [candidate])
+    resolved = resolver(entities, env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    bound = resolved.bind_candidate(benchmark['candidates'][0]['logical_candidate_id'])
+    assert bound['model_proof']['accepted']
+    assert not bound['validated'] and bound['relation_readiness']['status']=='unresolved'
+    assert 'absolute_metric_and_unit' in bound['relation_readiness']['missing_conditions']
+
+
+def test_token_metric_cannot_bypass_generation_conditions_with_label(entities, env):
+    identity, _ = audit(env, 'identity', [fact(env)])
+    candidate = relation(env, conditions={'hardware_config':'configuration-A','metric_class':'nongenerative'})
+    benchmark, _ = audit(env, 'benchmark', [candidate])
+    resolved = resolver(entities, env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    bound = resolved.bind_candidate(benchmark['candidates'][0]['logical_candidate_id'])
+    assert bound['model_proof']['accepted']
+    assert not bound['validated']
+    assert set(bound['relation_readiness']['missing_conditions']) >= {'input_seq_length','output_seq_length','batch_size_or_concurrency'}
+
+
+@pytest.mark.parametrize('field,value,unit', [('batch_size',4,'samples_per_batch'),('notes','configuration-A',None)])
+def test_nonmetric_fields_use_only_same_configuration_audited_metric_proof(entities, env, field, value, unit):
+    identity,_ = audit(env,'identity',[fact(env)])
+    metadata = relation(env,field_name=field,normalized_value=value,raw_value=value,unit=unit)
+    metric = relation(env)
+    result,model = audit(env,'benchmark',[metadata,metric])
+    before = model.snapshot()
+    resolved = resolver(entities,env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    binding = resolved.bind_candidate(result['candidates'][0]['logical_candidate_id'])
+    assert binding['model_proof']['accepted'] and binding['validated']
+    assert binding['metric_proofs'][0]['logical_candidate_id'] == result['candidates'][1]['logical_candidate_id']
+    assert binding['metric_proofs'][0]['semantic_review'] == 'accept'
+    assert model.snapshot() == before
+
+
+def test_metadata_cannot_borrow_metric_from_other_suite_or_variant(entities, env):
+    identity,_ = audit(env,'identity',[fact(env)])
+    metadata = relation(env,field_name='batch_size',normalized_value=4,raw_value=4,unit='samples_per_batch')
+    other = relation(env,entity_key={**metadata['entity_key'],'suite_name':'suite-report-B'})
+    result,_ = audit(env,'benchmark',[metadata,other])
+    resolved = resolver(entities,env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    binding = resolved.bind_candidate(result['candidates'][0]['logical_candidate_id'])
+    assert not binding['validated'] and binding['metric_proofs'] == []
+
+
+def test_metadata_cannot_borrow_rejected_metric_proof(entities, env):
+    identity,_ = audit(env,'identity',[fact(env)])
+    metadata = relation(env,field_name='batch_size',normalized_value=4,raw_value=4,unit='samples_per_batch')
+    client = Transport([{'facts':[metadata,relation(env)]}, {'verdict':'accept','reason':'Configuration condition supported.'},
+                        {'verdict':'reject','reason':'Metric unsupported.'}])
+    model = ModelService(env[0],'run-a',env[1],env[2],env[4],env[3],domain_id='benchmark',client=client,backoff=lambda _:None)
+    result = model.extract_page(env[-1]['snapshot_id'])
+    resolved = resolver(entities,env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    binding = resolved.bind_candidate(result['candidates'][0]['logical_candidate_id'])
+    assert not binding['validated'] and binding['metric_proofs'] == []
+
+
+def test_metadata_cannot_borrow_metric_across_snapshots(entities, env):
+    identity,_ = audit(env,'identity',[fact(env)])
+    metadata = relation(env,field_name='notes',normalized_value='configuration-A',raw_value='configuration-A',unit=None)
+    result,_ = audit(env,'benchmark',[metadata])
+    visited = env[4].visit({'candidate_id':'other-report','url':'https://vendor.example/other-report'})
+    other_env = (*env[:-1],env[4].read_snapshot(visited['snapshot_id']))
+    audit(other_env,'benchmark',[relation(other_env)])
+    resolved = resolver(entities,env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    binding = resolved.bind_candidate(result['candidates'][0]['logical_candidate_id'])
+    assert binding['model_proof']['accepted'] and not binding['validated']
+    assert binding['metric_proofs'] == []
+
+
+def test_metadata_cannot_borrow_metric_across_physical_variants(entities, env):
+    hints = [{'full_sku':'X80','entity_type':'board_sku','capacity':capacity,'form_factor':form}
+             for capacity,form in [('64GB','PCIe'),('80GB','SXM')]]
+    identity,_ = audit(env,'identity',[fact(env,sku='X80',entity_hints=h) for h in hints])
+    key = {**relation(env)['entity_key'],'chip_model':'X80'}
+    metadata = relation(env,field_name='batch_size',normalized_value=4,raw_value=4,unit='samples_per_batch',
+                        entity_key=key,entity_hints={'vendor':'Vendor A',**hints[0]})
+    metric = relation(env,entity_key=key,entity_hints={'vendor':'Vendor A',**hints[1]})
+    result,_ = audit(env,'benchmark',[metadata,metric])
+    resolved = resolver(entities,env)
+    for row in identity['candidates']:
+        resolved.register_identity(row['logical_candidate_id'])
+    binding = resolved.bind_candidate(result['candidates'][0]['logical_candidate_id'])
+    assert not binding['validated'] and binding['metric_proofs'] == []
+
+
+def test_actual_nongeneration_metric_does_not_require_token_conditions(entities, env):
+    identity,_ = audit(env,'identity',[fact(env)])
+    candidate = relation(env,field_name='throughput_samples_s',unit='samples/s',raw_value=200,normalized_value=200,
+                         conditions={'hardware_config':'configuration-A','metric_class':'nongenerative'})
+    result,_ = audit(env,'benchmark',[candidate])
+    resolved = resolver(entities,env)
+    resolved.register_identity(identity['candidates'][0]['logical_candidate_id'])
+    binding = resolved.bind_candidate(result['candidates'][0]['logical_candidate_id'])
+    assert binding['validated'] and binding['relation_readiness']['status']=='ready'
+
+
+@pytest.mark.parametrize('env', [{'single_benchmark':True}], indirect=True)
+def test_relation_comparison_preserves_resolved_variants_and_unknown_history(entities, env):
+    # Build the actual ambiguous historical relation as part of a new frozen
+    # fixture baseline; the original immutable run baseline is never edited.
+    source = env[0].run_path('run-a').parent / 'variant-baseline.db'
+    with closing(sqlite3.connect(source)) as db, db:
+        db.executescript((ROOT / 'tests/fixtures/domain_discovery/business_schema.sql').read_text(encoding='utf-8'))
+        db.execute('CREATE TABLE models (id TEXT)')
+        db.execute("INSERT INTO models VALUES ('org/Model-7B')")
+        db.execute("INSERT INTO chip_model_benchmarks (chip_model,model_id,suite_name,workload_type,chip_count,precision,hardware_config,batch_size,input_seq_length,output_seq_length) VALUES ('X80','org/Model-7B','suite-report-A','inference','2','BF16','configuration-A','4','128','256')")
+    store = RunStore(env[0].root / 'variant-runs', clock=lambda:1000)
+    store.start('start', {'domain':'specs'}, 'run-a')
+    gen = store.claim('run-a','worker',100000)
+    budget = RunBudget(store,'run-a',gen,monotonic=lambda:1000,epoch=lambda:1000)
+    bundle = store.run_path('run-a') / 'skill_bundle'
+    frozen = freeze_bundle(ROOT / '.hermes-skills',bundle)
+    store.ensure_baseline('run-a',gen,source,rule_bundle_hash=frozen['bundle_sha256'])
+    pages = PageService(store,'run-a',gen,budget,session=Session(env[-1]['text']),resolver=lambda _:['93.184.216.34'],monotonic=lambda:1000,backoff=lambda _:None)
+    visited = pages.visit({'candidate_id':'variant-page','url':Response.url})
+    variant_env = store,gen,budget,bundle,pages,pages.read_snapshot(visited['snapshot_id'])
+    hints = [{'full_sku':'X80','entity_type':'board_sku','capacity':capacity,'form_factor':form}
+             for capacity,form in [('64GB','PCIe'),('80GB','SXM')]]
+    identity,_ = audit(variant_env,'identity',[fact(variant_env,sku='X80',entity_hints=h) for h in hints])
+    benchmarks = [relation(variant_env,entity_hints={'vendor':'Vendor A',**h},
+                          entity_key={**relation(variant_env)['entity_key'],'chip_model':'X80'}) for h in hints]
+    result,_ = audit(variant_env,'benchmark',benchmarks)
+    resolved = resolver(entities,variant_env)
+    for row in identity['candidates']:
+        resolved.register_identity(row['logical_candidate_id'])
+    bound = [resolved.bind_candidate(row['logical_candidate_id']) for row in result['candidates']]
+    assert len({row['entity']['entity_id'] for row in bound}) == 2
+    assert len({row['comparison_key'] for row in bound}) == 2
+    assert all(row['comparison']['status']=='comparison_unresolved' for row in bound)
 
 
 def test_unreviewed_full_sku_cannot_override_reviewed_entity_key(entities, env):

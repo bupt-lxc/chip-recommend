@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import sqlite3
 from contextlib import closing
 
-from .contracts import benchmark_comparison_key, relation_readiness
+from .contracts import DomainContract, benchmark_comparison_key, benchmark_metric_kind, relation_readiness
 from .models import ModelService, _capacity_identity
 from .rules import load_phase
 from .store import _file_hash, _hash, _json
@@ -20,6 +21,26 @@ def normalized_sku(value: str) -> str:
 def temporary_entity_id(vendor: str, full_sku: str) -> str:
     key = normalized_sku(vendor) + '\0' + normalized_sku(full_sku)
     return 'tmp-chip-' + hashlib.sha256(key.encode('utf-8')).hexdigest()[:24]
+
+
+def identity_variants(hint: dict) -> dict:
+    """Extra dimensions only; exact literal SKU dimensions are not duplicated.
+
+    This never removes or rewrites the original SKU suffix, capacity or form.
+    Base names without those tokens retain every explicit variant dimension.
+    """
+    sku = hint['full_sku']
+    variants = {name:hint[name] for name in ('capacity','form_factor') if name in hint}
+    if 'capacity' in variants:
+        capacities = [{'value':float(amount), 'unit':unit} for amount,unit in
+                      re.findall(r'(?<![\w.])(\d+(?:\.\d+)?)\s*(gb|gib|mb|mib)(?!\w)', sku)]
+        if capacities == [variants['capacity']]:
+            variants.pop('capacity')
+    if 'form_factor' in variants:
+        form = re.escape(variants['form_factor'])
+        if re.search(r'(?<!\w)' + form + r'(?!\w)', sku):
+            variants.pop('form_factor')
+    return variants
 
 
 def candidate_entity_hint(candidate: dict) -> dict:
@@ -84,7 +105,7 @@ class EntityResolver:
             normalized['capacity'] = _capacity_identity(hint['capacity'])
         if 'form_factor' in hint:
             normalized['form_factor'] = normalized_sku(hint['form_factor'])
-        variants = {name:normalized[name] for name in ('capacity','form_factor') if name in normalized}
+        variants = identity_variants(normalized)
         return normalized, vendor + '\0' + sku + ('\0' + _json(variants) if variants else '')
 
     def _proof(self, candidate_id, *, require_accepted=False):
@@ -117,7 +138,7 @@ class EntityResolver:
             normalized, key = self._hint(hint)
         except (ValueError, KeyError, TypeError):
             return {'status':'unresolved', 'entity_id':None, 'canonical_key':None, 'reason':'incomplete_entity_hint', 'hint':hint}
-        variants = {name:normalized[name] for name in ('capacity','form_factor') if name in normalized}
+        variants = identity_variants(normalized)
         complete_sku = normalized['full_sku'] + (' ' + _json(variants) if variants else '')
         temporary = temporary_entity_id(normalized['vendor'], complete_sku)
         result = {'status':'unresolved', 'entity_id':temporary, 'temporary_entity_id':temporary,
@@ -236,8 +257,12 @@ class EntityResolver:
             if prior and prior['canonical_key'] != entity['canonical_key']:
                 raise ValueError('entity ID collision: original canonical key differs')
             if prior:
-                if prior['hint'] != entity['hint'] or prior['status'] != entity['status']:
+                incompatible = any(name in prior['hint'] and prior['hint'][name] != value
+                                   for name,value in entity['hint'].items())
+                if incompatible or prior['status'] != entity['status']:
                     prior.update(status='ambiguous', reason='conflicting_identity_proofs')
+                else:
+                    prior['hint'].update(entity['hint'])
                 if proof not in prior['identity_proofs']:
                     prior['identity_proofs'].append(proof)
                 result = prior
@@ -248,7 +273,7 @@ class EntityResolver:
             return state, result, {'kind':'identity_resolution', 'stage':'comparing', 'domain_id':'identity', 'entity':result}
         return self._update(save)
 
-    def _relation_comparison(self, candidate):
+    def _relation_comparison(self, candidate, entity):
         table, key = candidate['target_table'], candidate['entity_key']
         rows = self._rows(table)
         dimensions = dict(key)
@@ -256,17 +281,57 @@ class EntityResolver:
             dimensions.update({name:value for name,value in candidate['conditions'].items()
                                if name not in {'metric_class','verification_kind'}})
         matches, uncertain = [], []
+        variants = identity_variants(entity.get('hint', {'full_sku':''}))
         for row in rows:
             if any(str(row.get(name)) != str(value) for name,value in key.items()):
                 continue
             unknown = any(row.get(name) in (None, '') for name in dimensions if name not in key)
             different = any(row.get(name) not in (None, '') and str(row[name]) != str(value)
                             for name,value in dimensions.items() if name not in key)
+            # A base-name relationship row cannot prove which board variant
+            # produced its measurement. Do not infer it from current catalog
+            # membership or remove capacity/form from the candidate identity.
+            for name,value in variants.items():
+                column = 'vram_gb' if name == 'capacity' else name
+                if row.get(column) in (None, ''):
+                    unknown = True
+                elif name == 'capacity':
+                    try:
+                        if value['unit'] != 'gb':
+                            unknown = True
+                        else:
+                            different |= float(row[column]) != value['value']
+                    except (ValueError, TypeError):
+                        unknown = True
+                else:
+                    different |= normalized_sku(row[column]) != value
             if not different:
                 (uncertain if unknown else matches).append(row['id'])
         if uncertain or len(matches) > 1:
             return {'status':'comparison_unresolved', 'possible_matches':matches+uncertain}
         return {'status':'matched' if matches else 'new_relation', 'row_id':matches[0] if matches else None}
+
+    def _audited_metrics(self, candidate, entity, contract):
+        """Retrieve accepted absolute metrics from this exact frozen test scope."""
+        if candidate['domain_id'] != 'benchmark' or benchmark_metric_kind(candidate['field_name'], contract):
+            return []
+        key = benchmark_comparison_key(candidate, entity)
+        accepted = []
+        state = self.store.metadata(self.run_id, ModelService.KEY)
+        for identifier,row in state['candidates'].items():
+            if row.get('domain_id') != 'benchmark' or row['versions'][-1].get('program', {}).get('status') != 'program_valid':
+                continue
+            _, metric, proof = self._proof(identifier)
+            if not proof['accepted'] or not benchmark_metric_kind(metric['field_name'], contract):
+                continue
+            if metric['evidence']['snapshot_id'] != candidate['evidence']['snapshot_id']:
+                continue
+            metric_entity = self.resolve_entity(candidate_entity_hint(metric))
+            if benchmark_comparison_key(metric, metric_entity) != key:
+                continue
+            if relation_readiness(metric, contract)['status'] == 'ready':
+                accepted.append({'candidate':metric, 'proof':proof})
+        return accepted
 
     def bind_candidate(self, candidate_id):
         row, candidate, proof = self._proof(candidate_id)
@@ -274,8 +339,9 @@ class EntityResolver:
         frozen = load_phase(self.store.run_path(self.run_id) / 'skill_bundle', candidate['domain_id'], 'review')
         if self.store.metadata(self.run_id, 'baseline')['rule_bundle_hash'] != frozen['bundle_sha256']:
             raise ValueError('frozen baseline and relation rules mismatch')
-        from .contracts import DomainContract
-        readiness = relation_readiness(candidate, DomainContract.model_validate(frozen['contract']))
+        contract = DomainContract.model_validate(frozen['contract'])
+        metrics = self._audited_metrics(candidate, entity, contract)
+        readiness = relation_readiness(candidate, contract, metric_candidates=[row['candidate'] for row in metrics])
         missing = []
         key = candidate['entity_key']
         generic_chip = (candidate['domain_id'] == 'deployment' and key.get('chip_model') in {'generic','not_applicable'}
@@ -292,19 +358,20 @@ class EntityResolver:
             if not any(r.get('id') == model_id or r.get('model_id') == model_id for r in self._rows('models')):
                 missing.append('model:' + str(model_id))
         evidence_accepted = proof['accepted'] and readiness['status'] == 'ready'
-        comparison = (self._relation_comparison(candidate) if candidate['target_table'] != 'chips'
+        comparison = (self._relation_comparison(candidate, entity) if candidate['target_table'] != 'chips'
                       and evidence_accepted and entity['status'] in {'new','existing','not_applicable'} else
                       {'status':'dependency_unresolved'} if missing else
                       {'status':'not_applicable'})
         binding = {'logical_candidate_id':candidate_id, 'candidate':candidate, 'entity':entity,
                    'model_proof':proof, 'evidence_status':'accepted' if evidence_accepted else readiness['status'] if proof['accepted'] else row['status'],
+                   'metric_proofs':[metric['proof'] for metric in metrics],
                    'relation_readiness':readiness, 'dependency_status':'dependency_unresolved' if missing else 'resolved',
                    'missing_dependencies':missing, 'comparison':comparison,
                    'validated':evidence_accepted and entity['status'] in {'new','existing','not_applicable'},
                    'update_eligible':evidence_accepted and not missing and comparison['status'] not in {'comparison_unresolved','dependency_unresolved'},
                    'evidence_outcomes':row.get('evidence_outcomes', []),
                    'evidence_versions':row.get('evidence_versions', []),
-                   'comparison_key':benchmark_comparison_key(candidate) if candidate['domain_id']=='benchmark' else None}
+                   'comparison_key':benchmark_comparison_key(candidate, entity) if candidate['domain_id']=='benchmark' else None}
         binding['postprocessing_id'] = 'binding-' + _hash(_json(binding))
         def save(state):
             versions = state['bindings'].setdefault(candidate_id, [])

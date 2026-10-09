@@ -433,7 +433,34 @@ def _positive_count(value):
         return False
 
 
-def relation_readiness(candidate: dict, contract: DomainContract) -> dict:
+def benchmark_metric_kind(field: str, contract: DomainContract) -> str | None:
+    """Metric semantics within the frozen ownership allowlist, never ownership."""
+    if field not in contract.fields.get('chip_model_benchmarks', []):
+        return None
+    if field in {'prefill_throughput','decode_throughput','throughput_tok_s',
+                 'time_to_first_token_ms','inter_token_latency_ms','tpot_ms'}:
+        return 'generation'
+    if field == 'throughput_samples_s':
+        return 'nongeneration'
+    if field in {'gpu_hours','mfu_pct'}:
+        return 'training'
+    if field == 'memory_peak_mb':
+        return 'memory'
+    return None
+
+
+def _absolute_benchmark_metric(candidate, contract):
+    if benchmark_metric_kind(candidate.get('field_name'), contract) is None:
+        return False
+    value = candidate.get('normalized_value')
+    try:
+        absolute = not isinstance(value, bool) and math.isfinite(float(value)) and float(value) >= 0
+    except (ValueError, TypeError):
+        absolute = False
+    return absolute and _known_condition(candidate.get('unit'))
+
+
+def relation_readiness(candidate: dict, contract: DomainContract, *, metric_candidates=()) -> dict:
     """Restrict an audited relation using its frozen contract, without granting proof."""
     domain = contract.domain_id
     if candidate.get('domain_id') != domain:
@@ -450,22 +477,20 @@ def relation_readiness(candidate: dict, contract: DomainContract) -> dict:
         if not _positive_count(key.get('chip_count')):
             missing.append('chip_count')
         minimum = contract.conditions['minimum_evidence']
+        metric_kind = benchmark_metric_kind(candidate.get('field_name'), contract)
         if 'absolute_metric_and_unit' in minimum:
-            value = candidate.get('normalized_value')
-            try:
-                absolute = not isinstance(value, bool) and math.isfinite(float(value)) and float(value) >= 0
-            except (ValueError, TypeError):
-                absolute = False
-            if not absolute or not _known_condition(candidate.get('unit')):
+            # Only the store-backed caller supplies sibling metric candidates
+            # after checking their original independent review proofs and full
+            # entity/report/configuration/snapshot identity.
+            if not _absolute_benchmark_metric(candidate, contract) and not any(
+                    _absolute_benchmark_metric(metric, contract) for metric in metric_candidates):
                 missing.append('absolute_metric_and_unit')
         if 'distinguishable_report_suite_configuration' in minimum:
             if not any(_known_condition(conditions.get(name)) for name in ('hardware_config', 'hardware_configuration', 'configuration_id')):
                 missing.append('report_configuration')
-        training = key.get('workload_type') == 'training'
+        training = key.get('workload_type') == 'training' or metric_kind == 'training'
         generative = contract.conditions['generative_metrics']
-        if not training and (conditions.get('metric_class') in generative['applies_to']
-                or candidate.get('field_name') in {'time_to_first_token_ms','inter_token_latency_ms','tpot_ms'}
-                or (candidate.get('unit') in {'tokens/s', 'ms/token'} and conditions.get('metric_class') != 'nongenerative')):
+        if not training and (metric_kind == 'generation' or conditions.get('metric_class') in generative['applies_to']):
             for name in generative['required']:
                 present = any(_positive_count(conditions.get(n)) for n in ('batch_size', 'concurrency')) if name == 'batch_size_or_concurrency' else _positive_count(conditions.get(name))
                 if not present:
@@ -500,12 +525,29 @@ def relation_readiness(candidate: dict, contract: DomainContract) -> dict:
             'missing_conditions': sorted(set(missing))}
 
 
-def benchmark_comparison_key(candidate: dict) -> str:
+def benchmark_comparison_key(candidate: dict, entity: dict | None = None) -> str:
     """All observed conditions, preserving opaque model/report identifiers.
 
     Unknown optional values differ from explicit values. A partial comparison
     key cannot by itself authorize matching or updating a historical record.
     """
     from .store import _json
-    return _json({'entity_key': candidate.get('entity_key', {}),
+    from .entities import candidate_entity_hint, identity_variants, normalized_sku
+    identity = entity.get('canonical_key') if entity else None
+    if entity is None:
+        hints = candidate_entity_hint(candidate)
+        try:
+            from .models import _capacity_identity
+            normalized = {'vendor':normalized_sku(hints['vendor']), 'full_sku':normalized_sku(hints['full_sku'])}
+            if 'capacity' in hints:
+                normalized['capacity'] = _capacity_identity(hints['capacity'])
+            if 'form_factor' in hints:
+                normalized['form_factor'] = normalized_sku(hints['form_factor'])
+            identity = {'vendor':normalized['vendor'],'full_sku':normalized['full_sku'], **identity_variants(normalized)}
+        except (KeyError, ValueError, TypeError):
+            identity = hints
+    keys = dict(candidate.get('entity_key', {}))
+    if isinstance(keys.get('chip_model'), str):
+        keys['chip_model'] = normalized_sku(keys['chip_model'])
+    return _json({'entity_identity':identity, 'entity_key':keys,
                   'conditions': candidate.get('conditions', {})})
