@@ -822,7 +822,7 @@ Dockerfile 增加权威 `.hermes-skills` 及必要参考只读打包，运行数
 
 **Files:** `history.py`、`chip_model/pipeline/run_history.py`、`chip_model/server.py`、`static/run-history.js`；测试 `tests/test_domain_history.py`、更新既有 run_history 测试。
 
-- [ ] **Step 1：写旧值未知、真实阶段和全终态读取测试。**
+- [x] **Step 1：写旧值未知、真实阶段和全终态读取测试。**
 
 ```python
 from chip_model.pipeline.domain_discovery.history import display_baseline
@@ -835,8 +835,8 @@ def test_missing_baseline_and_new_entity_are_distinct():
 ```
 
 测试运行列表含 success/no_findings/partial/failed/interrupted；详情引用原基线与快照且脱敏，失败结果仍可看；旧 v1/v2 缺复核不标通过。候选响应须提供五列全部内容，来源 added+quality unknown 两维均可查看。
-- [ ] **Step 2：RED。** history 测试失败后实现，不从正式库当前值补齐缺基线。
-- [ ] **Step 3：实现只读投影并恢复表格。**
+- [x] **Step 2：RED。** history 测试失败后实现，不从正式库当前值补齐缺基线。
+- [x] **Step 3：实现只读投影并恢复表格。**
 
 ```python
 def display_baseline(candidate):
@@ -854,8 +854,8 @@ def display_baseline(candidate):
 JS 在 `hermes-open-web-v3` 分支先处理，再进入旧 startsWith 分支。复用现有 `fieldTable` 五列呈现，但移除对 published/旧 change_kind 的单一依赖；通过 v3 投影展示值变化、来源成员/质量与实际审核状态。用户看到“已保存到隔离区，未发布”，不能显示“已更新数据库”。保持安全 HTML 转义和 URL 协议检查，来源 href 只接受 http/https，正文命令不执行。
 
 默认展开“字段提取与校验”；搜索、诊断、500 字预览、Hermes 决定、模型轨迹、关联任务放进可折叠详细记录。新实体卡片只从身份已通过的实体记录渲染，不用标题造芯片。筛选项为实体、域、value_change_kind、source_change_kind、审核状态；摘要分别显示主域/关联域、新实体/独立字段/来源/URL/拒绝数量。刷新保存展开键、筛选值与滚动位置，阶段渲染真实记录，未执行不标完成。
-- [ ] **Step 4：GREEN 与浏览器检查。** 运行 history 测试；用可控运行样例在桌面和窄屏检查五列、长链接/引文、unknown/new entity/拒绝/冲突/仅来源变化；记录截图与运行 ID。刷新后保持阅读位置。浏览器检查作为验收证据，不以字符串单元测试替代布局检查。
-- [ ] **Step 5：提交。** 添加历史读取、API、JS 和测试，`git commit -m "feat: restore five-column audited discovery results"`。
+- [x] **Step 4：GREEN 与浏览器检查。** 运行 history 测试；用可控运行样例在桌面和窄屏检查五列、长链接/引文、unknown/new entity/拒绝/冲突/仅来源变化；记录截图与运行 ID。刷新后保持阅读位置。浏览器检查作为验收证据，不以字符串单元测试替代布局检查。
+- [x] **Step 5：提交。** 添加历史读取、API、JS 和测试，`git commit -m "feat: restore five-column audited discovery results"`。
 
 ## Task 15：六域正向贯通与失败路径回归
 
