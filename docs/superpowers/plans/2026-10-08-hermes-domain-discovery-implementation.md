@@ -908,7 +908,7 @@ def assert_complete_positive_run(result, domain_id):
 
 ## Task 16：实际搜索环境、Hermes 六域冒烟与验收材料
 
-**Files:** `scripts/probe_open_web_search.py`、`docs/open_web_test_runbook.md`、`docs/acceptance/2026-10-08-hermes-domain-discovery.md`。真实运行产物放 `data/test_runs/<run_id>/`，不将含网页全文或大数据库的运行目录整体加入 Git。
+**Files:** `scripts/probe_open_web_search.py`、`docs/open_web_test_runbook.md`、`docs/acceptance/2026-10-08-hermes-domain-discovery.md`。V3 真实运行产物使用 Task 4/12/13 已实现的同一 RunStore 根目录，默认 `data/domain_runs/<run_id>/`（控制库为 `data/domain_runs/control.sqlite3`）；配置其他共享根时，CLI、API、Worker 和历史读取必须一致，不另建测试注册表。`data/test_runs/` 仅为旧流程历史目录。不将含网页全文或大数据库的运行目录整体加入 Git。
 
 - [ ] **Step 1：编写探针并验证无密钥输出。** 探针提供 `--db/--output/--provider/--proxy` 参数；每个已配置源单独执行同一组短探针，保存实际请求词、HTTP/网络/解析结果、有效 URL 和脱敏代理配置。中文开放、英文开放、明确 SKU 三组分别检查，探针不成为生产固定模板。
 
