@@ -223,3 +223,41 @@ def test_schemeless_proxy_in_request_error_is_redacted(tmp_path, monkeypatch, ca
     text = output.read_text(encoding='utf-8')
     assert password not in text + capsys.readouterr().out
     assert {row['outcome'] for row in json.loads(text)['diagnostics']} == {'network_error'}
+
+
+def test_no_proxy_bypass_list_with_ipv6_preserves_healthy_all_source_diagnostics(tmp_path, monkeypatch):
+    for name in ('DATA_AGENT_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+                 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy'):
+        monkeypatch.delenv(name, raising=False)
+    bypass = 'localhost,127.0.0.1,::1'
+    monkeypatch.setenv('NO_PROXY', bypass)
+    sources = (
+        provider('bing-html', '<div id="b_results">no results</div>'),
+        provider('so360-html', '<div id="main">no results</div>'),
+        provider('duckduckgo-html', '<div id="links">no results</div>'),
+    )
+    monkeypatch.setattr(probe, 'default_providers', lambda **kw: sources)
+    output = tmp_path / 'no-proxy.json'
+    assert probe.main(['--provider', 'all', '--output', str(output)]) == 0
+    saved = json.loads(output.read_text(encoding='utf-8'))
+    assert saved['status'] == 'healthy' and saved['request_count'] == 9
+    assert all(row['ambient_proxy_environment']['NO_PROXY'] == bypass for row in saved['diagnostics'])
+
+
+def test_invalid_proxy_returns_safe_failed_json_without_parser_exception_or_transport(
+    tmp_path, monkeypatch, capsys,
+):
+    password = 'task16_synthetic_secret'
+    raw_proxy = 'http://user:' + password + '@bad[host'
+    calls = []
+    monkeypatch.setattr(probe, 'default_providers', lambda **kw: calls.append(kw) or (
+        provider('bing-html', '<div id="b_results">no results</div>'),))
+    output = tmp_path / 'invalid.json'
+    assert probe.main(['--proxy', raw_proxy, '--output', str(output)]) == 2
+    text = output.read_text(encoding='utf-8')
+    captured = capsys.readouterr()
+    assert password not in text + captured.out + captured.err
+    assert 'Traceback' not in captured.out + captured.err
+    assert json.loads(text)['status'] == 'failed'
+    assert calls == []
+    assert password not in probe._proxy_error_audit('invalid ' + raw_proxy + ' bare ' + password, [raw_proxy])

@@ -38,14 +38,18 @@ PROXY_ENVIRONMENT = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
 
 
 def _proxy_parts(value):
-    normalized = requests.utils.prepend_scheme_if_needed(value, 'http')
-    parsed = urlsplit(normalized)
-    # Bare user:password@host can look like an unknown URI scheme to the URL
-    # parser. Treat its userinfo structurally in the audit copy, never rewrite
-    # the actual configured transport value.
-    if not parsed.netloc and '@' in value:
-        parsed = urlsplit('http://' + value.removeprefix('//'))
-    return parsed
+    try:
+        normalized = requests.utils.prepend_scheme_if_needed(value, 'http')
+        parsed = urlsplit(normalized)
+        # Bare user:password@host can look like an unknown URI scheme to the
+        # parser. Only the audit copy treats that userinfo structurally.
+        if not parsed.netloc and '@' in value:
+            parsed = urlsplit('http://' + value.removeprefix('//'))
+        return parsed
+    except Exception:
+        # Parser exceptions can themselves contain credentials. Never expose
+        # them or invoke the same fallible parser again in an error handler.
+        return None
 
 
 def _proxy_audit(value):
@@ -53,10 +57,21 @@ def _proxy_audit(value):
     if not isinstance(value, str) or not value:
         return value
     parsed = _proxy_parts(value)
+    if parsed is None:
+        return '[REDACTED INVALID PROXY]'
     if parsed.username is not None or parsed.password is not None:
         safe_netloc = '[REDACTED]@' + parsed.netloc.rsplit('@', 1)[-1]
         return redact(urlunsplit((parsed.scheme, safe_netloc, parsed.path, parsed.query, parsed.fragment)))
     return redact(value)
+
+
+def _proxy_mapping_audit(mapping):
+    return {key: redact(value) if key.lower() in {'no', 'no_proxy'} else _proxy_audit(value)
+        for key, value in mapping.items()}
+
+
+def _transport_proxy_values(mapping):
+    return [value for key, value in mapping.items() if key.lower() not in {'no', 'no_proxy'}]
 
 
 def _proxy_error_audit(message, proxies):
@@ -66,17 +81,26 @@ def _proxy_error_audit(message, proxies):
         if not isinstance(proxy, str) or not proxy:
             continue
         parsed = _proxy_parts(proxy)
-        normalized = parsed.geturl()
-        if parsed.username is not None or parsed.password is not None:
-            safe = _proxy_audit(proxy)
-            message = message.replace(normalized, safe).replace(proxy, safe)
-            for credential in (parsed.username, parsed.password):
-                while credential:
-                    secrets.add(credential)
-                    decoded = unquote(credential)
-                    if decoded == credential:
-                        break
-                    credential = decoded
+        if parsed is None:
+            message = message.replace(proxy, '[REDACTED INVALID PROXY]')
+            # Conservative userinfo-only fallback for malformed URLs. It does
+            # not parse or publish the invalid hostname and also masks bare
+            # credentials embedded separately by a transport exception.
+            userinfo = proxy.rsplit('@', 1)[0].split('://', 1)[-1].removeprefix('//')
+            credentials = userinfo.split(':', 1) if '@' in proxy else []
+        else:
+            normalized = parsed.geturl()
+            credentials = (parsed.username, parsed.password)
+            if parsed.username is not None or parsed.password is not None:
+                safe = _proxy_audit(proxy)
+                message = message.replace(normalized, safe).replace(proxy, safe)
+        for credential in credentials:
+            while credential:
+                secrets.add(credential)
+                decoded = unquote(credential)
+                if decoded == credential:
+                    break
+                credential = decoded
     for secret in sorted(secrets, key=len, reverse=True):
         message = message.replace(secret, '[REDACTED]')
     return redact(message)
@@ -131,7 +155,8 @@ def run_probe(providers, *, proxy=None):
                 **ambient, **(provider.adapter.proxies or {})}
             effective = {key: value for key, value in effective.items() if value is not None}
             environment = {name: os.getenv(name) for name in PROXY_ENVIRONMENT if os.getenv(name)}
-            proxy_values = [proxy, *ambient.values(), *effective.values(), *environment.values()]
+            proxy_values = [proxy, *_transport_proxy_values(ambient),
+                *_transport_proxy_values(effective), *_transport_proxy_values(environment)]
             urls, rejected = [], []
             for row in response.rows:
                 try:
@@ -150,9 +175,9 @@ def run_probe(providers, *, proxy=None):
                 'error': _proxy_error_audit(response.error, proxy_values), 'elapsed_ms': response.elapsed_ms,
                 'raw_result_count': len(response.rows), 'valid_urls': urls,
                 'rejected_urls': rejected, 'explicit_proxy': _proxy_audit(proxy),
-                'ambient_proxy_environment': {key: _proxy_audit(value) for key, value in environment.items()},
-                'ambient_proxies': {key: _proxy_audit(value) for key, value in ambient.items()},
-                'effective_proxies': {key: _proxy_audit(value) for key, value in effective.items()},
+                'ambient_proxy_environment': _proxy_mapping_audit(environment),
+                'ambient_proxies': _proxy_mapping_audit(ambient),
+                'effective_proxies': _proxy_mapping_audit(effective),
                 'session_trust_env': trust_env, 'fallback_used': False,
             }))
     return redact({'diagnostic_only': True, 'production_template': False,
@@ -185,6 +210,10 @@ def main(argv=None):
             parser.error('--output must not alias the --db file through a hard link or symbolic link')
     before = None
     try:
+        configured_proxies = [args.proxy, *_transport_proxy_values(
+            {name: os.getenv(name) for name in PROXY_ENVIRONMENT if os.getenv(name)})]
+        if any(proxy and _proxy_parts(proxy) is None for proxy in configured_proxies):
+            raise ValueError('unsupported proxy URL configuration; credentials withheld')
         if args.db:
             before = business_digest(args.db)
         providers = default_providers(proxy=args.proxy or None)
@@ -199,7 +228,7 @@ def main(argv=None):
                 result.update(status='failed', interference='business content changed; inspect other writers and repeat in a quiet window')
     except (OSError, ValueError, sqlite3.Error) as error:
         result = {'diagnostic_only': True, 'status': 'failed',
-            'error': _proxy_error_audit(str(error), [args.proxy, *(os.getenv(name) for name in PROXY_ENVIRONMENT)]),
+            'error': _proxy_error_audit(str(error), configured_proxies),
             'business_before': before}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(redact(result), ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
