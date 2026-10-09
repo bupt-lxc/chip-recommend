@@ -259,7 +259,7 @@ def test_duplicate_same_fact_merges_evidence_and_conflicting_values_unresolved(m
     ('compute', 'precision_perf', 'X80 FP16 sparse peak 100 TFLOPS', 100, 'TFLOPS',
      {'source_unit': 'TFLOPS', 'factor': 1, 'dense_or_sparse': 'dense', 'precision': 'FP16'},
      {'vendor': 'Vendor', 'chip_model': 'X80'}, {}, 'sparse peak misrepresented as dense'),
-    ('benchmark', 'throughput_tok_s', 'X80 theoretical 100 tokens/s Qwen/Qwen3-8B', 100, 'tokens/s',
+    ('benchmark', 'throughput_tok_s', 'X80 theoretical 100 tokens/s Qwen/Qwen3-8B; Report A 1 card FP16 input 128 output 128 batch 1', 100, 'tokens/s',
      {'source_unit': 'tokens/s', 'factor': 1},
      {'chip_model': 'X80', 'model_id': 'Qwen/Qwen3-8B', 'suite_name': 'Report A',
       'workload_type': 'inference', 'chip_count': 1, 'precision': 'FP16'},
@@ -460,6 +460,10 @@ def test_known_transport_credential_echo_is_masked_everywhere(module, environmen
             if kind == 'http_error':
                 raise requests.HTTPError('Provider echoed ' + private)
 
+        @property
+        def text(self):
+            return json.dumps(self.json())
+
         def json(self):
             return {'id': private, 'model': 'keep-model-' + private, 'usage': {'total_tokens': 3},
                     'choices': [{'message': {'content': '{"facts":[],"linked_domains":[]}'}}]}
@@ -532,6 +536,10 @@ def test_provider_invalid_content_keeps_safe_raw_response_for_audit(module, envi
     class Response:
         def raise_for_status(self):
             pass
+
+        @property
+        def text(self):
+            return json.dumps(self.json())
 
         def json(self):
             return {'id': 'call-a', 'usage': {'total_tokens': 5},
@@ -682,6 +690,10 @@ def test_transport_reuses_configuration_thinking_timeout_and_closes_response(mod
         def raise_for_status(self):
             pass
 
+        @property
+        def text(self):
+            return json.dumps(self.json())
+
         def json(self):
             return {'id': 'provider-call', 'model': 'provider-model', 'usage': {'total_tokens': 9},
                     'choices': [{'message': {'content': '{"facts":[]}'}}]}
@@ -700,3 +712,188 @@ def test_transport_reuses_configuration_thinking_timeout_and_closes_response(mod
     assert seen[0][1]['json']['thinking'] == {'type': 'disabled'}
     assert seen[0][1]['timeout'] == 7 and closed == [True]
     assert result['_usage']['total_tokens'] == 9 and result['_call_id'] == 'provider-call'
+
+
+def test_incidental_entity_hints_cannot_split_same_fact_or_reset_revision(module, environment):
+    pages, snapshot = page(environment, 'X80 64GB or 80GB')
+    first = fact(snapshot, entity_hints={'full_sku': 'X80', 'note': 'nonce-1'})
+    second = fact(snapshot, raw_value=80, normalized_value=80, entity_hints={'full_sku': 'X80', 'note': 'nonce-2'})
+    assert module.logical_candidate_id(first) == module.logical_candidate_id(second)
+    different_sku = fact(snapshot, entity_key={'vendor': 'Vendor', 'chip_model': 'X80-B'})
+    assert module.logical_candidate_id(first) != module.logical_candidate_id(different_sku)
+    client = FakeModel([{'facts': [first, second]}])
+    result = service(module, environment, pages, client).extract_page(snapshot['snapshot_id'])
+    assert len(result['candidates']) == 1 and result['candidates'][0]['status'] == 'unresolved'
+    assert len(result['candidates'][0]['evidence_versions']) == 2 and len(client.requests) == 1
+
+
+@pytest.mark.parametrize('domain,table,field,keys', [
+    ('compatibility', 'chip_model_compatibility', 'framework', {'chip_model': 'X80'}),
+    ('deployment', 'deployment_guides', 'backend', {}),
+])
+def test_missing_relation_or_guide_identity_never_validated(module, environment, domain, table, field, keys):
+    pages, snapshot = page(environment, 'X80 PyTorch deployment guide')
+    candidate = fact(snapshot, domain_id=domain, target_table=table, field_name=field, entity_key=keys,
+                     raw_value='PyTorch', normalized_value='PyTorch', unit=None, conversion={}, scope='relation')
+    store, gen, budget, clock, bundle = environment
+    client = FakeModel([{'facts': [candidate]}])
+    models = module.ModelService(store, 'run-a', gen, budget, pages, bundle, domain_id=domain, client=client,
+                                monotonic=clock, backoff=lambda _: None)
+    row = models.extract_page(snapshot['snapshot_id'])['candidates'][0]
+    assert row['status'] == 'unresolved' and row['reason'] == 'incomplete_evidence'
+    assert row['missing_conditions'] and len(client.requests) == 1
+
+
+def test_explicit_generic_deployment_allows_model_not_applicable(module, environment):
+    pages, snapshot = page(environment, 'Generic X80 PyTorch runtime setup, model independent')
+    candidate = fact(snapshot, domain_id='deployment', target_table='deployment_guides', field_name='backend',
+                     entity_key={'url': snapshot['final_url'], 'title': 'Generic X80 runtime setup', 'chip_model': 'X80',
+                                 'model_id': 'not_applicable', 'source_type': 'official_doc'},
+                     raw_value='PyTorch', normalized_value='PyTorch', unit=None, conversion={}, scope='relation',
+                     conditions={'model_applicability': 'not_applicable'})
+    store, gen, budget, clock, bundle = environment
+    client = FakeModel([{'facts': [candidate]}, {'verdict': 'accept', 'reason': 'Explicit model independent guide.'}])
+    models = module.ModelService(store, 'run-a', gen, budget, pages, bundle, domain_id='deployment', client=client,
+                                monotonic=clock, backoff=lambda _: None)
+    assert models.extract_page(snapshot['snapshot_id'])['candidates'][0]['status'] == 'validated'
+
+
+def benchmark_fact(snapshot, **changes):
+    value = fact(snapshot, domain_id='benchmark', target_table='chip_model_benchmarks', field_name='throughput_tok_s',
+                 entity_key={'chip_model': 'X80', 'model_id': 'Qwen/Qwen3-8B', 'suite_name': 'Report A',
+                             'workload_type': 'inference', 'chip_count': 1, 'precision': 'FP16'},
+                 raw_value=100, normalized_value=100, unit='tokens/s', conversion={'source_unit': 'tokens/s'},
+                 conditions={'metric_class': 'generative_throughput', 'input_seq_length': 128,
+                             'output_seq_length': 128, 'batch_size': 1}, scope='relation', evidence_kind='measured')
+    value.update(changes)
+    return value
+
+
+@pytest.mark.parametrize('name,bad', [('chip_count', 0), ('chip_count', 1.5), ('chip_count', False),
+                                     ('input_seq_length', False), ('output_seq_length', {}), ('batch_size', True),
+                                     ('input_seq_length', -1), ('concurrency', '1.5')])
+def test_benchmark_required_counts_are_typed_integral_and_positive(module, environment, name, bad):
+    pages, snapshot = page(environment, 'X80 Qwen/Qwen3-8B Report A 1 card FP16, input 128 output 128 batch 1, 100 tokens/s')
+    candidate = benchmark_fact(snapshot)
+    namespace = candidate['entity_key'] if name == 'chip_count' else candidate['conditions']
+    namespace[name] = bad
+    client = FakeModel([{'facts': [candidate]}])
+    store, gen, budget, clock, bundle = environment
+    models = module.ModelService(store, 'run-a', gen, budget, pages, bundle, domain_id='benchmark', client=client,
+                                monotonic=clock, backoff=lambda _: None)
+    row = models.extract_page(snapshot['snapshot_id'])['candidates'][0]
+    assert row['status'] in {'unresolved', 'program_rejected'} and len(client.requests) == 1
+
+
+@pytest.mark.parametrize('workload,conditions', [
+    ('inference', {'metric_class': 'nongenerative', 'input_seq_length': 'not_applicable', 'output_seq_length': 'unknown'}),
+    ('training', {'training_workload': 'pretrain', 'training_data': '1 billion tokens', 'hardware_configuration': '1 card X80'}),
+])
+def test_benchmark_non_generation_and_training_do_not_require_generation_lengths(module, environment, workload, conditions):
+    pages, snapshot = page(environment, 'X80 Qwen/Qwen3-8B Report A 1 card FP16 100 tokens/s; pretrain 1 billion tokens')
+    candidate = benchmark_fact(snapshot, conditions=conditions)
+    candidate['entity_key']['workload_type'] = workload
+    result = module.validate_candidate(candidate, load_phase(environment[-1], 'benchmark', 'extract')['contract'],
+                                       snapshot, pages.chunks(snapshot['snapshot_id'])['chunks'][0])
+    assert result['status'] == 'program_valid'
+
+
+@pytest.mark.parametrize('body', [
+    '{"id":"one","id":"two","choices":[{"message":{"content":"{\\"facts\\":[]}"}}]}',
+    '{"model":42,"choices":[{"message":{"content":"{\\"facts\\":[]}"}}]}',
+    '{"usage":"a string","choices":[{"message":{"content":"{\\"facts\\":[]}"}}]}',
+    '{"usage":{"total_tokens":NaN},"choices":[{"message":{"content":"{\\"facts\\":[]}"}}]}',
+])
+def test_http_envelope_is_strict_json_and_typed_metadata(module, monkeypatch, body):
+    closed = []
+
+    class Response:
+        text = body
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return json.loads(self.text)
+
+        def close(self):
+            closed.append(True)
+
+    monkeypatch.setattr('requests.post', lambda *args, **kwargs: Response())
+    client = module.OpenAIModelTransport(base_url='https://model.example', api_key='private')
+    with pytest.raises(ValueError):
+        client.call_model(messages=[], timeout=1)
+    assert closed == [True]
+
+
+def test_failed_raw_envelope_text_is_saved_without_known_secret(module, environment, monkeypatch):
+    pages, snapshot = page(environment)
+    private = 'secret-raw-credential'
+    body = '{"id":"' + private + '","id":"two","choices":[]}'
+
+    class Response:
+        text = body
+
+        def raise_for_status(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr('requests.post', lambda *args, **kwargs: Response())
+    models = service(module, environment, pages, module.OpenAIModelTransport(base_url='https://model.example', api_key=private))
+    result = models.extract_page(snapshot['snapshot_id'])
+    assert not result['complete'] and result['chunks'][0]['reason'] == 'parser_rejected'
+    assert models.snapshot()['calls'][0]['response']['_raw_envelope_text'] == body.replace(private, '[REDACTED]')
+    assert private not in json.dumps(models.snapshot())
+
+
+def test_benchmark_counts_outside_submitted_source_are_incomplete(module, environment):
+    pages, snapshot = page(environment, 'X80 Qwen/Qwen3-8B measured 100 tokens/s')
+    candidate = benchmark_fact(snapshot)
+    program = module.validate_candidate(candidate, load_phase(environment[-1], 'benchmark', 'extract')['contract'],
+                                        snapshot, pages.chunks(snapshot['snapshot_id'])['chunks'][0])
+    assert program['status'] == 'unresolved' and 'chip_count' in program['missing_conditions']
+
+
+@pytest.mark.parametrize('domain,table,field,raw,unit,scope', [
+    ('benchmark', 'chip_model_benchmarks', 'throughput_tok_s', 100, 'tokens/s', 'configuration'),
+    ('deployment', 'deployment_guides', 'backend', 'PyTorch', None, 'configuration'),
+])
+def test_relation_configuration_scope_preserves_chip_identity(module, environment, domain, table, field, raw, unit, scope):
+    pages, snapshot = page(environment, 'X80 Qwen/Qwen3-8B Report A 2 cards FP16 input 128 output 128 batch 1, 100 tokens/s PyTorch')
+    if domain == 'benchmark':
+        candidate = benchmark_fact(snapshot, scope=scope)
+        candidate['entity_key']['chip_count'] = 2
+    else:
+        candidate = fact(snapshot, domain_id=domain, target_table=table, field_name=field, raw_value=raw, normalized_value=raw,
+                         unit=unit, conversion={}, scope=scope,
+                         entity_key={'url': snapshot['final_url'], 'title': 'X80 runtime guide', 'chip_model': 'X80',
+                                     'model_id': 'Qwen/Qwen3-8B', 'source_type': 'official_doc'})
+    program = module.validate_candidate(candidate, load_phase(environment[-1], domain, 'extract')['contract'],
+                                        snapshot, pages.chunks(snapshot['snapshot_id'])['chunks'][0])
+    assert program['status'] == 'program_valid'
+    assert candidate['entity_key']['chip_model'] == 'X80'
+
+
+def test_normalized_identity_dimensions_share_ids_but_preserve_real_variants(module, environment):
+    pages, snapshot = page(environment)
+    first = benchmark_fact(snapshot, entity_hints={'capacity': '64 GB', 'form_factor': 'PCIe', 'note': 'A'})
+    second = copy.deepcopy(first)
+    second['entity_hints'].update(capacity='64.0GB', form_factor=' pcie ', note='B')
+    second['entity_key']['chip_count'] = '1'
+    assert module.logical_candidate_id(first) == module.logical_candidate_id(second)
+    second['entity_hints']['capacity'] = '80GB'
+    assert module.logical_candidate_id(first) != module.logical_candidate_id(second)
+
+
+def test_generic_guide_requires_explicit_applicability_declaration(module, environment):
+    pages, snapshot = page(environment, 'PyTorch runtime guide')
+    candidate = fact(snapshot, domain_id='deployment', target_table='deployment_guides', field_name='backend',
+                     entity_key={'url': snapshot['final_url'], 'title': 'Runtime setup', 'chip_model': 'generic',
+                                 'model_id': 'generic', 'source_type': 'official_doc'},
+                     raw_value='PyTorch', normalized_value='PyTorch', unit=None, conversion={}, scope='configuration')
+    program = module.validate_candidate(candidate, load_phase(environment[-1], 'deployment', 'extract')['contract'],
+                                        snapshot, pages.chunks(snapshot['snapshot_id'])['chunks'][0])
+    assert program['status'] == 'unresolved'
+    assert {'chip_model', 'model_id'}.issubset(program['missing_conditions'])

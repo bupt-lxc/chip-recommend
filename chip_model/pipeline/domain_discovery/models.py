@@ -65,7 +65,9 @@ class FactCandidate(StrictModel):
     normalized_value: JsonValue
     unit: str | None
     conversion: Conversion = Field(default_factory=Conversion)
-    scope: Literal['chip', 'single_card', 'board_sku', 'relation', 'configuration', 'server', 'cluster']
+    scope: Literal['chip', 'single_card', 'board_sku', 'relation', 'configuration', 'server', 'cluster'] = Field(
+        description='Source applicability or measurement scope. entity_key always identifies the explicit chip SKU '
+                    'and applicable model/document relation; configurations never create server/cluster chip entities.')
     evidence_kind: Literal['explicit', 'measured', 'extrapolated', 'theoretical']
     conditions: dict[str, JsonValue] = Field(default_factory=dict)
     evidence: Quote
@@ -98,13 +100,38 @@ class ReviewResponse(StrictModel):
         return self
 
 
-def decode_content(value):
+class ProviderMessage(BaseModel):
+    model_config = ConfigDict(extra='allow', strict=True)
+    content: str
+
+
+class ProviderChoice(BaseModel):
+    model_config = ConfigDict(extra='allow', strict=True)
+    message: ProviderMessage
+
+
+class ProviderUsage(BaseModel):
+    model_config = ConfigDict(extra='allow', strict=True, allow_inf_nan=False)
+    prompt_tokens: int | None = Field(default=None, ge=0)
+    completion_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+
+
+class ProviderEnvelope(BaseModel):
+    model_config = ConfigDict(extra='allow', strict=True, allow_inf_nan=False)
+    id: str | None = Field(default=None, min_length=1)
+    model: str | None = Field(default=None, min_length=1)
+    usage: ProviderUsage | None = None
+    choices: list[ProviderChoice] = Field(min_length=1)
+
+
+def decode_content(value, *, allow_fences=True):
     """Strict provider JSON, with optional whole-response Markdown fences."""
     if not isinstance(value, str):
         raise ValueError('model content must be text')
     text = value.strip()
     fenced = re.fullmatch(r'```(?:json)?\s*(.*?)\s*```', text, re.S | re.I)
-    if fenced:
+    if fenced and allow_fences:
         text = fenced[1]
     def invalid_constant(value):
         raise ValueError('nonfinite JSON number: ' + value)
@@ -133,22 +160,21 @@ class OpenAIModelTransport(OpenAICompatibleExtractor):
                     json={'model': self.model_name, 'messages': messages, 'stream': False,
                           'temperature': self.temperature, 'thinking': {'type': 'disabled'}},
                     timeout=min(timeout, self.timeout))
-        data = None
+        data, raw_envelope, envelope = None, None, None
         try:
             response.raise_for_status()
-            data = response.json()
-            try:
-                result = decode_content(data['choices'][0]['message']['content'])
-            except (KeyError, IndexError, TypeError) as exc:
-                raise ValueError('missing model message') from exc
-            return _mask_known({**result, '_usage': data.get('usage', {}),
-                    '_model': data.get('model', self.model_name), '_call_id': data.get('id'),
+            raw_envelope = response.text
+            data = decode_content(raw_envelope, allow_fences=False)
+            envelope = ProviderEnvelope.model_validate(data)
+            result = decode_content(envelope.choices[0].message.content)
+            return _mask_known({**result, '_usage': envelope.usage.model_dump(exclude_none=True) if envelope.usage else {},
+                    '_model': envelope.model or self.model_name, '_call_id': envelope.id,
                     '_raw_response': data}, self.audit_secrets)
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             failure = ValueError(_mask_known(str(exc), self.audit_secrets))
-            failure.response_for_audit = _mask_known({'_raw_response': data,
-                '_usage': data.get('usage', {}) if isinstance(data, dict) else {},
-                '_call_id': data.get('id') if isinstance(data, dict) else None}, self.audit_secrets)
+            failure.response_for_audit = _mask_known({'_raw_response': data, '_raw_envelope_text': raw_envelope,
+                '_usage': envelope.usage.model_dump(exclude_none=True) if envelope and envelope.usage else {},
+                '_call_id': envelope.id if envelope else None}, self.audit_secrets)
             raise failure from None
         finally:
             response.close()
@@ -179,6 +205,24 @@ def validate_quote(text, evidence):
     return True
 
 
+def _capacity_identity(value):
+    unit = 'unknown'
+    if isinstance(value, str):
+        match = re.fullmatch(r'\s*(\d+(?:\.\d+)?)\s*(GB|GiB|MB|MiB)?\s*', value, re.I)
+        if not match:
+            raise ValueError('capacity hint requires a finite positive amount and explicit or unknown basis')
+        value, unit = float(match[1]), (match[2] or 'unknown').casefold()
+    elif isinstance(value, dict) and set(value) == {'value', 'unit'}:
+        unit = value['unit']
+        value = value['value']
+        if not isinstance(unit, str) or unit.casefold() not in {'gb', 'gib', 'mb', 'mib', 'unknown'}:
+            raise ValueError('invalid capacity basis')
+        unit = unit.casefold()
+    if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
+        raise ValueError('capacity hint must be finite positive numeric')
+    return {'value': float(value), 'unit': unit}
+
+
 def logical_candidate_id(candidate):
     """Ownership + INITIAL complete entity hint/relationship + snapshot, never value."""
     if not isinstance(candidate, dict):
@@ -186,8 +230,26 @@ def logical_candidate_id(candidate):
     evidence = candidate.get('evidence', {})
     if not isinstance(evidence, dict):
         evidence = {}
+    def canonical(value):
+        if isinstance(value, str):
+            return ' '.join(value.split()).casefold()
+        if isinstance(value, dict):
+            return {key: int(item) if key == 'chip_count' and _positive_integral(item) else canonical(item)
+                    for key, item in value.items()}
+        return value
+    hints = candidate.get('entity_hints', {})
+    # Full SKU/vendor/model relation identity is carried by entity_key. The
+    # extra physical variant dimensions are meaningful; free-form notes and
+    # redundant full_sku hints must not create another logical fact or quota.
+    variants = {name: canonical(hints[name]) for name in ('capacity', 'form_factor')
+                if isinstance(hints, dict) and name in hints}
+    if 'capacity' in variants:
+        try:
+            variants['capacity'] = _capacity_identity(hints['capacity'])
+        except ValueError:
+            variants['capacity'] = 'invalid_capacity'
     return 'fact-' + _hash(_json([candidate.get('domain_id'), candidate.get('target_table'),
-                  candidate.get('entity_key'), candidate.get('entity_hints', {}),
+                  canonical(candidate.get('entity_key')), variants,
                   candidate.get('field_name'), evidence.get('snapshot_id')]))
 
 
@@ -227,6 +289,35 @@ def _numeric_leaves(value):
             yield number
 
 
+def _known_text(value):
+    return isinstance(value, str) and bool(value.strip()) and value.casefold().strip() not in {'unknown', 'not_applicable'}
+
+
+def _positive_integral(value):
+    return (type(value) is int and value > 0) or (isinstance(value, str)
+             and bool(re.fullmatch(r'[1-9]\d*', value.strip())))
+
+
+def _missing_identity(fact, domain):
+    if fact.target_table == 'chips':
+        return []
+    missing = [name for name in domain.entity_keys[fact.target_table] if not _known_text(fact.entity_key.get(name))]
+    if domain.domain_id == 'benchmark':
+        missing = [name for name in missing if name != 'chip_count']
+        if not _positive_integral(fact.entity_key.get('chip_count')):
+            missing.append('chip_count')
+    if domain.domain_id == 'deployment':
+        # A document can explicitly describe a generic or model-independent
+        # setup. Missing scope still cannot be silently treated as generic.
+        for name, declaration in [('chip_model', 'chip_applicability'), ('model_id', 'model_applicability')]:
+            if fact.entity_key.get(name) in {'generic', 'not_applicable'}:
+                if fact.conditions.get(declaration) == fact.entity_key[name]:
+                    missing = [item for item in missing if item != name]
+                elif name not in missing:
+                    missing.append(name)
+    return missing
+
+
 def _audit_value(value):
     """Retain rejected provider material as JSON without serializing NaN/Infinity."""
     if isinstance(value, float) and not math.isfinite(value):
@@ -263,19 +354,24 @@ def validate_candidate(candidate, contract, snapshot, chunk):
         raise ValueError('field is outside frozen domain ownership')
     _validate_json_values(fact.raw_value)
     _validate_json_values(fact.normalized_value)
+    if 'capacity' in fact.entity_hints:
+        _capacity_identity(fact.entity_hints['capacity'])
+    if 'form_factor' in fact.entity_hints and not _known_text(fact.entity_hints['form_factor']):
+        raise ValueError('form_factor identity hint must be nonblank text')
     required_keys = domain.entity_keys[fact.target_table]
     if set(fact.entity_key) - set(required_keys):
         raise ValueError('unknown entity or relation key')
-    if not fact.entity_key.get('chip_model') and domain.domain_id != 'deployment':
+    if not fact.entity_key.get('chip_model') and fact.target_table == 'chips':
         raise ValueError('explicit full SKU hint required')
     for value in fact.entity_key.values():
         if isinstance(value, bool) or isinstance(value, (dict, list)):
             raise ValueError('entity keys must be scalar')
         if isinstance(value, (int, float)) and not math.isfinite(value):
             raise ValueError('entity keys must be finite')
-    if fact.scope in {'server', 'cluster'} or (fact.scope == 'configuration' and fact.field_name != 'psu_w'):
+    if fact.target_table == 'chips' and (fact.scope in {'server', 'cluster'}
+            or (fact.scope == 'configuration' and fact.field_name != 'psu_w' and domain.domain_id != 'compatibility')):
         raise ValueError('entity scope is outside chip/card contract')
-    if fact.target_table == 'chips' and any(not fact.entity_key.get(key) for key in required_keys):
+    if fact.target_table == 'chips' and any(not _known_text(fact.entity_key.get(key)) for key in required_keys):
         raise ValueError('vendor and full SKU hints required')
     validate_fact_value(fact.target_table, fact.field_name, fact.normalized_value)
     for quote in [fact.evidence, *fact.context_refs]:
@@ -332,23 +428,38 @@ def validate_candidate(candidate, contract, snapshot, chunk):
     if isinstance(unit_rule, dict) and unit_rule.get('preserve_decimal_or_binary_basis'):
         if fact.conversion.basis == 'unknown':
             raise ValueError('memory decimal/binary basis must be preserved')
+    missing_identity = _missing_identity(fact, domain)
+    if domain.domain_id in {'compatibility', 'deployment'} and missing_identity:
+        return {'status': 'unresolved', 'reason': 'incomplete_evidence', 'missing_conditions': missing_identity}
     if domain.domain_id == 'benchmark':
-        missing = [key for key in required_keys if fact.entity_key.get(key) in (None, '', 'unknown')]
+        missing = missing_identity
         if not fact.unit:
             missing.append('absolute_metric_and_unit')
         conditions = domain.conditions
-        if (fact.conditions.get('metric_class') in conditions['generative_metrics']['applies_to']
+        source_text = '\n'.join(snapshot['text'][start:end] for start, end in ranges)
+        source_numbers = {float(token) for token in re.findall(r'(?<![\w.])[+-]?\d+(?:\.\d+)?', source_text)}
+        if (_positive_integral(fact.entity_key.get('chip_count'))
+                and float(fact.entity_key['chip_count']) not in source_numbers):
+            missing.append('chip_count')
+        training = fact.entity_key.get('workload_type') == 'training'
+        if not training and (fact.conditions.get('metric_class') in conditions['generative_metrics']['applies_to']
                 or (fact.unit in {'tokens/s', 'ms/token'} and fact.conditions.get('metric_class') != 'nongenerative')):
             for name in conditions['generative_metrics']['required']:
                 if name == 'batch_size_or_concurrency':
-                    present = fact.conditions.get('batch_size') or fact.conditions.get('concurrency')
+                    present = any(_positive_integral(fact.conditions.get(key)) for key in ('batch_size', 'concurrency'))
                 else:
                     present = fact.conditions.get(name)
-                if present in (None, '', 'unknown'):
+                if not (present is True if name == 'batch_size_or_concurrency' else _positive_integral(present)):
                     missing.append(name)
-        if fact.entity_key.get('workload_type') == 'training':
+        for key in ('input_seq_length', 'output_seq_length', 'batch_size', 'concurrency'):
+            value = fact.conditions.get(key)
+            if value not in (None, '', 'unknown', 'not_applicable') and not _positive_integral(value):
+                missing.append(key)
+            elif _positive_integral(value) and float(value) not in source_numbers:
+                missing.append(key)
+        if training:
             missing.extend(key for key in conditions['training_metrics']['required']
-                           if fact.conditions.get(key) in (None, '', 'unknown'))
+                           if not _known_text(fact.conditions.get(key)))
         if missing:
             return {'status': 'unresolved', 'reason': 'incomplete_evidence', 'missing_conditions': missing}
     return {'status': 'program_valid', 'reason': 'contract_and_exact_evidence_passed'}
