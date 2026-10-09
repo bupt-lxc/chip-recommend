@@ -1400,6 +1400,7 @@ async def api_data_agent_manual_run(
     # Authentication precedes normalization and any persistent start. The raw
     # object avoids legacy defaults leaking into V3 requests.
     _require_secure_admin_transport(http_request)
+    from chip_model.pipeline.domain_discovery.markers import is_domain_request
     authenticated = admin_token_valid(admin_token)
     if not authenticated:
         # Keep the separate known_sources legacy endpoint semantics.
@@ -1408,7 +1409,7 @@ async def api_data_agent_manual_run(
             hint = json.loads(raw)
         except ValueError:
             hint = {}
-        legacy = isinstance(hint, dict) and hint.get('pipeline', 'known_sources') == 'known_sources' and not any(
+        legacy = isinstance(hint, dict) and not is_domain_request(hint) and hint.get('pipeline', 'known_sources') == 'known_sources' and not any(
             k in hint for k in ('domain', 'chip', 'request_id', 'resume_run_id', 'skill', 'chips', 'queries', 'target_fields')) and idempotency_key is None
         raise HTTPException(status_code=403 if legacy else 401, detail="需要数据更新管理员口令。")
     try:
@@ -1416,7 +1417,7 @@ async def api_data_agent_manual_run(
         if not isinstance(payload, dict):
             raise ValueError('启动请求必须为对象')
         is_v3 = payload.get('pipeline') != 'known_sources' if 'pipeline' in payload else False
-        is_v3 = is_v3 or idempotency_key is not None or any(
+        is_v3 = is_v3 or is_domain_request(payload) or idempotency_key is not None or any(
             k in payload for k in ('domain', 'chip', 'request_id', 'resume_run_id', 'skill', 'chips', 'queries', 'target_fields'))
         if is_v3:
             from chip_model.pipeline.manual_control import queue_domain_run, DomainStartConflict

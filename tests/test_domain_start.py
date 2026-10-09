@@ -4,6 +4,7 @@ import copy
 import importlib
 import json
 import sys
+import sqlite3
 from pathlib import Path
 from types import MappingProxyType, ModuleType
 
@@ -15,7 +16,10 @@ from scripts import run_hermes_open_web_test as cli
 
 @pytest.fixture(autouse=True)
 def isolated_cli_default(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, 'get_db_path', lambda: tmp_path / 'data.db')
+    source = tmp_path / 'data.db'
+    with sqlite3.connect(source) as db:
+        db.execute('CREATE TABLE fixture (id TEXT)')
+    monkeypatch.setattr(cli, 'get_db_path', lambda: source)
 
 
 def normalize(payload, **kwargs):
@@ -138,6 +142,8 @@ def capturing_executor(calls, status="success"):
 def test_cli_normalizes_discovery_and_separates_runtime_options(capsys, tmp_path):
     calls = []
     source = tmp_path / 'source.db'
+    with sqlite3.connect(source) as db:
+        db.execute('CREATE TABLE fixture (id TEXT)')
     assert cli.main(["--domain", "specs", "--db", str(source)], executor=capturing_executor(calls)) == 0
     request, dependencies = calls[0]
     assert request == expected()

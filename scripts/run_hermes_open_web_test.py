@@ -34,7 +34,7 @@ def _timeout(value: str) -> int:
 
 def main(argv: list[str] | None = None, *, executor=None) -> int:
     parser = argparse.ArgumentParser(description="Hermes 数据域开放互联网发现隔离测试", allow_abbrev=False)
-    parser.add_argument("--db", default=str(get_db_path()), help="只读来源数据库")
+    parser.add_argument("--db", default=argparse.SUPPRESS, help="只读来源 SQLite；其父目录作为 API/host 共享 data-root，续跑省略时继承原来源")
     parser.add_argument("--domain", default=argparse.SUPPRESS, help="数据域：identity/specs/compute/compatibility/benchmark/deployment")
     parser.add_argument("--skill", default=argparse.SUPPRESS, help="兼容别名 chip-<domain>，与 --domain 至少提供一个")
     parser.add_argument("--chip", default=argparse.SUPPRESS, help="可选芯片线索；省略时按数据域执行开放互联网发现")
@@ -56,10 +56,11 @@ def main(argv: list[str] | None = None, *, executor=None) -> int:
     from scripts.hermes_domain_worker import work_once
     receipt = None
     try:
-        source = Path(args.db).resolve()
-        receipt = queue_domain_run(payload, data_root=source.parent, timeout=args.timeout)
+        source = Path(values.get('db', get_db_path())).resolve()
+        explicit = source if 'db' in values or not payload.get('resume_run_id') else None
+        receipt = queue_domain_run(payload, data_root=source.parent, source_db=explicit, timeout=args.timeout)
         results = work_once(source.parent, run_id=receipt['run_id'], executor=executor,
-            dependencies={'source_db': source})
+            dependencies={'source_db': source} if explicit is not None else {})
         if results:
             result = dict(results[0])
         else:

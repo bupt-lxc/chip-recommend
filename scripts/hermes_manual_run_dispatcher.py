@@ -7,8 +7,15 @@ import argparse
 import json
 import subprocess
 import time
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from chip_model.pipeline.domain_discovery.markers import is_domain_request
 
 
 def stamp() -> str:
@@ -19,17 +26,6 @@ def write_request(path: Path, value: dict) -> None:
     temporary = path.with_suffix(".writing")
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(path)
-
-
-def is_domain_request(value: dict) -> bool:
-    """V3 canonical inputs never enter legacy dispatch, even before stamping.
-
-    request_id alone is a generic legacy idempotency key, not a V3 marker.
-    Legacy skill/chips/queries fields are not new-domain discriminators.
-    """
-    return (value.get('pipeline') == 'hermes-open-web-v3'
-        or value.get('schema_version') == 'hermes-open-web-v3'
-        or any(key in value for key in ('domain', 'chip', 'resume_run_id', 'scope_type', 'contract_version')))
 
 
 def dispatch(path: Path, *, container: str, formal_job_id: str, test_job_id: str,

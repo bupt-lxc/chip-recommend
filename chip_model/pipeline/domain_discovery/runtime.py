@@ -450,7 +450,7 @@ def run_domain(request, dependencies):
     """
     from .contracts import normalize_start
     from .budget import RunBudget
-    from .store import RunStore
+    from .store import RunStore, source_locator_for, resolve_source_locator
     from .search import redact
     deps = dict(dependencies)
     source = Path(deps['source_db']).resolve()
@@ -472,9 +472,15 @@ def run_domain(request, dependencies):
         if original['domain'] != canonical['domain'] or (canonical['chip'] is not None and canonical['chip'] != original['chip']):
             raise ValueError('续跑数据域或最初芯片线索与原运行不一致')
         run_id = resume
+        config = store.dispatch_request(run_id)
+        selected = source_locator_for(store.root.parent, source)
+        if config['source_locator'] != selected:
+            raise ValueError('续跑来源数据库与原运行冲突')
     else:
-        started = store.start(request_id, canonical, 'run-' + uuid.uuid4().hex, timeout=timeout)
+        started = store.start(request_id, canonical, 'run-' + uuid.uuid4().hex, timeout=timeout,
+                              source_locator=source_locator_for(store.root.parent, source))
         run_id = started['run_id']
+    deps['source_db'] = resolve_source_locator(store.root.parent, store.dispatch_request(run_id)['source_locator'])
     preclaimed = deps.get('preclaimed')
     if preclaimed is not None:
         if preclaimed.get('run_id') != run_id:

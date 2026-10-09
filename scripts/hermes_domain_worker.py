@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from chip_model.pipeline.domain_discovery.store import RunStore
+from chip_model.pipeline.domain_discovery.store import RunStore, resolve_source_locator
 
 
 def work_once(data_root, *, executor=None, dependencies=None, run_id=None, stop_event=None):
@@ -35,7 +35,10 @@ def work_once(data_root, *, executor=None, dependencies=None, run_id=None, stop_
         try:
             config = store.dispatch_request(rid)
             request = config.get('payload') or store.get_run(rid)['payload']
-            deps = {'source_db': data_root / 'data.db', **(dependencies or {}), 'store': store,
+            source = resolve_source_locator(data_root, config['source_locator'])
+            if (dependencies or {}).get('source_db') is not None and Path(dependencies['source_db']).resolve() != source:
+                raise ValueError('worker 来源数据库与原运行冲突')
+            deps = {**(dependencies or {}), 'source_db': source, 'store': store,
                 'request_id': config['request_id'], 'timeout': config['timeout'], 'stop_event': stop_event,
                 'preclaimed': {'run_id': rid, 'owner': owner, 'generation': generation}}
             # A cancelled/used runner cannot be reused by another invocation.
@@ -115,7 +118,9 @@ def inspect_run_storage(data_root):
                                 for row in connection.execute('PRAGMA index_list(' + table + ')') if row[2]}
                         if not unique_keys(expected) <= unique_keys(db):
                             raise ValueError(f'control database required unique keys missing: {table}')
-            add('control_database', True, f'{control}: read-only integrity/schema and access checks passed; write transaction deferred')
+                for locator, in db.execute('SELECT source_locator FROM dispatches'):
+                    resolve_source_locator(root, locator)
+            add('control_database', True, f'{control}: read-only integrity/schema/source and access checks passed; write transaction deferred')
     except (OSError, ValueError, sqlite3.Error) as exc:
         add('control_database', False, str(exc))
     add('sqlite_atomic_write', None, 'read-only inspection cannot certify journal creation, write locks, disk capacity or attached-database atomic commit; runtime preflight required')
@@ -132,7 +137,7 @@ def check_environment(data_root):
     def add(name, ok, detail):
         checks.append({'item': name, 'ok': bool(ok), 'detail': str(detail)})
     root = Path(data_root).resolve()
-    add('shared_data', root.is_dir() and (root / 'data.db').is_file(), root)
+    add('shared_data', root.is_dir(), root)
     checks.extend(inspect_run_storage(root))
     token = root / 'manual_control/admin_token'
     try:

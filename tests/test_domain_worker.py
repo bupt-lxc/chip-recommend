@@ -12,6 +12,13 @@ from chip_model.pipeline.domain_discovery.store import RunStore
 ROOT = Path(__file__).parents[1]
 
 
+@pytest.fixture(autouse=True)
+def readable_worker_default(tmp_path):
+    import sqlite3
+    with sqlite3.connect(tmp_path / 'data.db') as db:
+        db.execute('CREATE TABLE worker_fixture (id TEXT)')
+
+
 def worker_module():
     path = ROOT / 'scripts/hermes_domain_worker.py'
     assert path.is_file(), 'host V3 worker is missing'
@@ -73,7 +80,7 @@ def test_old_dispatcher_does_not_touch_v3(tmp_path):
 def test_worker_runs_runtime_with_single_generation(deps):
     from chip_model.pipeline.manual_control import queue_domain_run
     root = deps['source_db'].parent
-    receipt = queue_domain_run({'domain':'specs','request_id':'runtime-worker'}, data_root=root)
+    receipt = queue_domain_run({'domain':'specs','request_id':'runtime-worker'}, data_root=root,source_db=deps['source_db'])
     worker = worker_module()
     result = worker.work_once(root, dependencies=deps)
     assert result[0]['status'] == 'no_findings', result
@@ -119,7 +126,7 @@ def test_preflight_reports_missing_capabilities_without_creating_state(tmp_path,
 def test_worker_default_missing_hermes_is_persisted_failed(deps, monkeypatch):
     monkeypatch.setenv('HERMES_CLI_COMMAND','missing-hermes-fixture')
     root = deps['source_db'].parent
-    receipt = manual_control.queue_domain_run({'domain':'specs','request_id':'missing-hermes'},data_root=root)
+    receipt = manual_control.queue_domain_run({'domain':'specs','request_id':'missing-hermes'},data_root=root,source_db=deps['source_db'])
     injected = {k:v for k,v in deps.items() if k != 'hermes_runner'}
     result = worker_module().work_once(root,dependencies=injected)[0]
     assert result['status'] == 'failed'
@@ -143,7 +150,7 @@ def test_preclaimed_wrong_owner_fails_without_release(deps):
 def test_worker_sigterm_marks_interrupted_and_fences_late_callbacks(deps):
     import threading
     root = deps['source_db'].parent
-    receipt = manual_control.queue_domain_run({'domain':'specs','request_id':'stop'},data_root=root)
+    receipt = manual_control.queue_domain_run({'domain':'specs','request_id':'stop'},data_root=root,source_db=deps['source_db'])
     stop = threading.Event()
     entered = threading.Event()
     class Blocking:
@@ -415,7 +422,7 @@ def test_preflight_existing_control_is_readonly_and_defers_write_transactions(de
 def test_worker_before_first_budget_inherits_queued_timeout(deps,monkeypatch):
     from chip_model.pipeline.domain_discovery import runtime
     root = deps['source_db'].parent
-    receipt = manual_control.queue_domain_run({'domain':'specs','request_id':'worker-timeout'},data_root=root,timeout=1)
+    receipt = manual_control.queue_domain_run({'domain':'specs','request_id':'worker-timeout'},data_root=root,source_db=deps['source_db'],timeout=1)
     monkeypatch.setattr(runtime,'_execute_domain',lambda *a: {'status':'no_findings'})
     out = worker_module().work_once(root,dependencies={**deps,'timeout':1800})[0]
     assert out['status'] == 'no_findings'
@@ -433,3 +440,179 @@ def test_preflight_rejects_control_schema_without_required_keys(deps,monkeypatch
     report = worker_module().check_environment(root)
     assert report['status'] == 'failed'
     assert next(c for c in report['checks'] if c['item']=='control_database')['ok'] is False
+
+
+def _marker_db(path,value):
+    import sqlite3
+    with sqlite3.connect(path) as db:
+        db.execute('CREATE TABLE marker (value TEXT)')
+        db.execute('INSERT INTO marker VALUES (?)',(value,))
+    return path
+
+
+def test_cli_nonstandard_source_survives_independent_worker_race(tmp_path,capsys,monkeypatch):
+    import sqlite3
+    from scripts import run_hermes_open_web_test as cli, hermes_domain_worker as host
+    default=_marker_db(tmp_path / 'data.db','default')
+    chosen=_marker_db(tmp_path / 'chosen.db','chosen')
+    real=host.work_once
+    seen=[]
+    def execute(request,deps):
+        with sqlite3.connect(deps['source_db'].as_uri()+'?mode=ro',uri=True) as db:
+            seen.append(db.execute('SELECT value FROM marker').fetchone()[0])
+        out={'status':'no_findings'}
+        deps['store'].finish_run(deps['preclaimed']['run_id'],deps['preclaimed']['generation'],out)
+        return out
+    def race(root,**kwargs):
+        # Another host owns no CLI in-memory dependencies at all.
+        real(root,executor=execute)
+        return real(root,**kwargs)
+    monkeypatch.setattr(host,'work_once',race)
+    assert cli.main(['--domain','specs','--db',str(chosen),'--request-id','race-source'],executor=execute) == 0
+    assert seen == ['chosen']
+    assert json.loads(capsys.readouterr().out)['status'] == 'no_findings'
+
+
+def test_internal_source_configuration_is_atomic_and_rejects_changes(tmp_path):
+    _marker_db(tmp_path / 'chosen.db','chosen')
+    _marker_db(tmp_path / 'other.db','other')
+    receipt=manual_control.queue_domain_run({'domain':'specs','request_id':'bound'},data_root=tmp_path,source_db=tmp_path / 'chosen.db')
+    store=RunStore(tmp_path / 'domain_runs')
+    assert store.dispatch_request(receipt['run_id'])['source_locator'] == 'chosen.db'
+    for payload in ({'domain':'specs','request_id':'bound'}, {'domain':'specs','request_id':'resume','resume_run_id':receipt['run_id']}):
+        with pytest.raises(ValueError,match='来源'):
+            manual_control.queue_domain_run(payload,data_root=tmp_path,source_db=tmp_path / 'other.db')
+    assert store.dispatch_request(receipt['run_id'])['source_locator'] == 'chosen.db'
+
+
+def test_source_outside_shared_root_rejected_before_queue(tmp_path):
+    shared=tmp_path / 'shared'
+    shared.mkdir()
+    outside=_marker_db(tmp_path / 'outside.db','outside')
+    with pytest.raises(ValueError,match='来源'):
+        manual_control.queue_domain_run({'domain':'specs'},data_root=shared,source_db=outside)
+    assert not (shared / 'domain_runs').exists()
+
+@pytest.mark.parametrize('resume',[False,True])
+def test_direct_runtime_source_binding_rejects_changed_dependencies(tmp_path,monkeypatch,resume):
+    import sqlite3
+    from chip_model.pipeline.domain_discovery import runtime
+    chosen=_marker_db(tmp_path / 'chosen.db','chosen')
+    other=_marker_db(tmp_path / 'other.db','other')
+    store=RunStore(tmp_path / 'domain_runs')
+    seen=[]
+    def execute(*args):
+        with sqlite3.connect(args[-1]['source_db'].as_uri()+'?mode=ro',uri=True) as db:
+            seen.append(db.execute('SELECT value FROM marker').fetchone()[0])
+        return {'status':'no_findings','run_id':args[1]}
+    monkeypatch.setattr(runtime,'_execute_domain',execute)
+    request={'domain':'specs','chip':None,'scope_type':'discovery','resume_run_id':None}
+    dependencies={'source_db':chosen,'store':store,'request_id':'source-key'}
+    original=runtime.run_domain(request,dependencies)
+    events=store.events(original['run_id'])
+    retry={**request,'resume_run_id':original['run_id']} if resume else request
+    with pytest.raises(ValueError,match='来源'):
+        runtime.run_domain(retry,{**dependencies,'source_db':other})
+    assert store.events(original['run_id']) == events
+    assert store.dispatch_request(original['run_id'])['source_locator']=='chosen.db'
+    assert seen == ['chosen']
+
+
+def test_locator_is_persisted_even_if_run_initialization_crashes(tmp_path,monkeypatch):
+    _marker_db(tmp_path / 'chosen.db','chosen')
+    ensure=RunStore._ensure_run
+    monkeypatch.setattr(RunStore,'_ensure_run',lambda *a: (_ for _ in ()).throw(OSError('start crash')))
+    with pytest.raises(OSError,match='start crash'):
+        manual_control.queue_domain_run({'domain':'specs','request_id':'crash-source'},data_root=tmp_path,
+            source_db=tmp_path / 'chosen.db',timeout=7)
+    monkeypatch.setattr(RunStore,'_ensure_run',ensure)
+    store=RunStore(tmp_path / 'domain_runs')
+    with store._connect() as db:
+        record=dict(db.execute('SELECT * FROM dispatches').fetchone())
+    assert record['source_locator']=='chosen.db' and record['timeout_seconds']==7 and record['request_key']=='crash-source'
+
+
+def test_resume_and_host_continue_using_original_locator(tmp_path,capsys,monkeypatch):
+    import sqlite3
+    from scripts import run_hermes_open_web_test as cli,hermes_domain_worker as host
+    chosen=_marker_db(tmp_path / 'chosen.db','chosen')
+    receipt=manual_control.queue_domain_run({'domain':'specs','request_id':'first-source'},data_root=tmp_path,source_db=chosen)
+    store=RunStore(tmp_path / 'domain_runs')
+    generation=store.claim(receipt['run_id'],'stopped',5)
+    store.finish_run(receipt['run_id'],generation,{'status':'interrupted'})
+    monkeypatch.setattr(cli,'get_db_path',lambda: tmp_path / 'data.db')
+    seen=[]
+    def execute(request,deps):
+        with sqlite3.connect(deps['source_db'].as_uri()+'?mode=ro',uri=True) as db:
+            seen.append(db.execute('SELECT value FROM marker').fetchone()[0])
+        out={'status':'no_findings'}
+        deps['store'].finish_run(deps['preclaimed']['run_id'],deps['preclaimed']['generation'],out)
+        return out
+    assert cli.main(['--domain','specs','--resume',receipt['run_id'],'--request-id','resume-source'],executor=execute)==0
+    assert seen==['chosen']
+    assert store.dispatch_request(receipt['run_id'])['source_locator']=='chosen.db'
+
+
+def test_missing_legacy_locator_fails_closed_without_baseline_rewrite(tmp_path):
+    import sqlite3
+    chosen=_marker_db(tmp_path / 'chosen.db','chosen')
+    store=RunStore(tmp_path / 'domain_runs')
+    payload={'domain':'specs','chip':None,'scope_type':'discovery','resume_run_id':None}
+    store.start('legacy-key',payload,'legacy-run',source_locator='chosen.db')
+    before=store.get_run('legacy-run')
+    with store._connect() as db:
+        db.execute('ALTER TABLE dispatches DROP COLUMN source_locator')
+    reopened=RunStore(store.root)
+    with pytest.raises(ValueError,match='未配置'):
+        reopened.dispatch_request('legacy-run')
+    with pytest.raises(ValueError,match='未配置'):
+        reopened.start('legacy-key',payload,'unused',source_locator='chosen.db')
+    assert reopened.get_run('legacy-run')==before
+    assert reopened.events('legacy-run')==[]
+
+def test_source_sqlite_lock_is_inside_active_budget_and_persists_terminal(deps):
+    import sqlite3,time
+    root=deps['source_db'].parent
+    receipt=manual_control.queue_domain_run({'domain':'specs','request_id':'locked-source'},data_root=root,
+        source_db=deps['source_db'],timeout=1)
+    blocker=sqlite3.connect(deps['source_db'],isolation_level=None)
+    blocker.execute('BEGIN EXCLUSIVE')
+    start=time.monotonic()
+    try:
+        out=worker_module().work_once(root,dependencies=deps)[0]
+        elapsed=time.monotonic()-start
+        assert elapsed < 3, (elapsed,out)
+        assert out['status'] in {'partial','failed'} and out.get('terminal_persisted') is not False,out
+        store=RunStore(root / 'domain_runs')
+        state=store.metadata(receipt['run_id'],'domain_budget.v1')
+        assert state is not None and state['active_limit_ms']==1000 and state['active_ms']>=1000
+        assert store.get_run(receipt['run_id'])['status']==out['status']
+        assert store.dispatchable_runs()==[]
+    finally:
+        blocker.rollback()
+        blocker.close()
+    resumed=manual_control.queue_domain_run({'domain':'specs','resume_run_id':receipt['run_id'],'request_id':'unlock-resume'},data_root=root)
+    result=worker_module().work_once(root,dependencies=deps)[0]
+    assert result['status']=='partial'
+    assert RunStore(root / 'domain_runs').metadata(receipt['run_id'],'domain_budget.v1')['active_limit_ms']==1000
+
+
+def test_shared_relative_locator_survives_different_container_host_paths(tmp_path):
+    import shutil,sqlite3
+    container=tmp_path / 'container-data'
+    host=tmp_path / 'host-data'
+    container.mkdir()
+    chosen=_marker_db(container / 'chosen.db','mapped-source')
+    receipt=manual_control.queue_domain_run({'domain':'specs','request_id':'mapped'},data_root=container,source_db=chosen)
+    shutil.copytree(container,host)
+    seen=[]
+    def execute(request,deps):
+        assert deps['source_db']==host / 'chosen.db'
+        with sqlite3.connect(deps['source_db'].as_uri()+'?mode=ro',uri=True) as db:
+            seen.append(db.execute('SELECT value FROM marker').fetchone()[0])
+        out={'status':'no_findings'}
+        deps['store'].finish_run(deps['preclaimed']['run_id'],deps['preclaimed']['generation'],out)
+        return out
+    assert worker_module().work_once(host,executor=execute)[0]['status']=='no_findings'
+    assert seen==['mapped-source']
+    assert RunStore(host / 'domain_runs').dispatch_request(receipt['run_id'])['source_locator']=='chosen.db'

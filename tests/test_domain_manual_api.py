@@ -104,3 +104,57 @@ def test_api_storage_failure_returns_503(client, monkeypatch):
     monkeypatch.setattr(store.RunStore,'start',unavailable)
     result = api.post('/api/v1/data-agent/manual-run',headers=headers,json={'domain':'specs','request_id':'unavailable'})
     assert result.status_code == 503 and 'fixture shared volume unavailable' in result.text
+
+@pytest.mark.parametrize('marker',[{'scope_type':'discovery'}, {'schema_version':'hermes-open-web-v3'}, {'contract_version':3}])
+def test_contract_markers_cannot_enter_legacy_queue(client,marker):
+    api,headers,source=client
+    body={'mode':'test',**marker}
+    assert api.post('/api/v1/data-agent/manual-run',json=body).status_code == 401
+    assert api.post('/api/v1/data-agent/manual-run',headers=headers,json=body).status_code == 400
+    assert not list((source.parent / 'manual_control/requests').glob('*.json'))
+
+
+def test_api_persists_configured_nonstandard_source_for_host(client,monkeypatch):
+    api,headers,default=client
+    chosen=default.parent / 'chosen.db'
+    with sqlite3.connect(chosen) as db:
+        db.execute('CREATE TABLE marker (value TEXT)')
+        db.execute("INSERT INTO marker VALUES ('chosen-api')")
+    set_db_path(chosen)
+    result=api.post('/api/v1/data-agent/manual-run',headers=headers,json={'domain':'specs','request_id':'chosen-api'})
+    assert result.status_code == 202
+    store=RunStore(default.parent / 'domain_runs')
+    assert store.dispatch_request(result.json()['run_id'])['source_locator'] == 'chosen.db'
+    assert 'source_locator' not in store.get_run(result.json()['run_id'])['payload']
+    from scripts import hermes_domain_worker as worker
+    seen=[]
+    def execute(request,deps):
+        with sqlite3.connect(deps['source_db'].as_uri()+'?mode=ro',uri=True) as db:
+            seen.append(db.execute('SELECT value FROM marker').fetchone()[0])
+        out={'status':'no_findings'}
+        deps['store'].finish_run(deps['preclaimed']['run_id'],deps['preclaimed']['generation'],out)
+        return out
+    worker.work_once(default.parent,executor=execute)
+    assert seen == ['chosen-api']
+
+@pytest.mark.parametrize('key',['source_locator','source_db','data_root'])
+def test_internal_source_fields_are_not_public_api_parameters(client,key):
+    api,headers,source=client
+    response=api.post('/api/v1/data-agent/manual-run',headers=headers,json={'mode':'test','domain':'specs',key:'arbitrary-path'})
+    assert response.status_code == 400
+    assert not list((source.parent / 'manual_control/requests').glob('*.json'))
+
+
+def test_api_binding_does_not_wait_for_exclusive_source_lock(client):
+    import time
+    api,headers,source=client
+    blocker=sqlite3.connect(source,isolation_level=None)
+    blocker.execute('BEGIN EXCLUSIVE')
+    try:
+        started=time.monotonic()
+        response=api.post('/api/v1/data-agent/manual-run',headers=headers,json={'domain':'specs','request_id':'locked-api'})
+        assert response.status_code==202,response.text
+        assert time.monotonic()-started < 1.5
+    finally:
+        blocker.rollback()
+        blocker.close()

@@ -20,7 +20,7 @@ import sqlite3
 import time
 import uuid
 from contextlib import closing, contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .contracts import _start_request_id, validate_run_id
 
@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS runs (
     status TEXT NOT NULL, stage TEXT NOT NULL, initialized INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS dispatches (
-    run_id TEXT PRIMARY KEY, request_key TEXT NOT NULL, timeout_seconds INTEGER NOT NULL
+    run_id TEXT PRIMARY KEY, request_key TEXT NOT NULL, timeout_seconds INTEGER NOT NULL,
+    source_locator TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS leases (
     run_id TEXT PRIMARY KEY, owner TEXT, generation INTEGER NOT NULL DEFAULT 0,
@@ -142,6 +143,39 @@ def consistent_backup(source, destination):
         raise
 
 
+def validate_source_locator(locator):
+    """Internal portable path only; container absolute paths never cross hosts."""
+    if (not isinstance(locator, str) or not locator or ':' in locator or '\\' in locator
+            or PurePosixPath(locator).is_absolute() or any(part in {'', '.', '..'} for part in locator.split('/'))
+            or any(ord(char) < 32 for char in locator)):
+        raise ValueError('来源数据库定位未配置或不安全；需要共享数据目录内的相对路径')
+    return locator
+
+
+def resolve_source_locator(data_root, locator):
+    root = Path(data_root).resolve()
+    locator = validate_source_locator(locator)
+    source = (root / locator).resolve()
+    if not source.is_relative_to(root):
+        raise ValueError('来源数据库越出共享数据目录')
+    if not source.is_file() or not os.access(source, os.R_OK) or source.stat().st_size == 0:
+        raise ValueError('来源数据库必须为可读、已初始化的 SQLite 常规文件')
+    # No SQLite connection/PRAGMA here: an exclusive source lock must not
+    # block binding or the interval between lease claim and active supervision.
+    # The runtime's supervised readonly backup and schema checks validate it.
+    return source
+
+
+def source_locator_for(data_root, source_db):
+    root, source = Path(data_root).resolve(), Path(source_db).resolve()
+    try:
+        locator = source.relative_to(root).as_posix()
+    except ValueError as exc:
+        raise ValueError('来源数据库必须位于共享数据目录内') from exc
+    resolve_source_locator(root, locator)
+    return locator
+
+
 class RunStore:
     """Connection-per-operation store; a clock returns persistent epoch seconds."""
 
@@ -151,6 +185,9 @@ class RunStore:
         self.root.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(_CONTROL_DDL)
+            columns = {row[1] for row in conn.execute('PRAGMA table_info(dispatches)')}
+            if 'source_locator' not in columns:
+                conn.execute("ALTER TABLE dispatches ADD COLUMN source_locator TEXT NOT NULL DEFAULT ''")
 
     def _contained(self, path):
         resolved = path.resolve()
@@ -247,7 +284,7 @@ class RunStore:
                 'created_at': row['created_at'], 'status': run['status'], 'stage': run['stage'],
                 'pipeline': run['pipeline'], 'contract_version': run['contract_version']}
 
-    def start(self, key, payload, run_id, *, timeout=1800):
+    def start(self, key, payload, run_id, *, timeout=1800, source_locator="data.db"):
         """Bind normalized business payload before initialization; replay its ID.
 
         The caller separates the idempotency key from its normalized payload.
@@ -255,6 +292,7 @@ class RunStore:
         """
         if type(timeout) is not int or not 1 <= timeout <= 1800:
             raise ValueError('timeout 必须为 1..1800 秒整数')
+        source_locator = validate_source_locator(source_locator)
         path = self.run_path(run_id)
         key = _key(key)
         payload_json = _json(payload)
@@ -264,6 +302,11 @@ class RunStore:
             if existing is not None:
                 if existing['payload_hash'] != payload_hash:
                     raise ValueError('启动请求幂等键 payload 冲突')
+                config = conn.execute('SELECT source_locator FROM dispatches WHERE run_id=?', (existing['run_id'],)).fetchone()
+                if config is None or not config['source_locator']:
+                    raise ValueError('原运行来源数据库定位未配置；不能猜测默认来源')
+                if config['source_locator'] != source_locator:
+                    raise ValueError('启动请求来源数据库冲突')
                 binding = self._binding(conn, existing)
             else:
                 if conn.execute('SELECT 1 FROM runs WHERE path_key=?', (run_id.casefold(),)).fetchone():
@@ -275,14 +318,14 @@ class RunStore:
                 conn.execute('INSERT INTO runs VALUES (?,?,?,?,?,?,?)',
                              (run_id, run_id.casefold(), PIPELINE, CONTRACT_VERSION, 'preparing', 'preparing', 0))
                 conn.execute('INSERT INTO leases(run_id) VALUES (?)', (run_id,))
-                conn.execute('INSERT INTO dispatches VALUES (?,?,?)', (run_id, key, timeout))
+                conn.execute('INSERT INTO dispatches VALUES (?,?,?,?)', (run_id, key, timeout, source_locator))
                 binding = self._binding(conn, conn.execute('SELECT * FROM starts WHERE request_key=?', (key,)).fetchone())
         # A crash here leaves the original durable binding. Bootstrap repair is
         # allowed only until the run schema and initialized marker commit together.
         self._ensure_run(binding['run_id'])
         return binding
 
-    def queue_resume(self, key, payload):
+    def queue_resume(self, key, payload, *, source_locator=None):
         """Bind an explicit resume, preserving all original budget/configuration."""
         key = _key(key)
         run_id = payload['resume_run_id']
@@ -291,6 +334,11 @@ class RunStore:
         canonical = {**payload, 'chip': chip, 'scope_type': 'chip' if chip else 'discovery'}
         encoded = _json(canonical)
         with self._transaction(run_id) as conn:
+            config = conn.execute('SELECT * FROM dispatches WHERE run_id=?', (run_id,)).fetchone()
+            if config is None or not config['source_locator']:
+                raise ValueError('原运行来源数据库定位未配置；不能猜测默认来源')
+            if source_locator is not None and config['source_locator'] != validate_source_locator(source_locator):
+                raise ValueError('续跑来源数据库与原运行冲突')
             existing = conn.execute('SELECT * FROM starts WHERE request_key=?', (key,)).fetchone()
             if existing is not None:
                 if existing['payload_hash'] != _hash(encoded):
@@ -302,9 +350,7 @@ class RunStore:
             if lease['owner'] is not None and lease['expires_at'] > self.clock():
                 raise ValueError('运行已有有效租约，不能续跑')
             conn.execute('INSERT INTO starts VALUES (?,?,?,?,?)', (key, _hash(encoded), encoded, run_id, self.clock()))
-            config = conn.execute('SELECT * FROM dispatches WHERE run_id=?', (run_id,)).fetchone()
-            timeout = config['timeout_seconds'] if config is not None else 1800
-            conn.execute('INSERT OR REPLACE INTO dispatches VALUES (?,?,?)', (run_id, key, timeout))
+            conn.execute('UPDATE dispatches SET request_key=? WHERE run_id=?', (key, run_id))
             conn.execute("UPDATE runs SET status='preparing',stage='preparing' WHERE run_id=?", (run_id,))
             return self._binding(conn, conn.execute('SELECT * FROM starts WHERE request_key=?', (key,)).fetchone())
 
@@ -312,10 +358,10 @@ class RunStore:
         with self._connect() as conn:
             self._run(conn, run_id)
             row = conn.execute('SELECT * FROM dispatches WHERE run_id=?', (run_id,)).fetchone()
-            if row is None:
-                return {'request_id': self.get_run(run_id)['request_key'], 'timeout': 1800}
+            if row is None or not row['source_locator']:
+                raise ValueError('原运行来源数据库定位未配置；不能猜测默认来源')
             binding = conn.execute('SELECT * FROM starts WHERE request_key=?', (row['request_key'],)).fetchone()
-            return {'request_id': row['request_key'], 'timeout': row['timeout_seconds'], 'payload': json.loads(binding['payload_json'])}
+            return {'request_id': row['request_key'], 'timeout': row['timeout_seconds'], 'source_locator': validate_source_locator(row['source_locator']), 'payload': json.loads(binding['payload_json'])}
 
     def dispatchable_runs(self):
         """Only queued or crashed workers; terminal runs need explicit resume."""
