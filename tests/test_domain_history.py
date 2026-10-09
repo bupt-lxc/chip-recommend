@@ -11,6 +11,41 @@ from chip_model.pipeline.domain_discovery import history
 from chip_model.pipeline.domain_discovery.store import RunStore
 
 
+def test_skill_usage_keeps_domain_observations_separate_and_missing_unknown():
+    events = [
+        {'sequence': 1, 'payload': {'executor': 'backend_extract', 'domain_id': 'specs', 'kind': 'loaded'}},
+        {'sequence': 2, 'payload': {'executor': 'backend_extract', 'domain_id': 'compute', 'kind': 'executed'}},
+        {'sequence': 3, 'payload': {'executor': 'hermes', 'kind': 'loaded', 'resolver': {'files': {}}}},
+    ]
+    before = copy.deepcopy(events)
+    extract, hermes = history.project_skill_usage(events)
+    assert extract['scope'] == 'executor_observations'
+    assert extract['domain_usage']['specs']['loaded'] is True
+    assert extract['domain_usage']['specs']['executed'] is None
+    assert extract['domain_usage']['compute']['loaded'] is None
+    assert extract['domain_usage']['compute']['executed'] is True
+    assert extract['domain_usage']['specs']['evidence_refs'] == ['events/1']
+    assert hermes['executed'] is None and hermes['domain_usage'] == {}
+    assert events == before
+
+
+def test_skill_usage_ignores_damaged_event_shapes_without_inventing_execution():
+    assert history.project_skill_usage(None) == []
+    assert history.project_skill_usage({'executor': 'hermes'}) == []
+    assert history.project_skill_usage([None, [], {'payload': []}, {'payload': {'executor': [], 'kind': 'loaded'}}]) == []
+
+
+def test_skill_usage_redacts_diagnostic_secrets_and_does_not_verify_recorded_resolver():
+    events = [{'sequence': 1, 'payload': {'executor': 'hermes', 'kind': 'loaded',
+        'resolver': {'files': {'Fixture-file': {'path': 'Bearer fixture-secret', 'api_key': 'fixture-key'}}}}}]
+    before = copy.deepcopy(events)
+    usage = history.project_skill_usage(events)
+    assert usage[0]['verification'] == 'recorded_audit_only'
+    assert usage[0]['executed'] is None
+    assert 'fixture-secret' not in json.dumps(usage) and 'fixture-key' not in json.dumps(usage)
+    assert events == before
+
+
 @pytest.mark.parametrize('basis,label', [
     (None,'旧值未记录'), ('new_entity','本轮基线无此实体'),
     ('entity_absent','本轮基线无此实体'), ('relation_absent','本轮基线无此关系'),

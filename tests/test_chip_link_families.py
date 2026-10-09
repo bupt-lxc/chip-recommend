@@ -157,7 +157,9 @@ def test_discovered_catalogue_child_reuses_this_cycles_visit(tmp_path: Path):
 
 
 def test_family_api_is_admin_only_and_selection_does_not_write_formal_db(tmp_path: Path):
+    from tests.test_domain_acceptance import logical_digest
     formal = _db(tmp_path)
+    before, _ = logical_digest(formal, tmp_path / 'Fixture-family-before.db')
     original = get_db_path()
     set_db_path(formal)
     try:
@@ -169,7 +171,13 @@ def test_family_api_is_admin_only_and_selection_does_not_write_formal_db(tmp_pat
         headers = {"X-Data-Agent-Admin": "test-only-token"}
         formal_run = client.post("/api/v1/data-agent/manual-run", headers=headers,
                                  json={"mode": "formal", "limit": 5})
-        assert formal_run.status_code == 422
+        # Raw JSON validation now returns the explicit 400 rejection contract.
+        assert formal_run.status_code == 400
+        assert '正式巡检已暂停' in formal_run.json()['detail']
+        assert not list((formal.parent / 'manual_control/requests').glob('*.json'))
+        assert not (formal.parent / 'domain_runs').exists()
+        rejected, _ = logical_digest(formal, tmp_path / 'Fixture-family-rejected.db')
+        assert rejected == before
         families = client.get("/api/v1/data-agent/families", headers=headers).json()["families"]
         assert families
         family = families[0]
@@ -182,5 +190,7 @@ def test_family_api_is_admin_only_and_selection_does_not_write_formal_db(tmp_pat
         assert client.get("/api/v1/data-agent/families", headers=headers).json()["selection"]["parent_url"] == family["parent_url"]
         with sqlite3.connect(formal) as db:
             assert db.execute("SELECT COUNT(*) FROM link_library").fetchone()[0] == 0
+        selected_digest, _ = logical_digest(formal, tmp_path / 'Fixture-family-selected.db')
+        assert selected_digest == before
     finally:
         set_db_path(original)

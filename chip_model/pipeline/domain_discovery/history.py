@@ -389,6 +389,56 @@ def project_stage_views(stages, models, pages, tasks):
     return views
 
 
+def project_skill_usage(events):
+    """Expose only saved executor audits; missing execution stays unrecorded.
+
+    File closure is the actual Hermes resolver report. Backend references come
+    from each producer's loaded event, without fabricating a host/SDK proof.
+    Event sequence references keep all original observations inspectable.
+    """
+    if not isinstance(events, list):
+        return []
+    rows = {}
+    for event in events:
+        if not isinstance(event, dict) or type(event.get('sequence')) is not int:
+            continue
+        audit = event.get('payload')
+        if not isinstance(audit, dict) or not isinstance(audit.get('executor'), str) or audit['executor'] not in {
+                'hermes', 'backend_extract', 'backend_review'}:
+            continue
+        if not isinstance(audit.get('kind'), str) or audit['kind'] not in {'loaded', 'executed'}:
+            continue
+        executor = audit['executor']
+        row = rows.setdefault(executor, {'executor': executor, 'loaded': None, 'executed': None,
+            'scope': 'executor_observations', 'verification': 'recorded_audit_only', 'domain_usage': {},
+            'domains': [], 'loaded_file_count': 0, 'loads': [], 'evidence_refs': []})
+        row[audit['kind']] = True
+        domain = audit.get('domain_id')
+        ref = 'events/' + str(event.get('sequence'))
+        if isinstance(domain, str) and domain in DOMAIN_LABELS:
+            if domain not in row['domains']:
+                row['domains'].append(domain)
+            usage = row['domain_usage'].setdefault(domain, {'loaded': None, 'executed': None, 'evidence_refs': []})
+            usage[audit['kind']] = True
+            if ref not in usage['evidence_refs']:
+                usage['evidence_refs'].append(ref)
+        else:
+            domain = None
+        if ref not in row['evidence_refs']:
+            row['evidence_refs'].append(ref)
+        if audit['kind'] == 'loaded':
+            resolver = audit.get('resolver') or {}
+            files = resolver.get('files') if isinstance(resolver, dict) else None
+            references = audit.get('reference_hashes')
+            files = files if isinstance(files, dict) else references if isinstance(references, dict) else {}
+            row['loaded_file_count'] = max(row['loaded_file_count'], len(files))
+            row['loads'].append({'domain_id': domain, 'phase': audit.get('phase'),
+                'bundle_sha256': audit.get('bundle_sha256'), 'input_sha256': audit.get('input_sha256'),
+                'files': copy.deepcopy(files), 'evidence_ref': ref})
+    from .search import redact
+    return redact(list(rows.values()))
+
+
 def read_v3_run(root,run_id):
     """Read one SQLite snapshot plus original optional exports without mutation.
 
@@ -471,6 +521,7 @@ def read_v3_run(root,run_id):
         'search':search,'pages':pages,'selection':metadata.get('domain_selection.v1') or {},
         'model_calls':[_diagnostic_call(c) for c in models.get('calls',[])], 'linked_tasks':tasks,
         'executor_proof':redact(metadata.get('domain_executor_audit.v1') or {}),
+        'actual_skill_usage':project_skill_usage(events),
         'baseline':copy.deepcopy(metadata.get('baseline')),
         'formal_database_modified':False,'formal_business_writes':0,'formal_provenance_writes':0,
         'raw_records':{'manifest':redact(manifest),'metadata':safe_metadata,'work':work,
