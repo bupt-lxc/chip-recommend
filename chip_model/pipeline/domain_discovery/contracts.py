@@ -1,6 +1,7 @@
 """Load bundle-owned discovery contracts and check real SQLite schemas."""
 
 import json
+import math
 import re
 import sqlite3
 import unicodedata
@@ -418,3 +419,93 @@ def validate_domain_schema(connection: sqlite3.Connection, contract: DomainContr
         missing = required - columns
         if missing:
             raise ValueError(f"Missing schema columns in {table}: {', '.join(sorted(missing))}")
+
+
+def _known_condition(value):
+    return isinstance(value, str) and value.strip() not in {'', 'unknown', 'not_applicable', 'generic'}
+
+
+def _positive_count(value):
+    try:
+        number = float(value)
+        return not isinstance(value, bool) and math.isfinite(number) and number > 0 and number.is_integer()
+    except (TypeError, ValueError):
+        return False
+
+
+def relation_readiness(candidate: dict, contract: DomainContract) -> dict:
+    """Restrict an audited relation using its frozen contract, without granting proof."""
+    domain = contract.domain_id
+    if candidate.get('domain_id') != domain:
+        raise ValueError('candidate and frozen domain mismatch')
+    table = candidate.get('target_table')
+    if candidate.get('field_name') not in contract.fields.get(table, []):
+        raise ValueError('field is outside frozen domain ownership')
+    if table == 'chips':
+        return {'status': 'ready', 'missing_conditions': []}
+    key, conditions = candidate.get('entity_key', {}), candidate.get('conditions', {})
+    missing = [name for name in contract.entity_keys[table] if not _known_condition(key.get(name))]
+    if domain == 'benchmark':
+        missing = [name for name in missing if name != 'chip_count']
+        if not _positive_count(key.get('chip_count')):
+            missing.append('chip_count')
+        minimum = contract.conditions['minimum_evidence']
+        if 'absolute_metric_and_unit' in minimum:
+            value = candidate.get('normalized_value')
+            try:
+                absolute = not isinstance(value, bool) and math.isfinite(float(value)) and float(value) >= 0
+            except (ValueError, TypeError):
+                absolute = False
+            if not absolute or not _known_condition(candidate.get('unit')):
+                missing.append('absolute_metric_and_unit')
+        if 'distinguishable_report_suite_configuration' in minimum:
+            if not any(_known_condition(conditions.get(name)) for name in ('hardware_config', 'hardware_configuration', 'configuration_id')):
+                missing.append('report_configuration')
+        training = key.get('workload_type') == 'training'
+        generative = contract.conditions['generative_metrics']
+        if not training and (conditions.get('metric_class') in generative['applies_to']
+                or candidate.get('field_name') in {'time_to_first_token_ms','inter_token_latency_ms','tpot_ms'}
+                or (candidate.get('unit') in {'tokens/s', 'ms/token'} and conditions.get('metric_class') != 'nongenerative')):
+            for name in generative['required']:
+                present = any(_positive_count(conditions.get(n)) for n in ('batch_size', 'concurrency')) if name == 'batch_size_or_concurrency' else _positive_count(conditions.get(name))
+                if not present:
+                    missing.append(name)
+        if training:
+            missing.extend(name for name in contract.conditions['training_metrics']['required']
+                           if not _known_condition(conditions.get(name)))
+    elif domain == 'deployment':
+        for name, declaration in [('chip_model', 'chip_applicability'), ('model_id', 'model_applicability')]:
+            value = key.get(name)
+            if value in {'generic', 'not_applicable'}:
+                if conditions.get(declaration) == value:
+                    missing = [n for n in missing if n != name]
+                elif name not in missing:
+                    missing.append(name)
+        from .search import canonical_url
+        try:
+            canonical_url(key.get('url'))
+        except (ValueError, TypeError, AttributeError):
+            missing.append('url')
+    elif domain == 'compatibility' and candidate.get('field_name') == 'compat_status':
+        status = candidate.get('normalized_value')
+        strength = contract.conditions['compat_status'].get(status)
+        if strength == 'actual_verification' and (candidate.get('source_type') == 'vendor_claim'
+                or candidate.get('evidence_kind') != 'measured'
+                or conditions.get('verification_kind') not in {'actual_test', 'reproducible_validation'}):
+            return {'status': 'rejected', 'reason': 'verification_strength_mismatch', 'missing_conditions': []}
+        if strength == 'vendor_statement' and candidate.get('source_type') not in {'vendor_claim', 'official_datasheet', 'official_news'}:
+            return {'status': 'rejected', 'reason': 'verification_strength_mismatch', 'missing_conditions': []}
+    return {'status': 'unresolved' if missing else 'ready',
+            'reason': 'incomplete_evidence' if missing else 'minimum_conditions_passed',
+            'missing_conditions': sorted(set(missing))}
+
+
+def benchmark_comparison_key(candidate: dict) -> str:
+    """All observed conditions, preserving opaque model/report identifiers.
+
+    Unknown optional values differ from explicit values. A partial comparison
+    key cannot by itself authorize matching or updating a historical record.
+    """
+    from .store import _json
+    return _json({'entity_key': candidate.get('entity_key', {}),
+                  'conditions': candidate.get('conditions', {})})
