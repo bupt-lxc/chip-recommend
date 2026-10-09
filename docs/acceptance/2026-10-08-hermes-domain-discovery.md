@@ -107,4 +107,4 @@ Task15 日志名称与结果来自控制代理执行交接，原始日志不在�
 
 默认 `data/domain_runs/` 已加入 `.gitignore`，`git check-ignore --no-index` 验证 control.sqlite3 与示例 run_id 中的 data.db/manifest.json/source_snapshots/raw.html 都命中该规则。没有忽略整个 data、删除或取消跟踪既有数据；自定义共享根仍由部署侧保护，不整体加入 Git。
 
-Task16 本地可交付为 **DONE_WITH_CONCERNS**：进入独立 SPEC→QUALITY 审查；计划真实预检、六域网络执行和真实抽查步骤保持未完成，整体验收未通过。下一步依赖可信宿主连接与实际环境能力；没有正式发布、heartbeat、远程服务启用或业务库写入授权扩展。
+Task16 本地交付已通过独立 **SPEC→QUALITY** 及最终集成审查，代码审查绑定 `39761a956a3ca049001109690f66c89a1ff2e95e`。QUALITY 独立窄回归为 **22 passed / 1.44s**，并复验 NO_PROXY、畸形代理、无 scheme 凭据、输出别名和只读边界；最终集成审查静态确认 Task1–15 核心未变。本地批准仅覆盖实现和交付材料，状态仍为 **DONE_WITH_CONCERNS**：真实预检、六域网络执行和真实抽查步骤保持未完成，整体验收未通过。下一步依赖可信宿主连接与实际环境能力；没有正式发布、heartbeat、远程服务启用或业务库写入授权扩展。

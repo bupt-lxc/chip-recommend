@@ -910,7 +910,7 @@ def assert_complete_positive_run(result, domain_id):
 
 **Files:** `scripts/probe_open_web_search.py`、`docs/open_web_test_runbook.md`、`docs/acceptance/2026-10-08-hermes-domain-discovery.md`。V3 真实运行产物使用 Task 4/12/13 已实现的同一 RunStore 根目录，默认 `data/domain_runs/<run_id>/`（控制库为 `data/domain_runs/control.sqlite3`）；配置其他共享根时，CLI、API、Worker 和历史读取必须一致，不另建测试注册表。`data/test_runs/` 仅为旧流程历史目录。不将含网页全文或大数据库的运行目录整体加入 Git。
 
-- [ ] **Step 1：编写探针并验证无密钥输出。** 探针提供 `--db/--output/--provider/--proxy` 参数；每个已配置源单独执行同一组短探针，保存实际请求词、HTTP/网络/解析结果、有效 URL 和脱敏代理配置。中文开放、英文开放、明确 SKU 三组分别检查，探针不成为生产固定模板。
+- [x] **Step 1：编写探针并验证无密钥输出。** 探针提供 `--db/--output/--provider/--proxy` 参数；每个已配置源单独执行同一组短探针，保存实际请求词、HTTP/网络/解析结果、有效 URL 和脱敏代理配置。中文开放、英文开放、明确 SKU 三组分别检查，探针不成为生产固定模板。
 
 ```python
 PROBES = [
@@ -935,8 +935,8 @@ python scripts/run_hermes_open_web_test.py --domain deployment
 
 每次先保存启动键与 run_id，重新提交时使用同键；续跑使用 `--resume <已有运行 ID>`，不重复创建六个新运行。六域实际成功或诊断完整的 no_findings 可通过该次网络检查；partial/failed 必须定位修复重验，不能因日志存在就勾选。no_findings 不替代 Task 15 的正向识别证据。逐域执行可接受，不要求同时并发六域。
 - [ ] **Step 4：浏览器与人工证据抽查。** 每域抽查最多 5 个最终通过候选，少于 5 个则全部检查；另检查产生的拒绝、仅来源变化、新实体和条件未解析。核对页面/快照位置、域规则 hash、模型调用、实体、旧值来源、新来源和界面状态能相互引用。单独报告 fixture 正向覆盖与真实互联网执行结果、模型/网络耗时及调用数、覆盖不足与失败；候选数量不是准确率。
-- [ ] **Step 5：写验收报告与 runbook。** 报告逐 A01–A14 标注通过/失败/未执行、实际 run_id/测试或截图路径、核验方式与限制。runbook 给出 CLI/API 同链路示例、调用方预生成 request_id、domain 字段全集、旧参数错误、分页/detail/finalize、恢复预算、宿主机/容器路径与只读边界。现有温度参数说明保留。正式库核验用一致性备份和业务摘要，在无其他写入窗口前后检查；有干扰重新核验。
-- [ ] **Step 6：提交文档与诊断脚本。** `git add scripts/probe_open_web_search.py docs/acceptance/2026-10-08-hermes-domain-discovery.md`；runbook 只暂存本任务新增部分，`git commit -m "docs: record domain discovery validation and operating procedures"`。未实际执行的检查保留“未执行”，禁止提前写“通过”。
+- [x] **Step 5：写验收报告与 runbook。** 报告逐 A01–A14 标注通过/失败/未执行、实际 run_id/测试或截图路径、核验方式与限制。runbook 给出 CLI/API 同链路示例、调用方预生成 request_id、domain 字段全集、旧参数错误、分页/detail/finalize、恢复预算、宿主机/容器路径与只读边界。现有温度参数说明保留。正式库核验用一致性备份和业务摘要，在无其他写入窗口前后检查；有干扰重新核验。
+- [x] **Step 6：提交文档与诊断脚本。** `git add scripts/probe_open_web_search.py docs/acceptance/2026-10-08-hermes-domain-discovery.md`；runbook 只暂存本任务新增部分，`git commit -m "docs: record domain discovery validation and operating procedures"`。未实际执行的检查保留“未执行”，禁止提前写“通过”。
 
 ## Spec 覆盖与实施检查
 
@@ -963,4 +963,4 @@ python scripts/run_hermes_open_web_test.py --domain deployment
 
 ## 执行交接
 
-计划完成后选择执行方式：子代理按任务实现并在每项做需求/代码两阶段审查，或当前会话分批执行并检查结果。执行前读取相应执行技能；本计划当前所有 checkbox 未勾选，代码片段和测试断言是实施约束，不能冒充已经实现或运行通过。
+已选择子代理按任务实现，每项经过需求/代码两阶段审查。Task1–15 已完成；Task16 本地脚本与文档经过两阶段及最终集成审查，真实宿主预检、六域网络运行和人工抽查仍未执行。当前状态以各任务 checklist 与验收记录为准；代码片段、fixture 和本地诊断不能替代真实环境验收证据。
