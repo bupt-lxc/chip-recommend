@@ -897,3 +897,46 @@ def test_generic_guide_requires_explicit_applicability_declaration(module, envir
                                         snapshot, pages.chunks(snapshot['snapshot_id'])['chunks'][0])
     assert program['status'] == 'unresolved'
     assert {'chip_model', 'model_id'}.issubset(program['missing_conditions'])
+
+
+@pytest.mark.parametrize('first_url,second_url', [
+    ('https://vendor.example/guides/A', 'https://vendor.example/guides/a'),
+    ('https://vendor.example/guide?variant=A', 'https://vendor.example/guide?variant=a'),
+])
+def test_distinct_case_sensitive_guide_urls_remain_independently_reviewed(module, environment, first_url, second_url):
+    pages, snapshot = page(environment, f'X80 PyTorch guides: {first_url} and {second_url}')
+    keys = {'url': first_url, 'title': 'X80 runtime guide', 'chip_model': 'X80',
+            'model_id': 'Qwen/Qwen3-8B', 'source_type': 'official_doc'}
+    first = fact(snapshot, domain_id='deployment', target_table='deployment_guides', field_name='backend',
+                 entity_key=keys, raw_value='PyTorch', normalized_value='PyTorch', unit=None, conversion={}, scope='relation')
+    second = copy.deepcopy(first)
+    second['entity_key']['url'] = second_url
+    assert module.logical_candidate_id(first) != module.logical_candidate_id(second)
+    store, gen, budget, clock, bundle = environment
+    client = FakeModel([{'facts': [first, second]}, {'verdict': 'accept', 'reason': 'First explicit guide.'},
+                        {'verdict': 'accept', 'reason': 'Second explicit guide.'}])
+    models = module.ModelService(store, 'run-a', gen, budget, pages, bundle, domain_id='deployment', client=client,
+                                monotonic=clock, backoff=lambda _: None)
+    result = models.extract_page(snapshot['snapshot_id'])
+    assert len(result['candidates']) == 2 and all(row['status'] == 'validated' for row in result['candidates'])
+    assert len(client.requests) == 3 and result['complete']
+
+
+def test_guide_url_host_case_is_equivalent_but_model_ids_are_opaque(module, environment):
+    pages, snapshot = page(environment, 'X80 PyTorch guide https://VENDOR.EXAMPLE/guides/A?variant=B for Qwen/ModelA')
+    first = fact(snapshot, domain_id='deployment', target_table='deployment_guides', field_name='backend',
+                 raw_value='PyTorch', normalized_value='PyTorch', unit=None, conversion={}, scope='relation',
+                 entity_key={'url': 'https://VENDOR.EXAMPLE/guides/A?variant=B', 'title': 'Runtime guide',
+                             'source_type': 'official_doc', 'chip_model': 'X80', 'model_id': 'Qwen/ModelA'})
+    second = copy.deepcopy(first)
+    second['entity_key']['url'] = 'https://vendor.example/guides/A?variant=B'
+    assert module.logical_candidate_id(first) == module.logical_candidate_id(second)
+    store, gen, budget, clock, bundle = environment
+    client = FakeModel([{'facts': [first]}, {'verdict': 'accept', 'reason': 'Explicit guide.'}])
+    models = module.ModelService(store, 'run-a', gen, budget, pages, bundle, domain_id='deployment', client=client,
+                                monotonic=clock, backoff=lambda _: None)
+    result = models.extract_page(snapshot['snapshot_id'])
+    cached = models.review_candidate(second)
+    assert cached == result['candidates'][0] and len(client.requests) == 2
+    second['entity_key']['model_id'] = 'Qwen/modela'
+    assert module.logical_candidate_id(first) != module.logical_candidate_id(second)

@@ -23,7 +23,7 @@ from ..candidate_validation import validate_fact_value
 from ..open_web_test import OpenAICompatibleExtractor
 from .contracts import DOMAINS, DomainContract, _reject_duplicate_keys
 from .rules import load_phase
-from .search import redact
+from .search import canonical_url, redact
 from .store import _file_hash, _hash, _json
 
 
@@ -230,18 +230,27 @@ def logical_candidate_id(candidate):
     evidence = candidate.get('evidence', {})
     if not isinstance(evidence, dict):
         evidence = {}
-    def canonical(value):
+    def canonical(value, field=None):
         if isinstance(value, str):
-            return ' '.join(value.split()).casefold()
+            if field == 'url':
+                try:
+                    return canonical_url(value.strip())
+                except ValueError:
+                    return value.strip()  # malformed evidence remains auditable
+            if field in {'vendor', 'chip_model', 'form_factor'}:
+                return ' '.join(value.split()).casefold()
+            # Model/report/document identifiers are opaque. Display-name
+            # rules cannot lowercase URI paths, query values or HF IDs.
+            return value.strip()
         if isinstance(value, dict):
-            return {key: int(item) if key == 'chip_count' and _positive_integral(item) else canonical(item)
+            return {key: int(item) if key == 'chip_count' and _positive_integral(item) else canonical(item, key)
                     for key, item in value.items()}
         return value
     hints = candidate.get('entity_hints', {})
     # Full SKU/vendor/model relation identity is carried by entity_key. The
     # extra physical variant dimensions are meaningful; free-form notes and
     # redundant full_sku hints must not create another logical fact or quota.
-    variants = {name: canonical(hints[name]) for name in ('capacity', 'form_factor')
+    variants = {name: canonical(hints[name], name) for name in ('capacity', 'form_factor')
                 if isinstance(hints, dict) and name in hints}
     if 'capacity' in variants:
         try:
