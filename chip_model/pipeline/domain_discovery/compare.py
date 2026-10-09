@@ -258,18 +258,18 @@ def _verify_current_review(store, run_id, row, version, review, call, proof):
     if started is None or not any(e.get('kind')=='model_call_finished' and e.get('execution_id')==call['execution_id']
                 and e.get('domain_id')==row['domain_id'] and e.get('phase')=='review' and e.get('status')=='completed' for e in events):
         raise _UnverifiableReview('current actual review execution audit missing')
-    # These hash-only producer fields do not change the operation/replay
-    # protocol. Older legitimate producers retain their saved basic proof.
+    # Hash-only producer fields leave the operation/replay protocol intact.
+    # Older missing candidate bindings stay unverifiable, never backfilled.
     if call.get('input_sha256') is not None:
-        if (call['input_sha256']!=version['input_sha256']
+        if (call.get('candidate_sha256')!=_hash(_json(version['candidate']))
+                or call['input_sha256']!=version['input_sha256']
                 or call['review_binding_sha256']!=row['review_binding_sha256']
                 or call['audited_request_sha256']!=_hash(_json(messages))
                 or any(started.get(name)!=call.get(name) for name in
-                       ('input_sha256','review_binding_sha256','audited_request_sha256'))):
+                       ('candidate_sha256','input_sha256','review_binding_sha256','audited_request_sha256'))):
             raise _UnverifiableReview('current original producer review hash association mismatch')
-    elif _hash(_json(messages))==operation['payload'].get('messages_sha256'):
-        # Unredacted older requests can still verify the exact input chain.
-        _verify_review_input(store,run_id,row,version,review,call,proof)
+    else:
+        raise _UnverifiableReview('current original producer candidate binding unavailable; old audit was not migrated')
 
 def _evidence(store, run_id, candidate, proof):
     snapshot = _snapshot(store,run_id,candidate['evidence'])

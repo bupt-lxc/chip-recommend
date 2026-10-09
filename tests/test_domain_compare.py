@@ -725,3 +725,43 @@ def test_private_revision_is_business_rejection_without_second_review(comparison
     assert row['status']=='program_rejected' and row['reason']=='known_provider_credential_in_revision'
     assert len(row['versions'])==1 and len(model.snapshot()['calls'])==2
     assert private not in json.dumps({'model':model.snapshot(),'receipts':ctx['store'].list_operations(ctx['id'])})
+
+@pytest.mark.parametrize('tamper',['normalized','entity','conditions','evidence','field','producer_missing','producer_forged'])
+def test_current_candidate_bytes_are_bound_to_original_producer_review(comparison,factory,tamper):
+    ctx=factory()
+    snap=capture(ctx)
+    identity(ctx,snap)
+    row=audit(ctx,snap,[fact(snap)])[0]
+    identifier=row['logical_candidate_id']
+    metadata=ctx['store'].metadata
+    def facade(run_id,key):
+        state=copy.deepcopy(metadata(run_id,key))
+        if run_id==ctx['id'] and key==ModelService.KEY:
+            candidate=state['candidates'][identifier]['versions'][0]['candidate']
+            if tamper=='normalized':
+                candidate['normalized_value']=999
+            elif tamper=='entity':
+                candidate['entity_key']['vendor']='VENDOR A'
+            elif tamper=='conditions':
+                candidate['conditions']['measurement_note']='changed after review'
+            elif tamper=='evidence':
+                start=snap['text'].index('80 GB')
+                candidate['evidence'].update(quote='80 GB',start=start,end=start+5)
+            elif tamper=='field':
+                candidate['field_name']='tdp_w'
+            else:
+                logical='review-'+_hash(_json([identifier,0]))
+                call=next(c for c in state['calls'] if c['logical_id']==logical)
+                if tamper=='producer_missing':
+                    call.pop('candidate_sha256')
+                else:
+                    candidate['normalized_value']=999
+                    call['candidate_sha256']=_hash(_json(candidate))
+        return state
+    ctx['store'].metadata=facade
+    compare=service(comparison,ctx)
+    result=compare.compare_candidate(identifier)
+    assert not result['validated']
+    assert result['evidence_verification_status']=='unverifiable'
+    assert result['value_change_kind']=='unknown'
+    assert compare.statistics()['validated_candidates']==0

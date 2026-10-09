@@ -759,6 +759,7 @@ class ModelService:
                         if frozen['phase']=='review':
                             binding['baseline'] = {**payload['baseline'],'chips':[],'relations':[],'field_provenance':[]}
                         input_proof = {'input_sha256':_hash(_json(payload)),
+                                       'candidate_sha256':_hash(_json(payload['candidate'])) if frozen['phase']=='review' else None,
                                        'review_binding_sha256':_hash(_json(binding)) if frozen['phase']=='review' else None,
                                        'audited_request_sha256':_hash(_json(self._audit(messages)))}
                         record = {**input_proof, 'execution_id': execution_id, 'logical_id': logical, 'operation_id': operation_id,
