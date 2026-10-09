@@ -29,6 +29,7 @@ from ..source_refresh import (
 )
 from .search import SearchExecutor, canonical_url, redact, serialize_page
 from .store import _hash, _json, _key
+from .contracts import DOMAINS
 
 
 def _integer(value, low, high, name):
@@ -720,26 +721,49 @@ class PageService:
                                     'snapshot_id': snapshot_id, 'start': offset, 'end': end}
         return self._update(finish)
 
-    def chunks(self, snapshot_id, *, max_chars=8000):
+    @staticmethod
+    def _coverage_scope(domain_id, scope):
+        if scope not in {'main', 'linked', 'identity'}:
+            raise ValueError('unknown coverage scope')
+        if domain_id is None:
+            if scope != 'main':
+                raise ValueError('scoped coverage requires a domain')
+            return None
+        if domain_id not in DOMAINS:
+            raise ValueError('unknown coverage domain')
+        return domain_id + '/' + scope
+
+    def chunks(self, snapshot_id, *, max_chars=8000, domain_id=None, scope='main'):
         """Offer every body range to future model stages; none is auto processed."""
+        scope_key = self._coverage_scope(domain_id, scope)
         snapshot = self.read_snapshot(snapshot_id)
+        state = self._state()
+        updates = (state['coverage'][snapshot_id] if scope_key is None else
+                   state.get('coverage_scopes', {}).get(snapshot_id, {}).get(scope_key, []))
         return {'snapshot_id': snapshot_id, 'body_hash': snapshot['body_hash'],
                 'chunks': chunk_text(snapshot['text'], snapshot['blocks'], max_chars=max_chars),
-                'coverage': coverage_ranges(len(snapshot['text']), self._state()['coverage'][snapshot_id])}
+                **({'domain_id': domain_id, 'scope': scope} if scope_key is not None else {}),
+                'coverage': coverage_ranges(len(snapshot['text']), updates)}
 
-    def mark_coverage(self, request_id, snapshot_id, start, end, status):
+    def mark_coverage(self, request_id, snapshot_id, start, end, status, *, domain_id=None, scope='main'):
+        """Save one scoped aggregate outcome; domain results never update legacy coverage."""
+        scope_key = self._coverage_scope(domain_id, scope)
         request_id = _key(request_id)
         snapshot = self.read_snapshot(snapshot_id)
         update = {'start': start, 'end': end, 'status': status}
         coverage_ranges(len(snapshot['text']), [update])
-        payload = {'snapshot_id': snapshot_id, **update}
+        payload = {'snapshot_id': snapshot_id, **update,
+                   **({'domain_id': domain_id, 'scope': scope} if scope_key is not None else {})}
         def save(state):
             prior = state['coverage_requests'].get(request_id)
             if prior is not None and prior != payload:
                 raise ValueError('coverage payload conflict')
             if prior is None:
                 state['coverage_requests'][request_id] = payload
-                state['coverage'][snapshot_id].append(update)
-            result = coverage_ranges(len(snapshot['text']), state['coverage'][snapshot_id])
+            updates = (state['coverage'][snapshot_id] if scope_key is None else
+                       state.setdefault('coverage_scopes', {}).setdefault(snapshot_id, {}).setdefault(scope_key, []))
+            if prior is None:
+                updates.append(update)
+            result = coverage_ranges(len(snapshot['text']), updates)
             return state, result, None if prior is not None else {'kind': 'page_coverage', 'stage': 'extracting', **payload}
         return self._update(save)
