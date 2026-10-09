@@ -1,398 +1,61 @@
+"""Historical V1/V2 artifacts stay readable; old writes never run providers."""
 import json
 import sqlite3
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from chip_model.open_web_tool_server import create_open_web_tool_app
-from chip_model.pipeline.hermes_open_web_state import create_hermes_open_web_run
-from chip_model.pipeline.open_web_test import SearchResult, database_fingerprints
+from chip_model.pipeline.hermes_open_web_state import create_hermes_open_web_run, resolve_run_dir
+from chip_model.pipeline.open_web_test import database_fingerprints
+
+ROOT = Path(__file__).parents[1]
 
 
-SCHEMA = (Path(__file__).parents[1] / "schema.sql").read_text(encoding="utf-8")
+@pytest.mark.parametrize('version', [1, 2])
+def test_historical_get_is_readonly_and_old_posts_refuse_all_writes(tmp_path, version):
+    source = tmp_path / 'data.db'
+    with sqlite3.connect(source) as connection:
+        connection.executescript((ROOT / 'schema.sql').read_text(encoding='utf-8'))
+        connection.execute("INSERT INTO chips(id,chip_model,vendor,vram_gb) VALUES (1,'Test X1','Vendor','64')")
+    before = database_fingerprints(source)
+    run = create_hermes_open_web_run(source_db=source, skill='chip-specs', target_chip='Test X1', target_fields=['vram_gb'])
+    folder = resolve_run_dir(source, run['session_id'])
+    if version == 1:
+        path = folder / 'manifest.json'
+        manifest = json.loads(path.read_text(encoding='utf-8'))
+        manifest['schema_version'] = 'hermes-open-web-v1'
+        path.write_text(json.dumps(manifest), encoding='utf-8')
+    frozen_files = {path: path.read_bytes() for path in folder.rglob('*') if path.is_file()}
+    def forbidden(*args, **kwargs):
+        pytest.fail('historical POST executed provider/refresher/extractor')
+    app = create_open_web_tool_app(source_db=source, token='local-test-token', search_provider_factory=forbidden,
+                                   refresher_factory=forbidden, extractor_factory=forbidden)
+    client = TestClient(app, client=('127.0.0.1', 50000))
+    headers = {'Authorization': 'Bearer local-test-token'}
+    response = client.get(f'/v1/runs/{run["session_id"]}', headers=headers, params={'contract_version': version})
+    assert response.status_code == 200, response.text
+    assert response.json()['read_only'] is True
+    assert response.json()['contract_version'] == version
+    for endpoint in ('search', 'preview', 'submit-selection', 'selection'):
+        for marker in (None, version):
+            payload = {'run_id': run['session_id'], 'unit_id': run['units'][0]['unit_id'], 'scope_type': 'chip',
+                       'skill': 'chip-specs', 'target_chip': 'Test X1', 'queries': [], 'decisions': []}
+            if marker is not None:
+                payload['contract_version'] = marker
+            rejected = client.post('/v1/' + endpoint, headers=headers, json=payload)
+            assert rejected.status_code == 409
+            assert 'version' in rejected.json()['detail']
+    assert database_fingerprints(source) == before
+    assert {path: path.read_bytes() for path in folder.rglob('*') if path.is_file()} == frozen_files
 
 
-def _database(path: Path) -> Path:
-    with sqlite3.connect(path) as db:
-        db.executescript(SCHEMA)
-        db.execute(
-            "INSERT INTO chips (id,chip_model,vendor,vram_gb) "
-            "VALUES (1,'TestChip X1','Vendor','64')"
-        )
-    return path
-
-
-class FakeSearch:
-    name = "fixture-search"
-
-    def search(self, query: str, limit: int):
-        return [
-            SearchResult(
-                url="https://vendor.example/testchip-x1",
-                title="TestChip X1 official specifications",
-                snippet="96 GB HBM and 2400 GB/s bandwidth",
-                rank=1,
-                query=query,
-                provider=self.name,
-            ),
-            SearchResult(
-                url="https://bench.example/testchip-x1",
-                title="TestChip X1 benchmark",
-                snippet="Measured throughput and latency",
-                rank=2,
-                query=query,
-                provider=self.name,
-            ),
-        ][:limit]
-
-
-class EmptySearch:
-    name = "empty-search"
-
-    def search(self, query: str, limit: int):
-        return []
-
-
-class FakeRefresh:
-    def __init__(self, *, db_path, snapshot_dir, **kwargs):
-        self.db_path = Path(db_path)
-        self.snapshot_dir = Path(snapshot_dir)
-
-    def run(self, link_ids, *, apply_state, force):
-        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.db_path) as db:
-            placeholders = ",".join("?" for _ in link_ids)
-            rows = db.execute(
-                f"SELECT id,url FROM link_library WHERE id IN ({placeholders})", list(link_ids)
-            ).fetchall()
-        results = []
-        for link_id, url in rows:
-            snapshot = self.snapshot_dir / f"{link_id}.txt"
-            snapshot.write_text(
-                "TestChip X1 official page. Memory capacity: 96 GB HBM. "
-                "Memory bandwidth: 2400 GB/s. Benchmark throughput: 1000 tokens/s.",
-                encoding="utf-8",
-            )
-            results.append({
-                "link_id": link_id,
-                "requested_url": url,
-                "final_url": url,
-                "outcome": "new",
-                "http_status": 200,
-                "content_hash": f"hash-{link_id}",
-                "normalized_snapshot_path": str(snapshot),
-            })
-        return type("Summary", (), {"results": results})()
-
-
-class FakeExtractor:
-    model_name = "kimi-fixture"
-
-    def extract(self, *, text, url, chip_hints, skill):
-        field = next(iter(skill["fields"]))
-        value = "96" if field == "vram_gb" else "1000"
-        evidence = (
-            "Memory capacity: 96 GB HBM"
-            if field == "vram_gb"
-            else "Benchmark throughput: 1000 tokens/s"
-        )
-        return {
-            "relevant": True,
-            "reason": "正文有目标字段",
-            "chip_model": "TestChip X1",
-            "matched_categories": [skill["label"], "实测数据"],
-            "source_type": "官方文档",
-            "_model": self.model_name,
-            "facts": [{
-                "field_name": field,
-                "proposed_value": value,
-                "unit": "GB" if field == "vram_gb" else "tokens/s",
-                "evidence_text": evidence,
-                "evidence_location": "正文",
-                "confidence": "high",
-            }],
-        }
-
-
-def _headers() -> dict[str, str]:
-    return {"Authorization": "Bearer local-test-token"}
-
-
-def _queries() -> list[dict[str, str]]:
-    return [
-        {"query": f"TestChip X1 official specs {index}", "reason": "覆盖官方资料"}
-        for index in range(10)
-    ]
-
-
-def test_tool_service_search_preview_select_and_extract(tmp_path: Path) -> None:
-    formal = _database(tmp_path / "data.db")
-    before = database_fingerprints(formal)
-    run = create_hermes_open_web_run(
-        source_db=formal, skill="chip-specs", target_chip="TestChip X1",
-        target_fields=["vram_gb"],
-    )
-    app = create_open_web_tool_app(
-        source_db=formal,
-        token="local-test-token",
-        search_provider_factory=lambda proxy=None: FakeSearch(),
-        refresher_factory=FakeRefresh,
-        extractor_factory=lambda: FakeExtractor(),
-    )
-    client = TestClient(app)
-    unit_id = run["units"][0]["unit_id"]
-
-    unauthorized = client.post("/v1/search", json={})
-    assert unauthorized.status_code == 401
-
-    searched = client.post("/v1/search", headers=_headers(), json={
-        "run_id": run["session_id"],
-        "unit_id": unit_id,
-        "scope_type": "chip",
-        "skill": "chip-specs",
-        "target_chip": "TestChip X1",
-        "queries": _queries(),
-    })
-    assert searched.status_code == 200, searched.text
-    search_body = searched.json()
-    assert search_body["raw_result_count"] == 20
-    assert search_body["unique_candidate_count"] == 2
-    assert search_body["candidate_ids"] == [
-        row["candidate_id"] for row in search_body["candidates"]
-    ]
-    assert len(search_body["candidate_ids"]) == search_body["unique_candidate_count"]
-    assert all("mentions" not in row for row in search_body["candidates"])
-    assert all(len(row["title"]) <= 160 for row in search_body["candidates"])
-    assert all(len(row["snippet"]) <= 240 for row in search_body["candidates"])
-
-    candidate_ids = search_body["candidate_ids"]
-    previewed = client.post("/v1/preview", headers=_headers(), json={
-        "run_id": run["session_id"], "unit_id": unit_id,
-        "scope_type": "chip", "candidate_ids": candidate_ids,
-    })
-    assert previewed.status_code == 200, previewed.text
-    previews = previewed.json()["previews"]
-    assert len(previews) == 2
-    assert all(len(row["core_text"]) <= 500 for row in previews)
-    assert all(row["access_status"] == "reachable" for row in previews)
-
-    decisions = []
-    for index, candidate_id in enumerate(candidate_ids):
-        decisions.append({
-            "candidate_id": candidate_id,
-            "selected": index == 0,
-            "reason": "官方页面包含显存规格" if index == 0 else "仅有评测摘要",
-            "matched_categories": ["基础参数"],
-            # 模拟模型误把当前 Skill 填入联动建议；系统应依据完整正文
-            # 提取出的“实测数据”类别纠正为 chip-benchmark。
-            "suggested_skills": ["chip-specs"] if index == 0 else [],
-        })
-    submitted = client.post("/v1/submit-selection", headers=_headers(), json={
-        "run_id": run["session_id"], "unit_id": unit_id, "scope_type": "chip",
-        "skill": "chip-specs", "decisions": decisions,
-    })
-    assert submitted.status_code == 200, submitted.text
-    body = submitted.json()
-    assert body["selected_count"] == 1
-    assert body["validated_fact_count"] >= 1
-    assert body["linked_task_count"] == 1
-    assert body["cached"] is False
-    assert database_fingerprints(formal)["db"] == before["db"]
-
-    folder = Path(run["db_path"]).parent / "units" / unit_id
-    decision_rows = [
-        json.loads(line)
-        for line in (folder / "url_decisions.jsonl").read_text(encoding="utf-8").splitlines()
-    ]
-    assert decision_rows[0]["model_suggested_skills"] == ["chip-specs"]
-    assert decision_rows[0]["suggested_skills"] == ["chip-benchmark"]
-    linked_rows = [
-        json.loads(line)
-        for line in (folder / "linked_tasks.jsonl").read_text(encoding="utf-8").splitlines()
-    ]
-    assert linked_rows[0]["parent_skill"] == "chip-specs"
-    assert linked_rows[0]["skill"] == "chip-benchmark"
-    assert linked_rows[0]["depth"] == 1
-
-    facts_before_retry = (folder / "extracted_facts.jsonl").read_text(encoding="utf-8")
-    links_before_retry = (folder / "linked_tasks.jsonl").read_text(encoding="utf-8")
-    retried = client.post("/v1/submit-selection", headers=_headers(), json={
-        "run_id": run["session_id"], "unit_id": unit_id, "scope_type": "chip",
-        "skill": "chip-specs", "decisions": decisions,
-    })
-    assert retried.status_code == 200, retried.text
-    assert retried.json() == {**body, "cached": True}
-    assert (folder / "extracted_facts.jsonl").read_text(encoding="utf-8") == facts_before_retry
-    assert (folder / "linked_tasks.jsonl").read_text(encoding="utf-8") == links_before_retry
-
-    changed_decisions = [dict(decision) for decision in decisions]
-    changed_decisions[0]["reason"] = "不同的重复提交"
-    conflict = client.post("/v1/submit-selection", headers=_headers(), json={
-        "run_id": run["session_id"],
-        "unit_id": unit_id,
-        "scope_type": "chip",
-        "skill": "chip-specs",
-        "decisions": changed_decisions,
-    })
-    assert conflict.status_code == 409
-
-
-class StringFalseExtractor(FakeExtractor):
-    def extract(self, *, text, url, chip_hints, skill):
-        result = super().extract(
-            text=text, url=url, chip_hints=chip_hints, skill=skill
-        )
-        result["relevant"] = "false"
-        return result
-
-
-def test_submit_selection_rejects_non_boolean_relevant_value(tmp_path: Path) -> None:
-    formal = _database(tmp_path / "data.db")
-    run = create_hermes_open_web_run(
-        source_db=formal, skill="chip-specs", target_chip="TestChip X1",
-        target_fields=["vram_gb"],
-    )
-    app = create_open_web_tool_app(
-        source_db=formal,
-        token="local-test-token",
-        search_provider_factory=lambda proxy=None: FakeSearch(),
-        refresher_factory=FakeRefresh,
-        extractor_factory=lambda: StringFalseExtractor(),
-    )
-    client = TestClient(app)
-    unit_id = run["units"][0]["unit_id"]
-    searched = client.post("/v1/search", headers=_headers(), json={
-        "run_id": run["session_id"],
-        "unit_id": unit_id,
-        "scope_type": "chip",
-        "skill": "chip-specs",
-        "target_chip": "TestChip X1",
-        "queries": _queries(),
-    }).json()
-    candidate_ids = searched["candidate_ids"]
-    client.post("/v1/preview", headers=_headers(), json={
-        "run_id": run["session_id"], "unit_id": unit_id,
-        "scope_type": "chip", "candidate_ids": candidate_ids,
-    })
-    decisions = [{
-        "candidate_id": candidate_id,
-        "selected": index == 0,
-        "reason": "页面包含目标字段" if index == 0 else "本轮不选",
-        "matched_categories": ["基础参数"],
-        "suggested_skills": [],
-    } for index, candidate_id in enumerate(candidate_ids)]
-
-    response = client.post("/v1/submit-selection", headers=_headers(), json={
-        "run_id": run["session_id"], "unit_id": unit_id, "scope_type": "chip",
-        "skill": "chip-specs", "decisions": decisions,
-    })
-
-    assert response.status_code == 200
-    assert response.json()["validated_fact_count"] == 0
-    folder = Path(run["db_path"]).parent / "units" / unit_id
-    assert not (folder / "extracted_facts.jsonl").exists()
-    events = [
-        json.loads(line)
-        for line in (folder / "events.jsonl").read_text(encoding="utf-8").splitlines()
-    ]
-    assert any(
-        row.get("stage") == "extract" and row.get("status") == "failed"
-        for row in events
-    )
-
-
-def test_submit_selection_rejects_unknown_candidate(tmp_path: Path) -> None:
-    formal = _database(tmp_path / "data.db")
-    run = create_hermes_open_web_run(
-        source_db=formal, skill="chip-specs", target_chip="TestChip X1",
-    )
-    app = create_open_web_tool_app(source_db=formal, token="local-test-token")
-    unit_id = run["units"][0]["unit_id"]
-    response = TestClient(app).post("/v1/submit-selection", headers=_headers(), json={
-        "run_id": run["session_id"],
-        "unit_id": unit_id,
-        "scope_type": "chip",
-        "skill": "chip-specs",
-        "decisions": [{
-            "candidate_id": "candidate-abcdef123456",
-            "selected": True,
-            "reason": "有价值",
-            "matched_categories": ["基础参数"],
-            "suggested_skills": [],
-        }],
-    })
-    assert response.status_code == 409
-
-
-def test_discovery_unit_records_new_chip_candidates_without_formal_write(
-    tmp_path: Path,
-) -> None:
-    formal = _database(tmp_path / "data.db")
-    before = database_fingerprints(formal)
-    run = create_hermes_open_web_run(
-        source_db=formal, skill="chip-specs", target_chip=None,
-        target_fields=["vram_gb"],
-    )
-    app = create_open_web_tool_app(
-        source_db=formal, token="local-test-token",
-        search_provider_factory=lambda proxy=None: FakeSearch(),
-        refresher_factory=FakeRefresh,
-        extractor_factory=lambda: FakeExtractor(),
-    )
-    client = TestClient(app)
-    searched = client.post("/v1/search", headers=_headers(), json={
-        "run_id": run["session_id"], "unit_id": "discovery",
-        "scope_type": "discovery", "skill": "chip-specs",
-        "target_chip": "", "queries": _queries(),
-    })
-    assert searched.status_code == 200, searched.text
-    candidate_ids = searched.json()["candidate_ids"]
-    previewed = client.post("/v1/preview", headers=_headers(), json={
-        "run_id": run["session_id"], "unit_id": "discovery",
-        "scope_type": "discovery", "candidate_ids": candidate_ids,
-    })
-    assert previewed.status_code == 200, previewed.text
-    decisions = [{
-        "candidate_id": candidate_id,
-        "selected": index == 0,
-        "reason": "发现明确的新芯片规格" if index == 0 else "重复资料",
-        "matched_categories": ["基础参数"] if index == 0 else [],
-        "suggested_skills": [],
-    } for index, candidate_id in enumerate(candidate_ids)]
-    submitted = client.post("/v1/submit-selection", headers=_headers(), json={
-        "run_id": run["session_id"], "unit_id": "discovery",
-        "scope_type": "discovery", "skill": "chip-specs",
-        "decisions": decisions,
-    })
-    assert submitted.status_code == 200, submitted.text
-    folder = Path(run["db_path"]).parent
-    rows = [json.loads(line) for line in (
-        folder / "units" / "discovery" / "new_chip_candidates.jsonl"
-    ).read_text(encoding="utf-8").splitlines()]
-    assert len(rows) == 1
-    parent = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
-    assert parent["counts"]["new_chip_candidates"] == 1
-    assert database_fingerprints(formal)["db"] == before["db"]
-
-
-def test_zero_candidate_search_finishes_unit_without_preview(tmp_path: Path) -> None:
-    formal = _database(tmp_path / "data.db")
-    run = create_hermes_open_web_run(
-        source_db=formal, skill="chip-specs", target_chip="TestChip X1",
-    )
-    unit_id = run["units"][0]["unit_id"]
-    app = create_open_web_tool_app(
-        source_db=formal, token="local-test-token",
-        search_provider_factory=lambda proxy=None: EmptySearch(),
-    )
-    response = TestClient(app).post("/v1/search", headers=_headers(), json={
-        "run_id": run["session_id"], "unit_id": unit_id,
-        "scope_type": "chip", "skill": "chip-specs",
-        "target_chip": "TestChip X1", "queries": _queries(),
-    })
-    assert response.status_code == 200
-    assert response.json()["terminal"] is True
-    unit_path = Path(run["db_path"]).parent / "units" / unit_id / "manifest.json"
-    unit = json.loads(unit_path.read_text(encoding="utf-8"))
-    assert unit["status"] == "partial"
-    assert unit["stage"] == "completed"
+def test_historical_auth_and_path_limits_do_not_create_artifacts(tmp_path):
+    source = tmp_path / 'missing.db'
+    app = create_open_web_tool_app(source_db=source, token='test')
+    client = TestClient(app, client=('127.0.0.1', 50000))
+    assert client.get('/v1/runs/not-found').status_code == 401
+    assert client.get('/v1/runs/not-found', headers={'Authorization':'Bearer bad'}).status_code == 401
+    assert client.get('/v1/runs/not-found', headers={'Authorization':'Bearer test'}).status_code == 404
+    assert not source.exists()

@@ -8,10 +8,11 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, field_validator, model_validator
 
 
 DOMAINS = ("identity", "specs", "compute", "compatibility", "benchmark", "deployment")
+DomainId = Literal['identity', 'specs', 'compute', 'compatibility', 'benchmark', 'deployment']
 # SQL identifier allowlist only. Business field ownership lives in domain.json.
 _TABLES = frozenset({"chips", "chip_model_compatibility", "chip_model_benchmarks", "deployment_guides"})
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -70,6 +71,159 @@ class DiscoverySearchPlan(BaseModel):
         if len({' '.join(q.text.split()).casefold() for q in self.queries}) != len(self.queries):
             raise ValueError('duplicate query text')
         return self
+
+
+class StrictToolModel(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
+
+
+class ToolBinding(StrictToolModel):
+    contract_version: Literal[3]
+    pipeline: Literal['hermes-open-web-v3']
+    run_id: str
+    domain: DomainId
+    scope_type: Literal['chip', 'discovery']
+    chip: Annotated[str, Field(min_length=1, max_length=160)] | None
+
+    @field_validator('contract_version', mode='before')
+    @classmethod
+    def exact_version(cls, value):
+        if type(value) is not int:
+            raise ValueError('contract_version must be integer 3')
+        return value
+
+    @field_validator('run_id')
+    @classmethod
+    def portable_run(cls, value):
+        return validate_run_id(value)
+
+    @field_validator('chip')
+    @classmethod
+    def normalized_chip(cls, value):
+        if value is not None and (not value.strip() or value != value.strip()):
+            raise ValueError('chip must be normalized and nonblank')
+        return value
+
+
+class MutationBinding(ToolBinding):
+    request_id: Annotated[str, Field(min_length=1, max_length=200)]
+
+    @field_validator('request_id')
+    @classmethod
+    def request_key(cls, value):
+        if _start_request_id(value) != value:
+            raise ValueError('request_id must be normalized')
+        return value
+
+
+class ToolCursor(StrictToolModel):
+    list_version: Annotated[str, Field(min_length=1, max_length=200)]
+    offset: Annotated[int, Field(ge=0)]
+
+
+class SearchExecute(MutationBinding):
+    action: Literal['execute']
+    plan: DiscoverySearchPlan
+
+
+class IntentCompletion(StrictToolModel):
+    failed_query_id: Annotated[str, Field(min_length=1, max_length=200)]
+    replacement_query_id: Annotated[str, Field(min_length=1, max_length=200)]
+    reason: Annotated[str, Field(min_length=1, max_length=400)]
+
+    @field_validator('reason')
+    @classmethod
+    def nonblank_reason(cls, value):
+        if not value.strip():
+            raise ValueError('reason must be nonblank')
+        return value
+
+
+class SearchCompleteIntents(MutationBinding):
+    action: Literal['complete_intents']
+    completions: Annotated[list[IntentCompletion], Field(min_length=1, max_length=10)]
+
+
+class SearchResults(ToolBinding):
+    action: Literal['results']
+    list_version: Annotated[str, Field(min_length=1, max_length=200)]
+    cursor: ToolCursor | None = None
+
+
+class PreviewInitial(MutationBinding):
+    mode: Literal['initial']
+    list_version: Annotated[str, Field(min_length=1, max_length=200)]
+    cursor: ToolCursor | None = None
+    limit: Annotated[int, Field(ge=1, le=10)] = 10
+
+
+class PreviewDetail(MutationBinding):
+    mode: Literal['detail']
+    snapshot_id: Annotated[str, Field(min_length=1, max_length=200)]
+    offset: Annotated[int, Field(ge=0)] = 0
+    length: Annotated[int, Field(ge=1, le=4000)] = 4000
+
+
+class ToolDecision(StrictToolModel):
+    candidate_id: Annotated[str, Field(min_length=1, max_length=200)]
+    decision: Literal['select', 'reject']
+    reason: Annotated[str, Field(min_length=1, max_length=400)]
+    expected_info: Annotated[str, Field(max_length=1000)]
+    linked_domains: Annotated[list[DomainId], Field(max_length=5)]
+    entity_clues: Annotated[list[Annotated[str, Field(min_length=1, max_length=160)]], Field(max_length=10)] = Field(default_factory=list)
+    matched_category: DomainId | None = None
+
+    @model_validator(mode='after')
+    def valid_decision(self):
+        if not self.reason.strip():
+            raise ValueError('decision reason must be nonblank')
+        if self.decision == 'select' and not self.expected_info.strip():
+            raise ValueError('select expected_info must be nonblank')
+        if len(set(self.linked_domains)) != len(self.linked_domains):
+            raise ValueError('duplicate linked domains')
+        if any(not clue.strip() or any(unicodedata.category(char) in {'Cc', 'Cs'} for char in clue)
+               for clue in self.entity_clues):
+            raise ValueError('entity clues must be nonblank Unicode without controls')
+        return self
+
+
+class SelectionAppend(MutationBinding):
+    action: Literal['append']
+    list_version: Annotated[str, Field(min_length=1, max_length=200)]
+    decisions: Annotated[list[ToolDecision], Field(min_length=1, max_length=10)]
+
+
+class SelectionFinalize(MutationBinding):
+    action: Literal['finalize']
+    list_version: Annotated[str, Field(min_length=1, max_length=200)]
+
+
+SearchToolRequest = Annotated[SearchExecute | SearchResults | SearchCompleteIntents, Field(discriminator='action')]
+PreviewToolRequest = Annotated[PreviewInitial | PreviewDetail, Field(discriminator='mode')]
+SelectionToolRequest = Annotated[SelectionAppend | SelectionFinalize, Field(discriminator='action')]
+SEARCH_TOOL = TypeAdapter(SearchToolRequest)
+PREVIEW_TOOL = TypeAdapter(PreviewToolRequest)
+SELECTION_TOOL = TypeAdapter(SelectionToolRequest)
+
+
+def validate_decisions(major_ids, visited_ids, decisions, finalize=False, *, current_domain=None):
+    """Validate saved decisions without pretending to validate snapshot IO."""
+    if not isinstance(decisions, list) or type(finalize) is not bool:
+        raise ValueError('decisions must be a list and finalize a boolean')
+    major, visited = set(major_ids), set(visited_ids)
+    validated = [ToolDecision.model_validate(item).model_dump() for item in decisions]
+    ids = [item['candidate_id'] for item in validated]
+    if len(set(ids)) != len(ids):
+        raise ValueError('duplicate candidate IDs')
+    if not set(ids).issubset(major):
+        raise ValueError('unknown candidate outside saved major list')
+    if not set(ids).issubset(visited):
+        raise ValueError('candidate has no actual visit attempt')
+    if current_domain and any(current_domain in item['linked_domains'] for item in validated):
+        raise ValueError('linked domains must exclude current domain')
+    if finalize and (set(ids) != major or not major.issubset(visited)):
+        raise ValueError('未完成：every major candidate requires actual visit and decision')
+    return validated
 
 
 def validate_run_id(value: object) -> str:

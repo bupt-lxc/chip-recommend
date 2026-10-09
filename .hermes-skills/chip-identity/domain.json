@@ -112,6 +112,7 @@
   },
   "references": [
     "_shared/rules.md",
-    "chip-identity/references/identity-rules.md"
+    "chip-identity/references/identity-rules.md",
+    "_shared/tool-contract.json"
   ]
 }

@@ -109,6 +109,7 @@
   },
   "references": [
     "_shared/rules.md",
-    "chip-compute/references/compute-rules.md"
+    "chip-compute/references/compute-rules.md",
+    "_shared/tool-contract.json"
   ]
 }

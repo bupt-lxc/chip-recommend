@@ -335,7 +335,7 @@ class RunStore:
         return item
 
     def operation(self, run_id, generation, request_id, payload, execute, *,
-                  confirmed_failure=False, predecessor=None, prepare_metadata=None):
+                  confirmed_failure=False, predecessor=None, prepare_metadata=None, pending_result=None):
         """Execute outside the transaction; replay never executes running work.
 
         Opt-in confirmed_failure records an Exception only after the callback
@@ -349,6 +349,10 @@ class RunStore:
         An optional third item is a denial message: metadata/event commit under
         the lease fence, then ValueError is raised without claiming a receipt
         or executing the callback. This preserves deadline accounting on denial.
+        pending_result is an optional pure result classifier for orchestration
+        wrappers, not physical operations: delegated in-progress work stays
+        pending so the same immutable request can resume. Delegated physical
+        receipts continue to require explicit unknown-operation recovery.
         """
         request_id, payload_json = _key(request_id), _json(payload)
         if predecessor is not None:
@@ -384,8 +388,9 @@ class RunStore:
             raise ValueError(denial)
         # Exceptions intentionally leave the running receipt for explicit recovery.
         try:
-            result_json = _json(execute())
-            state = 'completed'
+            result = execute()
+            result_json = _json(result)
+            state = 'pending' if pending_result is not None and pending_result(result) else 'completed'
         except Exception as exc:
             if not confirmed_failure:
                 raise
@@ -551,6 +556,10 @@ class RunStore:
         if failed_operation is not None:
             failed_operation = _key(failed_operation)
         with self._transaction(run_id, generation) as conn:
+            if key == 'domain_search.v1':
+                selection = self._baseline_metadata(conn, 'domain_selection.v1')
+                if selection and selection.get('finalized'):
+                    raise ValueError('selection finalized; search collection is locked')
             if failed_operation is not None:
                 receipt = conn.execute('SELECT state FROM run.operations WHERE request_id=?',
                                        (failed_operation,)).fetchone()
@@ -560,6 +569,67 @@ class RunStore:
             _json(result)
             self._write_metadata(conn, run_id, key, value, event)
             return result
+
+    def commit_tool_request(self, run_id, generation, request_id, payload, keys, prepare):
+        """Commit pure metadata validation, jobs and the final receipt together.
+
+        prepare(detached_values) -> (updates, [(task_key,payload)], result,event).
+        No filesystem, inference or network belongs inside this transaction.
+        Result receives task_ids only for an enqueuing/finalization response.
+        """
+        request_id, payload_json = _key(request_id), _json(payload)
+        digest = _hash(payload_json)
+        keys = tuple(self._mutable_metadata_key(key) for key in keys)
+        with self._transaction(run_id, generation) as conn:
+            prior = conn.execute('SELECT * FROM run.operations WHERE request_id=?', (request_id,)).fetchone()
+            if prior is not None:
+                if prior['payload_hash'] != digest:
+                    raise ValueError('tool request payload conflict')
+                if prior['state'] != 'completed':
+                    raise ValueError('tool request still running; explicit recovery required')
+                return self._receipt(prior)['result']
+            values = {key: self._baseline_metadata(conn, key) for key in keys}
+            updates, tasks, result, event = prepare(values)
+            if not set(updates).issubset(keys):
+                raise ValueError('tool callback changed an undeclared metadata key')
+            task_ids = []
+            for task_key, task_payload in tasks:
+                task_key, task_json = _key(task_key), _json(task_payload)
+                task_hash = _hash(task_json)
+                row = conn.execute('SELECT * FROM run.tasks WHERE task_key=?', (task_key,)).fetchone()
+                if row is not None:
+                    if row['payload_hash'] != task_hash:
+                        raise ValueError('任务 payload 冲突')
+                    task_id = row['task_id']
+                else:
+                    # 48-bit public IDs keep the worst-case 600-job receipt
+                    # below 12000 characters. UNIQUE detects collisions closed.
+                    task_id = uuid.uuid5(uuid.NAMESPACE_URL, run_id + ':' + task_key).hex[:12]
+                    conn.execute('INSERT INTO run.tasks VALUES (?,?,?,?,?,?,?,?)',
+                                 (task_key, task_id, task_hash, task_json, 'pending', generation, None, 0))
+                if task_id not in task_ids:
+                    task_ids.append(task_id)
+            if 'task_ids' in result:
+                result = {**result, 'task_ids': task_ids}
+            result_json = _json(result)
+            for key, value in updates.items():
+                self._write_metadata(conn, run_id, key, value, event)
+                event = None
+            conn.execute('INSERT INTO run.operations VALUES (?,?,?,?,?,?,?,?)',
+                         (request_id, digest, payload_json, 'completed', result_json,
+                          result.get('current_stage', 'selecting'), 1, generation))
+            if result.get('status') == 'received':
+                conn.execute('UPDATE runs SET status=?, stage=? WHERE run_id=?',
+                             ('in_progress', result['current_stage'], run_id))
+            return result
+
+    def validate_context(self, run_id, generation, owner):
+        """Read-only auth fence for a runtime-provided context; never claims it."""
+        with self._connect(run_id) as conn:
+            self._fence(conn, run_id, generation)
+            actual = conn.execute('SELECT owner FROM leases WHERE run_id=?', (run_id,)).fetchone()[0]
+            if actual != owner:
+                raise ValueError('runtime owner mismatch')
 
     def _verify_baseline(self, metadata, baseline, rule_bundle_hash, manifest):
         if metadata['pipeline'] != PIPELINE or metadata['contract_version'] != CONTRACT_VERSION:

@@ -20,7 +20,21 @@ def main() -> int:
     parser.add_argument("--install-root", type=Path, help="显式安装目录；不默认写入用户主目录")
     args = parser.parse_args()
     try:
+        from chip_model.domain_tool_api import tool_contract, verify_tool_contract
+        if args.write:
+            import yaml
+            contract = tool_contract()
+            encoded = json.dumps(contract, ensure_ascii=False, sort_keys=True, indent=2) + '\n'
+            (PROJECT_ROOT / '.hermes-skills/_shared/tool-contract.json').write_text(encoded, encoding='utf-8', newline='\n')
+            plugin = PROJECT_ROOT / '.hermes-plugins/aishperf-open-web'
+            (plugin / 'tool-contract.json').write_text(encoded, encoding='utf-8', newline='\n')
+            manifest_path = plugin / 'plugin.yaml'
+            metadata = yaml.safe_load(manifest_path.read_text(encoding='utf-8'))
+            metadata.update(version=contract['tool_version'], tool_contract_sha256=contract['tool_contract_sha256'],
+                            provides_tools=[tool['name'] for tool in contract['tools']])
+            manifest_path.write_text(yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False), encoding='utf-8', newline='\n')
         manifest = synchronize_skills(PROJECT_ROOT / ".hermes-skills", PROJECT_ROOT / ".agents/skills", write=args.write, install_root=args.install_root)
+        verify_tool_contract(project_root=PROJECT_ROOT)
     except (ValueError, OSError) as error:
         print(str(error), file=sys.stderr)
         return 1

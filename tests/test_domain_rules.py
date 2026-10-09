@@ -46,6 +46,7 @@ def installed(tmp_path, rules):
         (references / f"{domain}-rules.md").write_text(f"{domain} 测试规则", encoding="utf-8")
     (root / "_shared").mkdir()
     (root / "_shared" / "rules.md").write_text("测试公共规则", encoding="utf-8")
+    shutil.copyfile(AUTHORITY / '_shared/tool-contract.json', root / '_shared/tool-contract.json')
     (root / "installed.manifest.json").write_text(
         json.dumps(rules.build_installation_manifest(root), ensure_ascii=False), encoding="utf-8"
     )
@@ -315,3 +316,6 @@ def test_git_checkout_preserves_manifest_bytes_with_autocrlf(tmp_path, rules):
     checked = rules.synchronize_skills(checkout / ".hermes-skills", checkout / ".agents/skills")
     assert checked["bundle_sha256"] == manifest["bundle_sha256"]
     assert (checkout / original_compute).read_bytes() == (ROOT / original_compute).read_bytes()
+    tool_reference = '_shared/tool-contract.json'
+    assert tool_reference in manifest['files']
+    assert (checkout / '.hermes-skills' / tool_reference).read_bytes() == (AUTHORITY / tool_reference).read_bytes()

@@ -92,6 +92,7 @@
   },
   "references": [
     "_shared/rules.md",
-    "chip-deployment/references/deployment-rules.md"
+    "chip-deployment/references/deployment-rules.md",
+    "_shared/tool-contract.json"
   ]
 }

@@ -19,3 +19,4 @@
 .agents/skills/installed.manifest.json -text
 docs/archive/hermes-skills/** -text
 docs/archive/codex-domain-skills/** -text
+.hermes-plugins/aishperf-open-web/tool-contract.json -text

@@ -12,9 +12,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 from chip_model.database import get_db_path
+from chip_model.pipeline.domain_discovery import contracts as domain_contracts
 from chip_model.pipeline.data_agent import canonicalize_source_url
 from chip_model.pipeline.hermes_open_web_contracts import (
     ExtractionResult,
@@ -370,10 +371,77 @@ def create_open_web_tool_app(
     search_provider_factory: Callable[..., Any] = FallbackSearch,
     refresher_factory: Callable[..., Any] = SourceRefresher,
     extractor_factory: Callable[[], Any] = OpenAICompatibleExtractor,
+    domain_service=None,
 ) -> FastAPI:
     source = Path(source_db or os.getenv("DATA_DB_PATH") or get_db_path()).resolve()
     expected_token = token if token is not None else os.getenv("AISH_PERF_OPEN_WEB_TOOL_TOKEN", "")
     app = FastAPI(title="AISHPerf Hermes Open-Web Tools", docs_url=None, redoc_url=None)
+    from fastapi.exceptions import RequestValidationError
+    from fastapi.responses import JSONResponse
+    from chip_model.domain_tool_api import ToolProtocolError
+
+    @app.exception_handler(ToolProtocolError)
+    async def protocol_error(request, error):
+        return JSONResponse({'detail': error.detail}, status_code=error.status_code)
+
+    @app.exception_handler(RequestValidationError)
+    async def strict_validation_error(request, error):
+        # Never reflect raw payloads, unknown keys or secret-looking values.
+        return JSONResponse({'detail': 'invalid strict v3 request',
+                             'errors': [{'type': item['type']} for item in error.errors()[:10]]}, status_code=422)
+
+    @app.middleware('http')
+    async def strict_domain_dispatch(request, call_next):
+        from fastapi.responses import JSONResponse
+        from chip_model.domain_tool_api import ToolProtocolError
+        import ipaddress
+        if request.method != 'POST' or request.url.path not in {
+            '/v1/search', '/v1/preview', '/v1/selection', '/v1/submit-selection'}:
+            return await call_next(request)
+        try:
+            authorize(request.headers.get('authorization'))
+            try:
+                local = request.client is not None and ipaddress.ip_address(request.client.host).is_loopback
+            except ValueError:
+                local = False
+            if not local:
+                raise HTTPException(403, '工具服务仅允许 loopback 客户端。')
+            body = await request.body()
+            if len(body) > 1000000:
+                raise HTTPException(413, 'tool request too large')
+            try:
+                payload = json.loads(body)
+            except (ValueError, UnicodeError):
+                raise HTTPException(422, 'invalid JSON')
+            if (not isinstance(payload, dict) or payload.get('contract_version') != 3
+                    or type(payload.get('contract_version')) is not int):
+                code = 422 if isinstance(payload, dict) and type(payload.get('contract_version')) not in (int, type(None)) else 409
+                raise HTTPException(code, 'version error: old POST writes/resume are read-only; explicit v3 required')
+            if request.url.path == '/v1/submit-selection':
+                raise HTTPException(409, 'version error: v3 selection uses /v1/selection')
+            if domain_service is None:
+                raise HTTPException(503, 'v3 runtime active context is not configured')
+            return await call_next(request)
+        except ToolProtocolError as exc:
+            return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
+        except HTTPException as exc:
+            return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
+
+    async def execute_domain_tool(tool, http_request):
+        from starlette.concurrency import run_in_threadpool
+        return await run_in_threadpool(domain_service.handle, tool, await http_request.json())
+
+    @app.post('/v1/search')
+    async def v3_search(request: domain_contracts.SearchToolRequest, http_request: Request):
+        return await execute_domain_tool('search', http_request)
+
+    @app.post('/v1/preview')
+    async def v3_preview(request: domain_contracts.PreviewToolRequest, http_request: Request):
+        return await execute_domain_tool('preview', http_request)
+
+    @app.post('/v1/selection')
+    async def v3_selection(request: domain_contracts.SelectionToolRequest, http_request: Request):
+        return await execute_domain_tool('selection', http_request)
 
     def authorize(authorization: str | None = Header(default=None)) -> None:
         if not expected_token:
@@ -413,7 +481,30 @@ def create_open_web_tool_app(
     def health() -> dict[str, Any]:
         return {"status": "ok", "loopback_only": True}
 
-    @app.post("/v1/search", dependencies=[Depends(authorize)])
+    @app.get('/v1/runs/{run_id}', dependencies=[Depends(authorize)])
+    def read_tool_run(run_id: str, request: Request, unit_id: str = '', contract_version: int | None = None):
+        import ipaddress
+        try:
+            local = request.client is not None and ipaddress.ip_address(request.client.host).is_loopback
+        except ValueError:
+            local = False
+        if not local:
+            raise HTTPException(403, '工具服务仅允许 loopback 客户端。')
+        if contract_version not in (None, 1, 2, 3):
+            raise HTTPException(409, 'unknown contract version')
+        if contract_version == 3:
+            if domain_service is None:
+                raise HTTPException(503, 'v3 runtime service not configured')
+            try:
+                return domain_service.read_run(run_id)
+            except ValueError as exc:
+                raise HTTPException(404, str(exc)) from exc
+        _, manifest, _, parent = checked_run(run_id, unit_id)
+        actual = 2 if parent.get('schema_version') == HERMES_OPEN_WEB_SCHEMA else 1
+        if contract_version is not None and contract_version != actual:
+            raise HTTPException(409, 'historical contract version mismatch')
+        return {'contract_version': actual, 'read_only': True, 'manifest': manifest}
+
     def search(request: SearchRequest) -> dict[str, Any]:
         started = _now()
         started_clock = time.monotonic()
@@ -553,7 +644,6 @@ def create_open_web_tool_app(
         )
         return output
 
-    @app.post("/v1/preview", dependencies=[Depends(authorize)])
     def preview(request: PreviewRequest) -> dict[str, Any]:
         started = _now()
         started_clock = time.monotonic()
@@ -661,7 +751,6 @@ def create_open_web_tool_app(
             "previews": previews, "cached": False,
         }
 
-    @app.post("/v1/submit-selection", dependencies=[Depends(authorize)])
     def submit_selection(request: SelectionRequest) -> dict[str, Any]:
         started = _now()
         started_clock = time.monotonic()
