@@ -6,7 +6,7 @@ import json
 import sqlite3
 import os
 import shutil
-from contextlib import closing
+from contextlib import closing, contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event
 
@@ -486,3 +486,65 @@ def test_invalid_callback_result_leaves_recoverable_receipt(store, active):
         store.operation('run-a', active, 'bad-result', {}, lambda: float('nan'))
     assert store.list_operations('run-a')[0]['state'] == 'running'
     assert store.list_operations('run-a')[0]['result'] is None
+
+
+@pytest.mark.parametrize('damage', ['delete', 'truncate', 'no_metadata', 'no_identity', 'no_operations'])
+@pytest.mark.parametrize('entrypoint', ['start', 'list', 'operation', 'checkpoint'])
+def test_initialized_database_loss_fails_closed_without_reexecuting_callback(store, active, clock, damage, entrypoint):
+    calls = []
+    def execute():
+        calls.append(1)
+        return 'saved'
+    store.operation('run-a', active, 'op', {}, execute)
+    database = store.run_path('run-a') / 'run.sqlite3'
+    if damage == 'delete':
+        database.unlink()
+    elif damage == 'truncate':
+        database.write_bytes(b'')
+    else:
+        with closing(sqlite3.connect(database)) as conn:
+            if damage == 'no_metadata':
+                conn.execute('DROP TABLE metadata')
+            elif damage == 'no_identity':
+                conn.execute("DELETE FROM metadata WHERE key='identity'")
+            else:
+                conn.execute('DROP TABLE operations')
+            conn.commit()
+    damaged_bytes = database.read_bytes() if database.exists() else None
+    reopened = type(store)(store.root, clock=clock)
+    actions = {
+        'start': lambda: reopened.start('client-001', {'domain': 'specs'}, 'ignored'),
+        'list': lambda: reopened.list_operations('run-a'),
+        'operation': lambda: reopened.operation('run-a', active, 'op', {}, execute),
+        'checkpoint': lambda: reopened.checkpoint('run-a', active, 'searching', {}),
+    }
+    with pytest.raises(ValueError, match='标记|数据库|schema'):
+        actions[entrypoint]()
+    assert calls == [1]
+    assert (database.read_bytes() if database.exists() else None) == damaged_bytes
+    with pytest.raises(ValueError, match='标记|数据库|schema'):
+        reopened.operation('run-a', active, 'op', {}, execute)
+    assert calls == [1]
+
+
+def test_initialization_marker_and_schema_rollback_together_before_first_commit(store, monkeypatch, clock):
+    original = store._transaction
+    @contextmanager
+    def interrupted_transaction(run_id=None, generation=None, **kwargs):
+        with original(run_id, generation, **kwargs) as conn:
+            yield conn
+            if run_id is not None:
+                raise RuntimeError('crash before schema transaction commit')
+    with monkeypatch.context() as patch:
+        patch.setattr(store, '_transaction', interrupted_transaction)
+        with pytest.raises(RuntimeError, match='schema transaction'):
+            store.start('original', {}, 'run-a')
+    with closing(sqlite3.connect(store.root / 'control.sqlite3')) as conn:
+        assert conn.execute("SELECT initialized FROM runs WHERE run_id='run-a'").fetchone()[0] == 0
+    with closing(sqlite3.connect(store.run_path('run-a') / 'run.sqlite3')) as conn:
+        assert conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall() == []
+    reopened = type(store)(store.root, clock=clock)
+    assert reopened.start('original', {}, 'ignored')['run_id'] == 'run-a'
+    with closing(sqlite3.connect(store.root / 'control.sqlite3')) as conn:
+        assert conn.execute("SELECT initialized FROM runs WHERE run_id='run-a'").fetchone()[0] == 1
+    assert reopened.list_operations('run-a') == []

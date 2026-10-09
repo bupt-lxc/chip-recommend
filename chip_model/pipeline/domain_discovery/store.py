@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS starts (
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY, path_key TEXT UNIQUE NOT NULL,
     pipeline TEXT NOT NULL, contract_version INTEGER NOT NULL,
-    status TEXT NOT NULL, stage TEXT NOT NULL
+    status TEXT NOT NULL, stage TEXT NOT NULL, initialized INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS leases (
     run_id TEXT PRIMARY KEY, owner TEXT, generation INTEGER NOT NULL DEFAULT 0,
@@ -167,12 +167,12 @@ class RunStore:
         return path
 
     @contextmanager
-    def _connect(self, run_id=None):
+    def _connect(self, run_id=None, *, bootstrap=False):
         control = self._contained(self.root / 'control.sqlite3')
         run_db = None
         if run_id is not None:
             run_db = self._contained(self.run_path(run_id) / 'run.sqlite3')
-        conn = sqlite3.connect(control, isolation_level=None, timeout=15)
+        conn = sqlite3.connect(control, uri=True, isolation_level=None, timeout=15)
         conn.row_factory = sqlite3.Row
         try:
             conn.execute('PRAGMA journal_mode=DELETE')
@@ -180,9 +180,21 @@ class RunStore:
             if run_db is not None:
                 # Validate control identity before ATTACH can create any file
                 # inside an unknown or legacy directory.
-                self._run(conn, run_id)
-                conn.execute('ATTACH DATABASE ? AS run', (str(run_db),))
-                if conn.execute("SELECT 1 FROM run.sqlite_master WHERE type='table' AND name='metadata'").fetchone():
+                run = self._run(conn, run_id)
+                initialized = run['initialized']
+                if initialized:
+                    if not run_db.is_file() or run_db.stat().st_size == 0:
+                        raise ValueError('已初始化的运行数据库缺失或为空，不能自动重建')
+                elif not bootstrap:
+                    raise ValueError('运行数据库尚未初始化；请重放原始启动请求')
+                # mode=rw closes the existence-check/ATTACH gap: initialized
+                # databases must never be implicitly created by SQLite.
+                mode = 'rw' if initialized else 'rwc'
+                conn.execute('ATTACH DATABASE ? AS run', (run_db.as_uri() + '?mode=' + mode,))
+                tables = {row[0] for row in conn.execute("SELECT name FROM run.sqlite_master WHERE type='table'")}
+                if initialized and not {'operations', 'tasks', 'events', 'metadata'} <= tables:
+                    raise ValueError('已初始化的运行数据库 schema 缺失，不能自动修复')
+                if 'metadata' in tables:
                     marker = self._baseline_metadata(conn, 'identity')
                     if marker != self._identity(run_id):
                         raise ValueError('运行身份或版本标记不匹配')
@@ -193,8 +205,8 @@ class RunStore:
             conn.close()
 
     @contextmanager
-    def _transaction(self, run_id=None, generation=None):
-        with self._connect(run_id) as conn:
+    def _transaction(self, run_id=None, generation=None, *, bootstrap=False):
+        with self._connect(run_id, bootstrap=bootstrap) as conn:
             conn.execute('BEGIN IMMEDIATE')
             try:
                 if generation is not None:
@@ -214,6 +226,8 @@ class RunStore:
             raise ValueError('未知运行；旧运行版本不能续跑')
         if row['pipeline'] != PIPELINE or row['contract_version'] != CONTRACT_VERSION:
             raise ValueError('运行版本不兼容：需要 hermes-open-web-v3 合同版本 3')
+        if 'initialized' not in row.keys():
+            raise ValueError('运行控制数据库版本缺少持久初始化标记，不能自动续跑')
         return row
 
     def _fence(self, conn, run_id, generation):
@@ -253,24 +267,26 @@ class RunStore:
                     raise ValueError('未登记的运行目录或旧版本不能续跑')
                 conn.execute('INSERT INTO starts VALUES (?,?,?,?,?)',
                              (key, payload_hash, payload_json, run_id, self.clock()))
-                conn.execute('INSERT INTO runs VALUES (?,?,?,?,?,?)',
-                             (run_id, run_id.casefold(), PIPELINE, CONTRACT_VERSION, 'preparing', 'preparing'))
+                conn.execute('INSERT INTO runs VALUES (?,?,?,?,?,?,?)',
+                             (run_id, run_id.casefold(), PIPELINE, CONTRACT_VERSION, 'preparing', 'preparing', 0))
                 conn.execute('INSERT INTO leases(run_id) VALUES (?)', (run_id,))
                 binding = self._binding(conn, conn.execute('SELECT * FROM starts WHERE request_key=?', (key,)).fetchone())
-        # A crash here leaves the original durable binding. Replaying repairs
-        # only the empty control schema, never recaptures a business baseline.
+        # A crash here leaves the original durable binding. Bootstrap repair is
+        # allowed only until the run schema and initialized marker commit together.
         self._ensure_run(binding['run_id'])
         return binding
 
     def _ensure_run(self, run_id):
         path = self.run_path(run_id)
         path.mkdir(exist_ok=True)
-        with self._transaction(run_id) as conn:
-            self._run(conn, run_id)
+        with self._transaction(run_id, bootstrap=True) as conn:
+            if self._run(conn, run_id)['initialized']:
+                return
             for ddl in _RUN_DDL:
                 conn.execute(ddl)
             conn.execute('INSERT OR IGNORE INTO run.metadata VALUES (?,?)',
                          ('identity', _json(self._identity(run_id))))
+            conn.execute('UPDATE runs SET initialized=1 WHERE run_id=?', (run_id,))
 
     @staticmethod
     def _identity(run_id):
