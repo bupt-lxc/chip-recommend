@@ -547,3 +547,175 @@ def test_installed_adapter_requires_same_probed_plugin_bytes_at_execution(deps, 
     result = run(deps)
     assert result['status'] == 'failed'
     assert deps['search_provider'][0].calls == 0
+
+
+class OutcomeRunner(Runner):
+    """Hermes correctly rejects failed visits without erasing their diagnosis."""
+    reject_healthy = False
+
+    def run(self, **kwargs):
+        service, context = kwargs['service'], kwargs['context']
+        handle = service.handle
+        def decide(tool, payload):
+            if tool == 'selection' and payload.get('action') == 'append':
+                visits = context.pages._state()['visits']
+                for decision in payload['decisions']:
+                    if self.reject_healthy or not visits[decision['candidate_id']]['extractable']:
+                        decision.update(decision='reject', reason='无相关证据或无法取得原文', expected_info='')
+            return handle(tool, payload)
+        service.handle = decide
+        return super().run(**kwargs)
+
+
+class OutcomeSession(Session):
+    def __init__(self, failed_urls=(), failures_before_success=0):
+        super().__init__('Vendor A X80 64GB PCIe GPU: 64GB HBM3')
+        self.failed_urls, self.failures_before_success, self.calls = set(failed_urls), failures_before_success, []
+
+    def get(self, url, **kwargs):
+        import requests
+        self.calls.append(url)
+        if url in self.failed_urls or len(self.calls) <= self.failures_before_success:
+            raise requests.ConnectionError('controlled unavailable URL')
+        return super().get(url, **kwargs)
+
+
+def test_all_unreachable_pages_rejected_by_hermes_are_failed_not_no_findings(deps):
+    deps['hermes_runner'] = OutcomeRunner()
+    deps['page_fetcher'] = OutcomeSession(['https://vendor.example/products'])
+    result = run(deps)
+    assert result['status'] == 'failed', result
+    assert len(deps['page_fetcher'].calls) == 3
+    assert deps['store'].metadata(result['run_id'], 'domain_selection.v1')['finalized']
+    assert not deps['store'].list_tasks(result['run_id'])
+    assert result['execution_state']['page_failures'][0]['diagnostic']['error_category'] == 'network_error'
+
+
+@pytest.mark.parametrize('reject_healthy', [False, True])
+def test_mixed_healthy_and_failed_pages_remain_partial_even_if_all_are_rejected(deps, reject_healthy):
+    class TwoURLs(Provider):
+        def search(self, query, limit, *, language):
+            self.calls += 1
+            return ProviderResponse(rows=[{'url': url, 'title': 'accelerator'} for url in (
+                'https://vendor.example/products', 'https://vendor.example/unavailable')], outcome='success')
+    deps['search_provider'] = [TwoURLs()]
+    deps['hermes_runner'] = OutcomeRunner()
+    deps['hermes_runner'].reject_healthy = reject_healthy
+    deps['page_fetcher'] = OutcomeSession(['https://vendor.example/unavailable'])
+    result = run(deps)
+    assert result['status'] == 'partial', result
+    assert result['execution_state']['healthy_page_count'] == 1
+    assert len(result['execution_state']['page_failures']) == 1
+
+
+def test_recovered_latest_visit_and_closed_search_replacement_do_not_retain_fatal_failure(deps):
+    class RecoveringProvider(Provider):
+        def search(self, query, limit, *, language):
+            if query == plan()['queries'][0]['text']:
+                return ProviderResponse(rows=[], outcome='parse_error', error='controlled initial provider failure')
+            return super().search(query, limit, language=language)
+    class ReplacingRunner(OutcomeRunner):
+        def run(self, **kwargs):
+            service = kwargs['service']
+            handle = service.handle
+            def replace(tool, payload):
+                result = handle(tool, payload)
+                if tool == 'search' and payload.get('action') == 'execute' and payload['plan']['round_number'] == 0:
+                    binding = {k: payload[k] for k in ('contract_version', 'pipeline', 'run_id', 'domain', 'scope_type', 'chip')}
+                    replacement = {'round_number': 1, 'queries': [{'query_id': 'replacement',
+                        'text': 'GPU reference recovery', 'language': 'en', 'reason': '恢复失败意图',
+                        'page_type': 'datasheet', 'replaces_query_id': payload['plan']['queries'][0]['query_id']}]}
+                    result = handle('search', {**binding, 'action': 'execute', 'request_id': 'replacement-search', 'plan': replacement})
+                    handle('search', {**binding, 'action': 'complete_intents', 'request_id': 'close-intent',
+                        'completions': [{'failed_query_id': payload['plan']['queries'][0]['query_id'],
+                            'replacement_query_id': 'replacement', 'reason': '替代查询已正常完成'}]})
+                return result
+            service.handle = replace
+            return super().run(**kwargs)
+    deps['search_provider'] = [RecoveringProvider()]
+    deps['hermes_runner'] = ReplacingRunner()
+    deps['page_fetcher'] = OutcomeSession(failures_before_success=1)
+    result = run(deps)
+    assert result['status'] == 'no_findings', result
+    pages = deps['store'].metadata(result['run_id'], 'domain_pages.v1')
+    assert any(row['status'] == 'failed' for history in pages['attempts'].values() for row in history)
+    assert all(row['status'] == 'success' for row in pages['visits'].values())
+    assert not result['execution_state']['page_failures'] and not result['execution_state']['search_failures']
+    assert result['execution_state']['closed_search_intents'][plan()['queries'][0]['query_id']]['replacement_query_id'] == 'replacement'
+    assert result['execution_state']['recovered_pages'][0]['previous_failed_execution_ids']
+
+
+def test_all_model_connections_exhausted_without_audited_deliverable_is_failed(deps):
+    import requests
+    def unavailable(**kwargs):
+        deps['call_model'].calls.append(kwargs)
+        raise requests.ConnectionError('controlled model unavailable')
+    deps['call_model'].call_model = unavailable
+    result = run(deps)
+    assert result['status'] == 'failed', result
+    assert len(deps['call_model'].calls) == 3
+    assert result['execution_state']['all_model_chains_failed']
+    assert result['execution_state']['completed_work_count'] == 0
+
+
+def test_mandatory_preflight_infrastructure_unavailable_is_fatal(deps):
+    import requests
+    def unavailable(**kwargs):
+        raise requests.ConnectionError('mandatory installed resolver unavailable')
+    deps['hermes_runner'].preflight = unavailable
+    result = run(deps)
+    assert result['status'] == 'failed', result
+    assert not deps['call_model'].calls and deps['search_provider'][0].calls == 0
+
+
+def test_revision_without_final_review_and_exhausted_review_connections_is_failed(deps):
+    import copy
+    import requests
+    from tests.test_domain_entities import fact
+    class RevisionModel(Model):
+        def call_model(self, **kwargs):
+            self.calls.append(kwargs)
+            payload = json.loads(kwargs['messages'][-1]['content'])
+            if payload['phase'] == 'extract':
+                page = payload['page']
+                return {'facts': [fact(({**page, 'text': page['text']},), 'specs')]}
+            if len(self.calls) == 2:
+                revised = copy.deepcopy(payload['candidate'])
+                revised['explanation'] += ' Clarified the exact supported SKU.'
+                return {'verdict': 'revise', 'reason': 'Clarify the supporting explanation.', 'candidate': revised}
+            raise requests.ConnectionError('controlled final review unavailable')
+    deps['call_model'] = RevisionModel()
+    result = run(deps)
+    assert result['status'] == 'failed', result
+    assert len(deps['call_model'].calls) == 5
+    assert result['execution_state']['completed_work_count'] == 0
+
+
+@pytest.mark.parametrize('corruption', ['entity_policy', 'baseline', 'rules'])
+def test_integrity_failure_on_finalized_resume_is_fatal_before_any_external_call(deps, corruption):
+    class Crash(BaseException):
+        pass
+    def crash(stage):
+        raise Crash('controlled finalized checkpoint')
+    deps['stage_hook'] = crash
+    original = run(deps)
+    run_id = original['run_id']
+    store = deps['store']
+    if corruption == 'entity_policy':
+        generation = store.claim(run_id, 'fixture-policy-update', 5)
+        store.update_metadata(run_id, generation, 'domain_entities.v1', lambda state: (
+            {**state, 'entity_policy_version': 1, 'entities': {'legacy': {'entity_kind': 'board_sku'}}}, None, None))
+        store.release(run_id, generation)
+    elif corruption == 'baseline':
+        path = store.run_path(run_id) / 'data.db'
+        path.chmod(0o666)
+        path.write_bytes(path.read_bytes() + b'controlled changed baseline')
+    else:
+        path = store.run_path(run_id) / 'skill_bundle/chip-specs/SKILL.md'
+        path.write_text(path.read_text(encoding='utf-8') + '\ncontrolled changed frozen rules', encoding='utf-8')
+    deps.pop('stage_hook')
+    deps['request_id'] = 'resume-integrity-failure'
+    result = run(deps, resume=run_id)
+    assert result['status'] == 'failed', result
+    assert deps['hermes_runner'].calls == 1 and not deps['call_model'].calls
+    assert store.get_run(run_id)['status'] == 'failed'

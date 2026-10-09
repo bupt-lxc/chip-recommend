@@ -181,6 +181,93 @@ def hermes_completion_error(returncode, submitted):
     return None if submitted else 'Hermes 已退出但未完成选择提交'
 
 
+class HermesExecutionFailure(RuntimeError):
+    """Hermes ended without completing its required selection work."""
+
+
+def execution_state(store, run_id):
+    """Project unresolved execution coverage, retaining the original records.
+
+    Use latest page executions and explicitly open query intents, never any
+    historical failed attempt. Completed business decisions count as completed
+    work even when no field is accepted or a dependency remains unresolved.
+    """
+    from .pages import PageService
+    from .search import SearchExecutor, HEALTHY, QUERY_FAILURES
+    from chip_model.domain_tool_api import DomainToolService
+    search = store.metadata(run_id, SearchExecutor.KEY) or SearchExecutor._empty()
+    selection = store.metadata(run_id, 'domain_selection.v1') or {}
+    pages = store.metadata(run_id, PageService.KEY) or PageService._empty()
+    terminal_visits = DomainToolService._visits(pages)
+    models = store.metadata(run_id, ModelService.KEY) or {}
+    tasks = store.list_tasks(run_id)
+    plans = [value for _, value in sorted(search['plans'].items(), key=lambda pair: int(pair[0]))]
+    version = selection.get('list_version') or next((p['list_version'] for p in reversed(plans) if p.get('list_version')), None)
+    current = search['versions'].get(version, {}).get('items', [])
+    failures, pending, healthy, recovered = {}, {}, {}, []
+    for item in current:
+        cid, url = item['candidate_id'], item['url']
+        history = pages['attempts'].get(cid, [])
+        latest, visit = (history[-1] if history else None), pages['visits'].get(cid)
+        sealed = cid in terminal_visits
+        if sealed and latest['status'] == 'success' and visit.get('extractable'):
+            healthy[url] = latest
+            previous = [row['execution_id'] for row in history[:-1] if row['status'] == 'failed']
+            if previous:
+                recovered.append({'candidate_id': cid, 'requested_url': url,
+                    'latest_execution_id': latest['execution_id'], 'snapshot_id': latest['snapshot_id'],
+                    'previous_failed_execution_ids': previous})
+        elif sealed and latest['status'] == 'failed':
+            failures[url] = latest
+        else:
+            pending[url] = latest or {'candidate_id': cid, 'requested_url': url, 'status': 'not_started'}
+    search_failures = [{'query_id': qid, **row} for qid, row in search['queries'].items()
+                       if row['outcome'] not in HEALTHY and qid not in search['intents']]
+    completed_chunks = [row for row in models.get('chunks', {}).values() if row['status'] == 'completed']
+    audited_candidates = [row for row in models.get('candidates', {}).values()
+        if row.get('reviews') and row['status'] in {'validated', 'semantic_rejected', 'program_rejected', 'unresolved'}]
+    completed_tasks = [task for task in tasks if task['state'] == 'completed']
+    completed_work = len(completed_chunks) + len(audited_candidates) + len(completed_tasks)
+    outcomes = (store.metadata(run_id, LinkedDomainScheduler.KEY) or {}).get('job_outcomes', {})
+    def confirmed_model_failure(task):
+        chunks = outcomes.get(task['task_id'], {}).get('chunks', [])
+        return task['state'] != 'completed' and bool(chunks) and all(
+            chunk['status'] in {'extract_failed', 'review_failed'} for chunk in chunks)
+    all_models_failed = bool(tasks) and all(confirmed_model_failure(task) for task in tasks) and not completed_work
+    all_pages_failed = bool(current) and len(failures) == len({item['url'] for item in current}) and not completed_work
+    all_search_failed = bool(search_failures) and not any(row['outcome'] in HEALTHY for row in search['queries'].values()) and all(
+        row['outcome'] in QUERY_FAILURES for row in search_failures)
+    unfinished = [task['task_id'] for task in tasks if task['state'] != 'completed']
+    return {'page_failures': list(failures.values()), 'pending_pages': list(pending.values()),
+        'healthy_page_count': len(healthy), 'healthy_pages': list(healthy.values()),
+        'recovered_pages': recovered, 'search_failures': search_failures,
+        'closed_search_intents': search['intents'],
+        'unfinished_task_ids': unfinished, 'completed_work_count': completed_work,
+        'all_model_chains_failed': bool(all_models_failed), 'all_page_chains_failed': bool(all_pages_failed),
+        'all_search_chains_failed': bool(all_search_failed),
+        'normal_search_completed': any(p.get('list_version') for p in plans),
+        'incomplete': bool(failures or pending or search_failures or unfinished or not selection.get('finalized'))}
+
+
+def terminal_status(store, run_id, *, validated_count=0, error=None):
+    """One status policy: RunBudget's ordered fatal/interruption/coverage gate."""
+    from .budget import derive_status
+    state = execution_state(store, run_id)
+    fatal = state['all_page_chains_failed'] or state['all_model_chains_failed'] or state['all_search_chains_failed']
+    # Integrity/schema/policy/DB/model-input errors remain fatal regardless of
+    # selection submission. Ordinary time exhaustion is coverage loss; process
+    # interruption is distinct and keeps its established priority below fatal.
+    if isinstance(error, Exception) and not isinstance(error, (TimeoutError, HermesExecutionFailure)):
+        fatal = True
+        state['fatal_error_type'] = type(error).__name__
+    elif isinstance(error, HermesExecutionFailure) and not state['normal_search_completed'] and not state['completed_work_count']:
+        fatal = True
+    status = derive_status(bool(fatal), error is not None and not isinstance(error, Exception),
+                           state['incomplete'] or error is not None, validated_count)
+    state['fatal'] = bool(fatal)
+    return status, state
+
+
 def build_domain_prompt(run, bundle_root, resume_state):
     from .rules import load_phase
     phases = [load_phase(bundle_root, run['domain'], phase) for phase in ('plan', 'select', 'complete')]
@@ -246,7 +333,9 @@ def _execute_domain(store, run_id, generation, owner, budget, deps):
     verify_tool_contract(bundle)
     prior = store.metadata(run_id, 'domain_runtime_result.v1')
     if prior and prior['status'] in {'success', 'no_findings'}:
-        return prior
+        status, state = terminal_status(store, run_id, validated_count=prior.get('statistics', {}).get('validated_candidates', 0))
+        if status in {'success', 'no_findings'}:
+            return {**prior, 'status': status, 'execution_state': state}
     store.recover_operations(run_id, generation)
     store.recover_tasks(run_id, generation)
     providers = deps.get('search_provider')
@@ -287,7 +376,7 @@ def _execute_domain(store, run_id, generation, owner, budget, deps):
         store.update_metadata(run_id, generation, 'domain_hermes_diagnostic.v1', lambda _: (diagnostic, None,
             {'kind': 'failed' if error else 'accepted', 'executor': 'hermes', 'phase': 'complete', 'error': error}))
         if error:
-            raise ValueError(error)
+            raise HermesExecutionFailure(error)
     if deps.get('stage_hook'):
         deps['stage_hook']('after_finalize')
     budget.record_stage('selecting', 'completed', scope='main', reason='durable selection finalize receipt')
@@ -329,11 +418,12 @@ def _execute_domain(store, run_id, generation, owner, budget, deps):
     # Comparison/statistics rebind using ALL completed identity evidence. Cached
     # scheduler bindings are never authoritative for the final validated count.
     statistics = comparisons.statistics()
-    incomplete = any(t['state'] != 'completed' for t in store.list_tasks(run_id))
-    status = 'partial' if incomplete else 'success' if statistics['validated_candidates'] else 'no_findings'
+    status, state = terminal_status(store, run_id, validated_count=statistics['validated_candidates'])
+    incomplete = state['incomplete']
     budget.record_stage('comparison', 'partial_failure' if incomplete else 'completed', scope='main',
-        reason='unfinished tasks' if incomplete else 'all saved candidates compared')
+        reason='unresolved execution coverage' if incomplete else 'all saved candidates compared')
     return {**run['payload'], 'run_id': run_id, 'status': status, 'statistics': statistics,
+        'execution_state': state,
         'baseline_sha256': baseline['baseline_sha256'], 'bundle_sha256': manifest['bundle_sha256'],
         'selection_receipt_id': selection.get('receipt_id'), 'artifact_path': str(root),
         'pipeline': 'hermes-open-web-v3', 'contract_version': 3}
@@ -410,9 +500,9 @@ def run_domain(request, dependencies):
             raise outcome['error']
         result = outcome['result']
     except BaseException as exc:
-        selection = store.metadata(run_id, 'domain_selection.v1') or {}
-        status = 'interrupted' if not isinstance(exc, Exception) else 'partial' if selection.get('finalized') or isinstance(exc, TimeoutError) else 'failed'
+        status, state = terminal_status(store, run_id, error=exc)
         result = {**store.get_run(run_id)['payload'], 'run_id': run_id, 'status': status,
+                  'execution_state': state,
                   'artifact_path': str(store.run_path(run_id)), 'error': redact(str(exc))[:2000]}
     finally:
         try:
