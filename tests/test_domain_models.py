@@ -1022,3 +1022,45 @@ def test_baseline_sqlite_connections_close_on_success_and_error(module, environm
     assert len(opened) == 1
     with pytest.raises(sqlite3.ProgrammingError, match='closed'):
         opened[0].execute('SELECT 1')
+
+
+@pytest.mark.parametrize('first_review', ['accept', 'failed'])
+def test_equal_fact_across_chunks_merges_unreviewed_support_without_changing_proof(module, environment, first_review):
+    pages, snapshot = page(environment, 'X80 64GB\n' + 'body text\n' * 900 + 'X80 64GB')
+    chunks = pages.chunks(snapshot['snapshot_id'])['chunks']
+    first = fact(snapshot, evidence={**fact(snapshot)['evidence'], 'quote': 'X80 64GB', 'start': 0, 'end': 8})
+    offset = snapshot['text'].rindex('X80 64GB')
+    second = fact(snapshot, evidence={**fact(snapshot)['evidence'], 'quote': 'X80 64GB', 'start': offset, 'end': offset + 8})
+    responses = [{'facts': [first]}]
+    responses += [{'verdict': 'accept', 'reason': 'Exact first capacity.'}] if first_review == 'accept' else [requests.Timeout()] * 3
+    responses += [{'facts': []}] * (len(chunks) - 2) + [{'facts': [second]}]
+    client = FakeModel(responses)
+    models = service(module, environment, pages, client)
+    result = models.extract_page(snapshot['snapshot_id'])
+    row = result['candidates'][0]
+    assert len(result['chunks']) == len(chunks) and len(row['evidence_versions']) == 2
+    assert row['versions'][0]['candidate']['evidence'] == first['evidence']
+    assert row['source']['start'] == 0 and row['review_chunk'] == chunks[0]
+    assert row['evidence_outcomes'][-1]['semantic_review'] == 'not_executed'
+    assert result['chunks'][-1]['review_status'] == 'not_executed'
+    assert result['chunks'][-1]['review_reused'] is True
+    if first_review == 'accept':
+        assert row['status'] == 'validated' and result['complete']
+    else:
+        assert row['status'] == 'review_failed' and not result['complete'] and result['coverage']['failed']
+    count = len(client.requests)
+    assert models.extract_page(snapshot['snapshot_id']) == result
+    assert len(client.requests) == count
+
+
+def test_equal_duplicate_with_changed_semantic_conditions_is_unresolved_without_aborting(module, environment):
+    pages, snapshot = page(environment, 'X80 64GB\n' + 'body text\n' * 900 + 'X80 64GB')
+    first = fact(snapshot, evidence={**fact(snapshot)['evidence'], 'quote': 'X80 64GB', 'start': 0, 'end': 8})
+    offset = snapshot['text'].rindex('X80 64GB')
+    second = fact(snapshot, conditions={'capacity_scope': 'alternate configuration'},
+                  evidence={**fact(snapshot)['evidence'], 'quote': 'X80 64GB', 'start': offset, 'end': offset + 8})
+    client = FakeModel([{'facts': [first]}, {'verdict': 'accept', 'reason': 'Exact first capacity.'}, {'facts': [second]}])
+    result = service(module, environment, pages, client).extract_page(snapshot['snapshot_id'])
+    assert result['candidates'][0]['status'] == 'unresolved'
+    assert result['candidates'][0]['reason'] == 'duplicate_semantic_inputs_changed'
+    assert len(result['chunks']) == 2 and len(client.requests) == 3

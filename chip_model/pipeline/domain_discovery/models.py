@@ -758,17 +758,80 @@ class ModelService:
                 return {'status': 'failed', 'reason': 'technical_retry_budget_exhausted'}
             raise
 
-    def _save_candidate(self, row):
+    def _save_candidate(self, row, *, evidence_merge=False):
         semantic_stage = bool(row['reviews']) or row['status'] in {'review_failed', 'pending', 'budget_stopped'}
         final_program_reject = row['status'] == 'program_rejected'
         def save(state):
             state['candidates'][row['logical_candidate_id']] = self._audit(row)
             return state, state['candidates'][row['logical_candidate_id']], {
-                'kind': 'candidate_outcome', 'stage': 'reviewing' if semantic_stage else 'extracting',
+                'kind': 'duplicate_evidence_outcome' if evidence_merge else 'candidate_outcome',
+                'stage': 'extracting' if evidence_merge else 'reviewing' if semantic_stage else 'extracting',
                 'domain_id': self.domain_id, 'logical_candidate_id': row['logical_candidate_id'],
-                'validator_role': 'semantic_model' if semantic_stage and not final_program_reject else 'program_validator',
+                'validator_role': 'program_validator' if evidence_merge else
+                                  'semantic_model' if semantic_stage and not final_program_reject else 'program_validator',
+                **({'new_physical_model_call': False, 'review_proof_sha256': row.get('review_binding_sha256')}
+                   if evidence_merge else {}),
                 'candidate_status': row['status']}
         return self._update(save)
+
+    @classmethod
+    def _support_signature(cls, candidate):
+        """Compare semantics for internal merging; never authorize external replay."""
+        normalized = json.loads(_json(candidate))
+        normalized['evidence'] = {key: normalized['evidence'][key] for key in ('snapshot_id', 'body_hash')}
+        normalized['context_refs'] = []
+        return cls._candidate_signature(normalized)
+
+    def _evidence_outcomes(self, row, candidates):
+        reviewed = {}
+        program = {item['candidate_sha256']: item['program_validation'] for item in row.get('evidence_outcomes', [])}
+        for version in row['versions']:
+            signature = self._candidate_signature(version['candidate'])
+            validation = version.get('program', {}).get('status')
+            program[signature] = {'program_valid': 'passed', 'rejected': 'rejected',
+                                  'unresolved': 'unresolved'}.get(validation, 'not_executed')
+            review = next((item for item in row['reviews'] if item['version'] == version['version']), None)
+            if review is not None:
+                reviewed[signature] = (version, review)
+        outcomes = []
+        for candidate in candidates:
+            digest = self._candidate_signature(candidate)
+            proof = reviewed.get(digest)
+            outcomes.append({'candidate_sha256': digest, 'evidence': candidate['evidence'],
+                             'context_refs': candidate.get('context_refs', []),
+                             'program_validation': program.get(digest, 'passed'),
+                             'semantic_review': proof[1]['verdict'] if proof else 'not_executed',
+                             'review_input_sha256': proof[0].get('input_sha256') if proof else None,
+                             'reason': 'authorized_version_review' if proof else 'duplicate_support_evidence_not_reviewed'})
+        return outcomes
+
+    def _merge_support(self, prior, candidates, snapshot, identity_context):
+        """Keep the audited fact; new exact positions remain explicitly unreviewed.
+
+        This extraction-only path cannot authorize different context or semantic
+        inputs, create another logical operation, or complete a pending review.
+        """
+        if prior.get('review_chunk') is None or prior.get('review_binding_sha256') is None:
+            row = prior
+            row.update(status='unresolved', reason='duplicate_without_review_proof')
+        else:
+            binding = self._review_binding(self._phase('review'), snapshot, prior['review_chunk'], identity_context or {})
+            digest = _hash(_json(binding))
+            if digest != prior['review_binding_sha256']:
+                self._input_conflict('review', prior['logical_candidate_id'], 'execution_binding',
+                                     prior['review_binding_sha256'], digest, binding)
+            current = prior['versions'][-1]['candidate']
+            if any(self._support_signature(candidate) != self._support_signature(current) for candidate in candidates):
+                row = prior
+                if row['status'] not in {'review_failed', 'pending', 'budget_stopped'}:
+                    row.update(status='unresolved', reason='duplicate_semantic_inputs_changed', final_verdict='unresolved')
+                row['duplicate_status'] = 'unresolved'
+            else:
+                row = self.review_candidate(prior['original_raw'], identity_context=identity_context, chunk=prior['review_chunk'])
+                row['duplicate_status'] = 'merged_support_evidence'
+        row['evidence_versions'] = candidates
+        row['evidence_outcomes'] = self._evidence_outcomes(row, candidates)
+        return self._save_candidate(row, evidence_merge=True)
 
     def review_candidate(self, candidate, *, identity_context=None, chunk=None, request_id=None, candidate_version=None):
         """Idempotent by initial logical candidate, regardless of client/version IDs."""
@@ -911,15 +974,28 @@ class ModelService:
                         row.update(evidence_versions=unique, status='unresolved', reason='conflicting_extraction_values', final_verdict='unresolved')
                         rows.append(self._save_candidate(row))
                     else:
-                        row = self.review_candidate(first, identity_context=identity_context, chunk=chunk)
-                        row['evidence_versions'] = unique
-                        rows.append(self._save_candidate(row))
+                        if prior is not None:
+                            row = self._merge_support(prior, unique, snapshot, identity_context)
+                        else:
+                            row = self.review_candidate(first, identity_context=identity_context, chunk=chunk)
+                            row['evidence_versions'] = unique
+                            row['evidence_outcomes'] = self._evidence_outcomes(row, unique)
+                            row = self._save_candidate(row)
+                        rows.append(row)
+                # Include a completed physical call recovered on replay, but
+                # never attribute an original chunk's review to a new support
+                # position merely because its candidate proof was reused.
+                review_executed = any(call['phase'] == 'review' and call['domain_id'] == self.domain_id
+                    and call['input_range'] == {'snapshot_id': snapshot_id, 'start': chunk['start'], 'end': chunk['end']}
+                    for call in self.snapshot()['calls'])
                 outcome = {'chunk': chunk, 'candidate_ids': [row['logical_candidate_id'] for row in rows],
                            'status': 'review_failed' if any(row['status'] == 'review_failed' for row in rows) else
                                      'budget_stopped' if any(row['status'] == 'budget_stopped' for row in rows) else
                                      'pending' if any(row['status'] == 'pending' for row in rows) else 'completed',
                            'linked_domains': invocation['response'].get('linked_domains', []), 'extract_status': 'completed',
-                           'review_status': 'failed' if any(row['status'] == 'review_failed' for row in rows) else
+                           'review_reused': any(row.get('duplicate_status') for row in rows),
+                           'review_status': 'not_executed' if not review_executed else
+                                            'failed' if any(row['status'] == 'review_failed' for row in rows) else
                                             'budget_stopped' if any(row['status'] == 'budget_stopped' for row in rows) else
                                             'in_progress' if any(row['status'] == 'pending' for row in rows) else
                                             'completed' if any(row['reviews'] for row in rows) else 'not_executed'}
