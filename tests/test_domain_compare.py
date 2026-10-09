@@ -15,7 +15,7 @@ from chip_model.pipeline.domain_discovery.entities import EntityResolver
 from chip_model.pipeline.domain_discovery.models import ModelService
 from chip_model.pipeline.domain_discovery.pages import PageService
 from chip_model.pipeline.domain_discovery.rules import freeze_bundle
-from chip_model.pipeline.domain_discovery.store import RunStore, _file_hash
+from chip_model.pipeline.domain_discovery.store import RunStore, _file_hash, _hash, _json
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = 'chip_model.pipeline.domain_discovery.compare'
@@ -519,3 +519,209 @@ def test_identity_field_case_normalization_remains_explicit(comparison,factory,f
     assert result['value_change_kind']=='unchanged'
     from chip_model.pipeline.domain_discovery.history import same_value
     assert not same_value('00123','123',policy='sku_identity')
+
+@pytest.mark.parametrize('tamper',['input_hash','binding_hash','empty_request','request_candidate','request_system','request_baseline','request_page','proof_input_hash','proof_binding_hash','combined','call_execution','call_phase','call_domain','call_logical','missing_operation'])
+def test_archived_review_input_hash_chain_rejects_tampering(comparison,factory,tamper):
+    old,ref=archived(factory,quote='X80: 80 GB.')
+    ctx=factory('new-run',provenance=[{'source_url':'https://old.example/spec','evidence_ref_json':json.dumps(ref)}])
+    snap=capture(ctx)
+    identity(ctx,snap)
+    row=audit(ctx,snap,[fact(snap)])[0]
+    metadata=old['store'].metadata
+    def facade(run_id,key):
+        state=copy.deepcopy(metadata(run_id,key))
+        if run_id!=old['id']:
+            return state
+        if key==ModelService.KEY:
+            candidate=state['candidates'][ref['logical_candidate_id']]
+            if tamper in {'input_hash','combined'}:
+                candidate['versions'][0]['input_sha256']='0'*64
+            if tamper in {'binding_hash','combined'}:
+                candidate['review_binding_sha256']='0'*64
+            logical='review-'+_hash(_json([ref['logical_candidate_id'],0]))
+            call=next(c for c in state['calls'] if c['logical_id']==logical)
+            if tamper=='call_execution':
+                call['execution_id']='fabricated-execution'
+                call['request_ref']=ModelService.KEY+'/calls/fabricated-execution/raw_request'
+                call['response_ref']=ModelService.KEY+'/calls/fabricated-execution/response'
+            elif tamper=='call_phase':
+                call['phase']='extract'
+            elif tamper=='call_domain':
+                call['domain_id']='compute'
+            elif tamper=='call_logical':
+                call['logical_id']='invented-logical-review'
+            if tamper in {'empty_request','combined'}:
+                call['raw_request']=[]
+            elif tamper=='request_system':
+                call['raw_request'][0]['content']='Untrusted replacement review instructions'
+            elif tamper.startswith('request_'):
+                payload=json.loads(call['raw_request'][1]['content'])
+                if tamper=='request_candidate':
+                    payload['candidate']['normalized_value']=999
+                elif tamper=='request_baseline':
+                    payload['baseline']['baseline_sha256']='0'*64
+                elif tamper=='request_page':
+                    payload['page']['text']='Forged page text'
+                call['raw_request'][1]['content']=json.dumps(payload)
+        elif key==EntityResolver.KEY:
+            proof=state['bindings'][ref['logical_candidate_id']][-1]['model_proof']
+            if tamper=='call_execution':
+                proof['execution_id']='fabricated-execution'
+            if tamper=='proof_input_hash':
+                proof['input_sha256']='0'*64
+            if tamper=='proof_binding_hash':
+                proof['review_binding_sha256']='0'*64
+        return state
+    old['store'].metadata=facade
+    if tamper=='missing_operation':
+        operations=old['store'].list_operations
+        old['store'].list_operations=lambda run_id:[] if run_id==old['id'] else operations(run_id)
+    result=service(comparison,ctx).compare_candidate(row['logical_candidate_id'])
+    assert result['source_quality_kind']=='unknown'
+    assert 'verified_evidence' not in result['old_sources'][0]
+    assert 'archived' in result['old_sources'][0]['evidence_unavailable_reason']
+
+def test_redacted_original_review_request_is_unverifiable_without_secret_recovery(comparison,factory):
+    old=factory('old-run')
+    snap=capture(old,url='https://old.example/spec',text='Vendor A X80 80GB SXM GPU: 80 GB.')
+    identity(old,snap)
+    secret='controlled-fixture-credential'
+    candidate=fact(snap,explanation=secret+' appeared in the provider context')
+    class SecretModel(Model):
+        audit_secrets=(secret,)
+    model=ModelService(old['store'],old['id'],old['gen'],old['budget'],old['pages'],old['bundle'],domain_id='specs',client=SecretModel([candidate]),backoff=lambda _:None)
+    row=model.extract_page(snap['snapshot_id'],identity_context={'manual_note':secret})['candidates'][0]
+    EntityResolver(old['store'],old['id'],old['gen']).bind_candidate(row['logical_candidate_id'])
+    ref={'run_id':old['id'],'logical_candidate_id':row['logical_candidate_id'],'version':0}
+    ctx=factory('new-run',provenance=[{'source_url':'https://old.example/spec','evidence_ref_json':json.dumps(ref)}])
+    snap=capture(ctx)
+    identity(ctx,snap)
+    row=audit(ctx,snap,[fact(snap)])[0]
+    result=service(comparison,ctx).compare_candidate(row['logical_candidate_id'])
+    assert result['source_quality_kind']=='unknown'
+    assert 'redacted' in result['old_sources'][0]['evidence_unavailable_reason']
+    assert secret not in json.dumps(result)
+    assert secret not in json.dumps(model.snapshot())
+
+@pytest.mark.parametrize('tamper',['input_hash','empty_request'])
+def test_current_source_requires_same_actual_review_input_proof(comparison,factory,tamper):
+    ctx=factory()
+    snap=capture(ctx)
+    identity(ctx,snap)
+    row=audit(ctx,snap,[fact(snap)])[0]
+    identifier=row['logical_candidate_id']
+    metadata=ctx['store'].metadata
+    def facade(run_id,key):
+        state=copy.deepcopy(metadata(run_id,key))
+        if run_id==ctx['id'] and key==ModelService.KEY:
+            if tamper=='input_hash':
+                state['candidates'][identifier]['versions'][0]['input_sha256']='0'*64
+            else:
+                logical='review-'+_hash(_json([identifier,0]))
+                next(c for c in state['calls'] if c['logical_id']==logical)['raw_request']=[]
+        return state
+    ctx['store'].metadata=facade
+    compare=service(comparison,ctx)
+    result=compare.compare_candidate(identifier)
+    assert result['evidence_verification_status']=='unverifiable'
+    assert result['new_source'] is None and not result['validated']
+    assert result['value_change_kind']=='unknown'
+    assert compare.statistics()['validated_candidates']==0
+
+def test_public_deployment_example_remains_verifiable_business_evidence(comparison,factory):
+    ctx=factory()
+    public='OPENAI_API_KEY=example'
+    snap=capture(ctx,url='https://vendor.example/guide',text='Guide title; generic vLLM deployment. '+public)
+    candidate=fact(snap,'deployment',field='notes',value=public,unit=None,target_table='deployment_guides',scope='relation',entity_key={'url':'https://vendor.example/guide','title':'Guide title','chip_model':'generic','model_id':'not_applicable','source_type':'official'},entity_hints={},conditions={'chip_applicability':'generic','model_applicability':'not_applicable'})
+    row=audit(ctx,snap,[candidate])[0]
+    assert row['status']=='validated'
+    assert row['versions'][0]['candidate']['evidence']['quote']==snap['text']
+    result=service(comparison,ctx).compare_candidate(row['logical_candidate_id'])
+    assert result['validated']
+    assert result['candidate']['normalized_value']==public
+    assert result['candidate']['evidence']['quote']==snap['text']
+    assert result['value_change_kind']=='added'
+    model=ctx['store'].metadata(ctx['id'],ModelService.KEY)
+    assert public not in json.dumps([call['raw_request'] for call in model['calls']])
+
+def test_known_private_fact_is_typed_rejected_without_retry_or_false_quote(comparison,factory):
+    ctx=factory()
+    snap=capture(ctx,url='https://vendor.example/guide',text='Guide title; generic vLLM deployment instructions.')
+    private='sk-controlled-private-provider-credential'
+    candidate=fact(snap,'deployment',field='notes',value=private,unit=None,target_table='deployment_guides',scope='relation',entity_key={'url':'https://vendor.example/guide','title':'Guide title','chip_model':'generic','model_id':'not_applicable','source_type':'official'},entity_hints={},conditions={'chip_applicability':'generic','model_applicability':'not_applicable'})
+    class PrivateModel(Model):
+        audit_secrets=(private,)
+    client=PrivateModel([candidate])
+    model=ModelService(ctx['store'],ctx['id'],ctx['gen'],ctx['budget'],ctx['pages'],ctx['bundle'],domain_id='deployment',client=client,backoff=lambda _:None)
+    first=model.extract_page(snap['snapshot_id'])
+    row=first['candidates'][0]
+    assert row['status']=='program_rejected'
+    assert row['reason']=='known_provider_credential_in_fact'
+    assert len(model.snapshot()['calls'])==1
+    replay=model.extract_page(snap['snapshot_id'])
+    assert replay['candidates']==first['candidates']
+    assert len(model.snapshot()['calls'])==1
+    result=service(comparison,ctx).compare_candidate(row['logical_candidate_id'])
+    assert not result['validated'] and result['new_source'] is None
+    assert private not in json.dumps({'model':model.snapshot(),'receipts':ctx['store'].list_operations(ctx['id']),'events':ctx['store'].events(ctx['id']),'comparison':result})
+
+def test_native_transport_marks_private_business_fact_before_masking(comparison,factory,monkeypatch):
+    from chip_model.pipeline.domain_discovery.models import OpenAIModelTransport
+    ctx=factory()
+    snap=capture(ctx,url='https://vendor.example/guide',text='Guide title; generic vLLM deployment instructions.')
+    private='sk-controlled-native-provider-credential'
+    candidate=fact(snap,'deployment',field='notes',value=private,unit=None,target_table='deployment_guides',scope='relation',entity_key={'url':'https://vendor.example/guide','title':'Guide title','chip_model':'generic','model_id':'not_applicable','source_type':'official'},entity_hints={},conditions={'chip_applicability':'generic','model_applicability':'not_applicable'})
+    sent=[]
+    class ProviderResponse:
+        text=json.dumps({'choices':[{'message':{'content':json.dumps({'facts':[candidate]})}}]})
+        def raise_for_status(self):
+            pass
+        def close(self):
+            pass
+    monkeypatch.setattr('requests.post',lambda *args,**kwargs:(sent.append(kwargs) or ProviderResponse()))
+    client=OpenAIModelTransport(base_url='https://fixture.invalid',api_key=private)
+    model=ModelService(ctx['store'],ctx['id'],ctx['gen'],ctx['budget'],ctx['pages'],ctx['bundle'],domain_id='deployment',client=client,backoff=lambda _:None)
+    row=model.extract_page(snap['snapshot_id'])['candidates'][0]
+    assert row['status']=='program_rejected' and row['reason']=='known_provider_credential_in_fact'
+    assert len(sent)==1
+    assert private not in json.dumps({'model':model.snapshot(),'receipts':ctx['store'].list_operations(ctx['id'])})
+
+def test_public_business_cache_resumes_without_model_calls_or_audit_rewrites(comparison,factory):
+    ctx=factory()
+    public='OPENAI_API_KEY=example'
+    snap=capture(ctx,url='https://vendor.example/guide',text='Guide title; generic vLLM deployment. '+public)
+    candidate=fact(snap,'deployment',field='notes',value=public,unit=None,target_table='deployment_guides',scope='relation',entity_key={'url':'https://vendor.example/guide','title':'Guide title','chip_model':'generic','model_id':'not_applicable','source_type':'official'},entity_hints={},conditions={'chip_applicability':'generic','model_applicability':'not_applicable'})
+    client=Model([candidate])
+    model=ModelService(ctx['store'],ctx['id'],ctx['gen'],ctx['budget'],ctx['pages'],ctx['bundle'],domain_id='deployment',client=client,backoff=lambda _:None)
+    first=model.extract_page(snap['snapshot_id'])
+    assert first['candidates'][0]['status']=='validated'
+    assert len(model.snapshot()['calls'])==2
+    calls=copy.deepcopy(model.snapshot()['calls'])
+    operations=copy.deepcopy(ctx['store'].list_operations(ctx['id']))
+    assert model.extract_page(snap['snapshot_id'])['candidates']==first['candidates']
+    ctx['store'].release(ctx['id'],ctx['gen'])
+    ctx['gen']=ctx['store'].claim(ctx['id'],'replacement-worker',100000)
+    ctx['budget']=RunBudget(ctx['store'],ctx['id'],ctx['gen'],monotonic=lambda:1000,epoch=lambda:1000)
+    ctx['pages']=PageService(ctx['store'],ctx['id'],ctx['gen'],ctx['budget'],session=Session(snap['text']),resolver=lambda _:['93.184.216.34'],monotonic=lambda:1000,backoff=lambda _:None)
+    resumed=ModelService(ctx['store'],ctx['id'],ctx['gen'],ctx['budget'],ctx['pages'],ctx['bundle'],domain_id='deployment',client=Model([]),backoff=lambda _:None)
+    after=resumed.extract_page(snap['snapshot_id'])
+    assert after['candidates']==first['candidates']
+    assert resumed.snapshot()['calls']==calls
+    assert ctx['store'].list_operations(ctx['id'])==operations
+    result=service(comparison,ctx).compare_candidate(after['candidates'][0]['logical_candidate_id'])
+    assert result['validated'] and result['candidate']['normalized_value']==public
+
+def test_private_revision_is_business_rejection_without_second_review(comparison,factory):
+    ctx=factory()
+    snap=capture(ctx,url='https://vendor.example/guide',text='Guide title; generic vLLM deployment instructions.')
+    private='sk-controlled-revision-provider-credential'
+    candidate=fact(snap,'deployment',field='notes',value='vLLM deployment instructions',unit=None,target_table='deployment_guides',scope='relation',entity_key={'url':'https://vendor.example/guide','title':'Guide title','chip_model':'generic','model_id':'not_applicable','source_type':'official'},entity_hints={},conditions={'chip_applicability':'generic','model_applicability':'not_applicable'})
+    class PrivateModel(Model):
+        audit_secrets=(private,)
+    client=PrivateModel([candidate])
+    client.responses[1]={'verdict':'revise','reason':'Change instruction','candidate':{**candidate,'raw_value':private,'normalized_value':private}}
+    model=ModelService(ctx['store'],ctx['id'],ctx['gen'],ctx['budget'],ctx['pages'],ctx['bundle'],domain_id='deployment',client=client,backoff=lambda _:None)
+    row=model.extract_page(snap['snapshot_id'])['candidates'][0]
+    assert row['status']=='program_rejected' and row['reason']=='known_provider_credential_in_revision'
+    assert len(row['versions'])==1 and len(model.snapshot()['calls'])==2
+    assert private not in json.dumps({'model':model.snapshot(),'receipts':ctx['store'].list_operations(ctx['id'])})

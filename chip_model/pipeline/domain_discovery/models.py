@@ -181,7 +181,11 @@ class OpenAIModelTransport(OpenAICompatibleExtractor):
             data = decode_content(raw_envelope, allow_fences=False)
             envelope = ProviderEnvelope.model_validate(data)
             result = decode_content(envelope.choices[0].message.content)
-            return _mask_known({**result, '_usage': envelope.usage.model_dump(exclude_none=True) if envelope.usage else {},
+            protected = {'_credential_fact_indices':[i for i,fact in enumerate(result.get('facts',[]))
+                         if _credential_in_fact(fact,self.audit_secrets)],
+                         '_credential_review_candidate':result.get('candidate') is not None
+                         and _credential_in_fact(result['candidate'],self.audit_secrets)}
+            return _mask_known({**result, **protected, '_usage': envelope.usage.model_dump(exclude_none=True) if envelope.usage else {},
                     '_model': envelope.model or self.model_name, '_call_id': envelope.id,
                     '_raw_response': data}, self.audit_secrets)
         except (ValueError, KeyError, IndexError, TypeError) as exc:
@@ -372,6 +376,36 @@ def _mask_known(value, secrets):
     return value
 
 
+
+def _contains_known(value, secrets):
+    if isinstance(value,str):
+        return any(secret in value for secret in secrets if secret)
+    if isinstance(value,dict):
+        return any(_contains_known(key,secrets) or _contains_known(item,secrets) for key,item in value.items())
+    if isinstance(value,list):
+        return any(_contains_known(item,secrets) for item in value)
+    return False
+
+
+def _credential_in_fact(fact, secrets):
+    # Narrative metadata can be safely masked. Factual values/identity/quotes
+    # must not be mutated and then presented as original supported evidence.
+    data = {key:value for key,value in fact.items() if key not in {'explanation','confidence_reason'}} if isinstance(fact,dict) else fact
+    return _contains_known(data,secrets)
+
+
+def _safe_business_fact(fact, secrets, *, rejected=False):
+    safe = _mask_known(fact,secrets)
+    if isinstance(safe,dict):
+        for name in ('explanation','confidence_reason'):
+            if name in safe:
+                safe[name] = _audit_value(safe[name])
+        if rejected or _credential_in_fact(fact,secrets):
+            safe['_credential_rejected'] = True
+    elif rejected or _credential_in_fact(fact,secrets):
+        safe = {'_credential_rejected':True,'redacted_raw':safe}
+    return safe
+
 def validate_candidate(candidate, contract, snapshot, chunk):
     """Check syntax/evidence/units only; contextual truth requires a review call.
 
@@ -550,6 +584,24 @@ class ModelService:
     def _audit(self, value):
         return _audit_value(_mask_known(value, self._audit_secrets))
 
+    def _business_response(self, response):
+        """Return privacy-safe business data; audit the provider metadata separately."""
+        metadata = {'_usage','_model','_call_id','_raw_response','_credential_fact_indices','_credential_review_candidate'}
+        result = {key:_mask_known(value,self._audit_secrets) for key,value in response.items() if key not in metadata}
+        if 'facts' in response:
+            flagged = response.get('_credential_fact_indices',[])
+            result['facts'] = [_safe_business_fact(fact,self._audit_secrets,rejected=index in flagged)
+                               for index,fact in enumerate(response['facts'])]
+        if response.get('candidate') is not None:
+            result['candidate'] = _safe_business_fact(response['candidate'],self._audit_secrets,
+                                        rejected=response.get('_credential_review_candidate') is True)
+        if 'reason' in result:
+            result['reason'] = self._audit(result['reason'])
+        for name in ('_usage','_model','_call_id','_raw_response'):
+            if name in response:
+                result[name] = self._audit(response[name])
+        return result
+
     def _persist(self, callback):
         try:
             return self._update(callback)
@@ -689,7 +741,7 @@ class ModelService:
                     'generation': self.generation, 'new_physical_model_call': False}))
                 if record['status'] != 'completed':
                     raise _TechnicalFailure(record['status'])
-                return record['response']
+                return record.get('business_response',record['response'])
             return self.store.operation(self.run_id, self.generation, operation_id, operation_payload,
                                          execute, confirmed_failure=True)
         try:
@@ -703,7 +755,13 @@ class ModelService:
                         timeout = self._remaining()
                         started = self.monotonic()
                         execution_id = uuid.uuid4().hex
-                        record = {'execution_id': execution_id, 'logical_id': logical, 'operation_id': operation_id,
+                        binding = {key:value for key,value in payload.items() if key not in {'domain_id','candidate'}}
+                        if frozen['phase']=='review':
+                            binding['baseline'] = {**payload['baseline'],'chips':[],'relations':[],'field_provenance':[]}
+                        input_proof = {'input_sha256':_hash(_json(payload)),
+                                       'review_binding_sha256':_hash(_json(binding)) if frozen['phase']=='review' else None,
+                                       'audited_request_sha256':_hash(_json(self._audit(messages)))}
+                        record = {**input_proof, 'execution_id': execution_id, 'logical_id': logical, 'operation_id': operation_id,
                                   'attempt': attempt, 'generation': self.generation, 'status': 'running',
                                   'phase': frozen['phase'], 'domain_id': self.domain_id, 'scope': self.scope,
                                   'skill_name': frozen['skill_name'], 'rule_version': frozen['rule_version'],
@@ -714,7 +772,7 @@ class ModelService:
                                   'raw_request': self._audit(messages), 'request_ref': self.KEY + '/calls/' + execution_id + '/raw_request'}
                         self._persist(lambda state: (dict(state, calls=state['calls'] + [record]), None,
                                    {'kind': 'model_call_started', 'stage': operation_payload['stage'],
-                                    'domain_id': self.domain_id, 'phase': frozen['phase'], 'execution_id': execution_id}))
+                                    'domain_id': self.domain_id, 'phase': frozen['phase'], 'execution_id': execution_id, **input_proof}))
                         error, response, status = None, None, 'completed'
                         try:
                             response = self.client.call_model(messages=messages, timeout=timeout)
@@ -728,7 +786,7 @@ class ModelService:
                                 if not isinstance(response, dict):
                                     raise ValueError('model response must be an object')
                                 _json(response)
-                                business = {k: v for k, v in response.items() if k not in {'_usage', '_model', '_call_id', '_raw_response'}}
+                                business = {k: v for k, v in response.items() if k not in {'_usage', '_model', '_call_id', '_raw_response', '_credential_fact_indices', '_credential_review_candidate'}}
                                 schema = ExtractResponse if frozen['phase'] == 'extract' else ReviewResponse
                                 schema.model_validate(business)
                                 if frozen['phase'] == 'extract' and (set(business.get('linked_domains', [])) - set(DOMAINS)
@@ -738,6 +796,7 @@ class ModelService:
                                 error, status = self._audit(str(exc)), 'parser_rejected'
                         finish = {**record, 'status': status, 'finished_at': self.store.clock(),
                                   'duration_seconds': max(0, self.monotonic() - started), 'response': self._audit(response),
+                                  **({'business_response':self._business_response(response)} if status=='completed' else {}),
                                   'response_ref': self.KEY + '/calls/' + execution_id + '/response', 'error': error,
                                   'usage': self._audit(response.get('_usage', {})) if isinstance(response, dict) else {},
                                   'call_id': self._audit(response.get('_call_id')) if isinstance(response, dict) else None}
@@ -749,7 +808,7 @@ class ModelService:
                         self._persist(save)
                         if status != 'completed':
                             raise _TechnicalFailure(status)
-                        return finish['response']
+                        return finish['business_response']
                     receipt = self.budget.operation(logical, operation_payload, execute, attempt=attempt)
                 if receipt['state'] == 'completed':
                     return {'status': 'completed', 'response': receipt['result']}
@@ -780,7 +839,7 @@ class ModelService:
         semantic_stage = bool(row['reviews']) or row['status'] in {'review_failed', 'pending', 'budget_stopped'}
         final_program_reject = row['status'] == 'program_rejected'
         def save(state):
-            state['candidates'][row['logical_candidate_id']] = self._audit(row)
+            state['candidates'][row['logical_candidate_id']] = _mask_known(row,self._audit_secrets)
             return state, state['candidates'][row['logical_candidate_id']], {
                 'kind': 'duplicate_evidence_outcome' if evidence_merge else 'candidate_outcome',
                 'stage': 'extracting' if evidence_merge else 'reviewing' if semantic_stage else 'extracting',
@@ -914,6 +973,9 @@ class ModelService:
                 row.update(status='unresolved', reason='revision_limit', final_verdict='unresolved')
                 return self._save_candidate(row)
             revised = verdict['candidate']
+            if revised.get('_credential_rejected') is True:
+                row.update(status='program_rejected',reason='known_provider_credential_in_revision',final_verdict='rejected')
+                return self._save_candidate(row)
             if logical_candidate_id(revised) != logical:
                 row.update(status='unresolved', reason='revision_changes_entity_scope', final_verdict='unresolved')
                 return self._save_candidate(row)
@@ -975,6 +1037,8 @@ class ModelService:
                     prior = self.snapshot()['candidates'].get(logical)
                     try:
                         for candidate in unique:
+                            if isinstance(candidate,dict) and candidate.get('_credential_rejected') is True:
+                                raise ValueError('known_provider_credential_in_fact')
                             validate_candidate(candidate, frozen['contract'], snapshot, chunk)
                     except (ValueError, TypeError) as exc:
                         row = {'logical_candidate_id': logical, 'domain_id': self.domain_id, 'original_raw': first,

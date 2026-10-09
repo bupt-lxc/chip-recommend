@@ -9,10 +9,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sqlite3
+from contextlib import closing
 
 from .entities import EntityResolver
 from .history import baseline_projection, frozen_baseline, same_value
-from .models import ModelService
+from .models import ModelService, ReviewResponse, FactCandidate, phase_messages, decode_content, validate_candidate
 from .pages import PageService
 from .search import canonical_url
 from .rules import load_phase
@@ -56,11 +58,11 @@ def _snapshot(store, run_id, evidence):
     if (isinstance(start,bool) or isinstance(end,bool) or not isinstance(start,int) or not isinstance(end,int)
             or not 0 <= start < end <= len(text) or text[start:end] != evidence['quote']):
         raise ValueError('archived exact quote mismatch')
-    return record
+    return {**record,'text':text}
 
 
-def _reviewed_proof(store, run_id, identifier, version_number):
-    """Read old runs without initializing services, claiming leases or writing."""
+def _saved_review(store, run_id, identifier, version_number):
+    """Read a specific saved accepted review; never initialize a service."""
     state = store.metadata(run_id, ModelService.KEY) or {}
     row = state.get('candidates', {}).get(identifier)
     if row is None or not row.get('versions'):
@@ -76,6 +78,12 @@ def _reviewed_proof(store, run_id, identifier, version_number):
                  and c['status']=='completed' and c.get('response',{}).get('verdict')=='accept'),None)
     if version.get('program',{}).get('status')!='program_valid' or review is None or review['verdict']!='accept' or call is None:
         raise ValueError('archived accepted review missing')
+    return row,version,review,call
+
+
+def _reviewed_proof(store, run_id, identifier, version_number):
+    """Read old runs without initializing services, claiming leases or writing."""
+    row,version,review,call = _saved_review(store,run_id,identifier,version_number)
     entities = store.metadata(run_id, EntityResolver.KEY) or {}
     bindings = [b for b in entities.get('bindings',{}).get(identifier,[])
                 if b['model_proof']['version']==version_number and b['validated']]
@@ -95,8 +103,173 @@ def _reviewed_proof(store, run_id, identifier, version_number):
     _,baseline = frozen_baseline(store,run_id)
     if call['bundle_sha256'] != baseline['rule_bundle_hash']:
         raise ValueError('archived review rule bundle mismatch')
+    _verify_review_input(store,run_id,row,version,review,call,proof)
     return bound, row
 
+
+
+def _archive_selected_baseline(path, metadata, candidate, contract):
+    """Replay the V3 model's read-only baseline query; never initialize old runs."""
+    result = {'baseline_sha256':metadata['baseline_sha256'], 'created_at':metadata['created_at'],
+              'chips':[], 'relations':[], 'field_provenance':[]}
+    key,table = candidate['entity_key'],candidate['target_table']
+    with closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True)) as db:
+        db.row_factory = sqlite3.Row
+        db.execute('PRAGMA query_only=ON')
+        columns = {r[1] for r in db.execute('PRAGMA table_info(chips)')}
+        names = [name for name in ('vendor','chip_model') if name in columns and key.get(name)]
+        if 'chip_model' in names:
+            sql = 'SELECT * FROM chips WHERE '+' AND '.join('"'+name+'"=?' for name in names)
+            result['chips'] = [dict(r) for r in db.execute(sql,[key[name] for name in names])]
+        if table!='chips' and table in contract['fields']:
+            columns = {r[1] for r in db.execute('PRAGMA table_info("'+table+'")')}
+            names = [name for name in key if name in columns]
+            if names:
+                sql = 'SELECT * FROM "'+table+'" WHERE '+' AND '.join('"'+name+'"=?' for name in names)
+                result['relations'] = [dict(r) for r in db.execute(sql,[key[name] for name in names])]
+        columns = {r[1] for r in db.execute('PRAGMA table_info(field_provenance)')}
+        if {'table_name','row_id'} <= columns:
+            for target,rows in [('chips',result['chips']),(table,result['relations'])]:
+                for row in rows:
+                    if row.get('id') is not None:
+                        result['field_provenance'].extend(dict(r) for r in db.execute(
+                            'SELECT * FROM field_provenance WHERE table_name=? AND row_id=?',(target,str(row['id']))))
+    return result
+
+
+
+class _UnverifiableReview(ValueError):
+    """Saved review audit cannot authenticate the claimed semantic input."""
+
+def _verify_review_input(store, run_id, row, version, review, call, proof):
+    """Authenticate actual review input via its original immutable operation hash.
+
+    Audited requests can be redacted. When their safe bytes cannot verify the
+    original hash, this archive is unverifiable; never reconstruct secrets or
+    assert that a redacted request was the original model input.
+    """
+    path,baseline = frozen_baseline(store,run_id)
+    frozen = load_phase(store.run_path(run_id)/'skill_bundle',row['domain_id'],'review')
+    if frozen['bundle_sha256'] != baseline['rule_bundle_hash']:
+        raise ValueError('archived frozen review rules mismatch')
+    messages = call.get('raw_request')
+    if (not isinstance(messages,list) or len(messages)!=2
+            or any(not isinstance(message,dict) for message in messages)
+            or messages[0].get('role')!='system' or messages[1].get('role')!='user'):
+        raise _UnverifiableReview('archived actual review request missing')
+    operation = next((r for r in store.list_operations(run_id) if r['request_id']==call['operation_id']),None)
+    if (operation is None or operation['state']!='completed'
+            or operation['payload'].get('logical_id')!=call['logical_id']
+            or operation['payload'].get('stage')!='reviewing'
+            or _hash(_json(operation['payload']))!=operation['payload_hash']
+            or operation['result']!=call.get('business_response',call['response'])):
+        raise _UnverifiableReview('archived actual review operation binding unavailable')
+    if _hash(_json(messages)) != operation['payload'].get('messages_sha256'):
+        raise _UnverifiableReview('archived request original hash cannot be verified; audit may be redacted or modified')
+    events = [event['payload'] for event in store.events(run_id)]
+    if (not any(e.get('kind')=='model_call_started' and e.get('execution_id')==call['execution_id']
+                and e.get('domain_id')==row['domain_id'] and e.get('phase')=='review' for e in events)
+            or not any(e.get('kind')=='model_call_finished' and e.get('execution_id')==call['execution_id']
+                       and e.get('domain_id')==row['domain_id'] and e.get('phase')=='review'
+                       and e.get('status')=='completed' and e.get('bundle_sha256')==frozen['bundle_sha256'] for e in events)):
+        raise _UnverifiableReview('archived actual review execution audit missing')
+    if (call.get('request_ref')!=ModelService.KEY+'/calls/'+call['execution_id']+'/raw_request'
+            or call.get('response_ref')!=ModelService.KEY+'/calls/'+call['execution_id']+'/response'):
+        raise _UnverifiableReview('archived actual review request/response references mismatch')
+    payload = decode_content(messages[1]['content'],allow_fences=False)
+    digest = _hash(_json(payload))
+    if version.get('input_sha256')!=digest or proof.get('input_sha256')!=digest:
+        raise _UnverifiableReview('archived review input hash mismatch')
+    candidate = version['candidate']
+    if (proof.get('version')!=version['version'] or proof.get('execution_id')!=call['execution_id']
+            or proof.get('candidate_sha256')!=_hash(_json(candidate)) or proof.get('semantic_review')!='accept'):
+        raise _UnverifiableReview('archived candidate/version/execution proof mismatch')
+    if (payload.get('candidate')!=candidate or payload.get('domain_id')!=row['domain_id']
+            or payload.get('phase')!='review' or payload.get('scope_type')!=call['scope']
+            or payload.get('bundle_sha256')!=frozen['bundle_sha256']
+            or payload.get('contract_sha256')!=frozen['contract_sha256']
+            or payload.get('reference_hashes')!=frozen['reference_hashes']
+            or payload.get('required_schema')!=ReviewResponse.model_json_schema()
+            or payload.get('candidate_schema')!=FactCandidate.model_json_schema()
+            or call['domain_id']!=row['domain_id'] or call['phase']!='review'):
+        raise _UnverifiableReview('archived review candidate/schema/frozen closure mismatch')
+    expected = phase_messages('review',frozen['skill_text'],frozen['references'],frozen['contract'],payload)
+    if messages!=expected:
+        raise _UnverifiableReview('archived trusted review instructions mismatch')
+    snapshot = _snapshot(store,run_id,candidate['evidence'])
+    chunk = row['review_chunk']
+    page = ModelService._page_payload(None,snapshot,chunk)
+    if (payload.get('page')!=page or row.get('source')!=page
+            or call['input_range']!={'snapshot_id':page['snapshot_id'],'start':page['start'],'end':page['end']}):
+        raise _UnverifiableReview('archived review source/chunk binding mismatch')
+    if validate_candidate(candidate,frozen['contract'],snapshot,chunk)['status']!='program_valid':
+        raise _UnverifiableReview('archived actual candidate program proof invalid')
+    if payload.get('baseline')!=_archive_selected_baseline(path,baseline,candidate,frozen['contract']):
+        raise _UnverifiableReview('archived review selected frozen baseline mismatch')
+    binding = {name:payload[name] for name in ('phase','scope_type','bundle_sha256','contract_sha256',
+               'reference_hashes','page','identity_context','required_schema','candidate_schema')}
+    binding['baseline'] = {'baseline_sha256':baseline['baseline_sha256'],'created_at':baseline['created_at'],
+                           'chips':[],'relations':[],'field_provenance':[]}
+    digest = _hash(_json(binding))
+    if row.get('review_binding_sha256')!=digest or proof.get('review_binding_sha256')!=digest:
+        raise _UnverifiableReview('archived candidate-independent review binding hash mismatch')
+    expected_review = ReviewResponse.model_validate({k:v for k,v in call.get('business_response',call['response']).items() if not k.startswith('_')}).model_dump()
+    if {k:v for k,v in review.items() if k!='version'}!=expected_review or not proof.get('accepted'):
+        raise _UnverifiableReview('archived accepted review result binding mismatch')
+
+
+def _verify_current_review(store, run_id, row, version, review, call, proof):
+    """Fresh factual authority uses the real saved producer/review/binding.
+
+    Original source evidence remains verifiable even when audit diagnostics
+    intentionally redact public example commands. No archive-grade request
+    reconstruction or recovery of a private identity-context value is needed.
+    """
+    _,baseline = frozen_baseline(store,run_id)
+    frozen = load_phase(store.run_path(run_id)/'skill_bundle',row['domain_id'],'review')
+    if frozen['bundle_sha256'] != baseline['rule_bundle_hash']:
+        raise ValueError('current frozen review rules mismatch')
+    if (proof.get('version')!=version['version'] or proof.get('execution_id')!=call['execution_id']
+            or proof.get('candidate_sha256')!=_hash(_json(version['candidate']))
+            or proof.get('semantic_review')!='accept' or not proof.get('accepted')
+            or proof.get('input_sha256')!=version.get('input_sha256')
+            or proof.get('review_binding_sha256')!=row.get('review_binding_sha256')):
+        raise _UnverifiableReview('current candidate/version/review hash association mismatch')
+    for value in (version.get('input_sha256'),row.get('review_binding_sha256')):
+        if not isinstance(value,str) or not re.fullmatch('[0-9a-f]{64}',value):
+            raise _UnverifiableReview('current saved review input hash missing')
+    messages = call.get('raw_request')
+    if not isinstance(messages,list) or len(messages)!=2 or any(not isinstance(m,dict) for m in messages):
+        raise _UnverifiableReview('current saved review audit request missing')
+    operation = next((r for r in store.list_operations(run_id) if r['request_id']==call['operation_id']),None)
+    if (operation is None or operation['state']!='completed'
+            or operation['payload'].get('logical_id')!=call['logical_id']
+            or operation['payload'].get('stage')!='reviewing'
+            or _hash(_json(operation['payload']))!=operation['payload_hash']
+            or operation['result']!=call.get('business_response',call['response'])
+            or call['phase']!='review' or call['domain_id']!=row['domain_id']
+            or call['bundle_sha256']!=frozen['bundle_sha256'] or call['contract_sha256']!=frozen['contract_sha256']
+            or call['reference_hashes']!=frozen['reference_hashes']):
+        raise _UnverifiableReview('current actual producer review operation mismatch')
+    events = [event['payload'] for event in store.events(run_id)]
+    started = next((e for e in events if e.get('kind')=='model_call_started'
+                    and e.get('execution_id')==call['execution_id'] and e.get('domain_id')==row['domain_id']
+                    and e.get('phase')=='review'),None)
+    if started is None or not any(e.get('kind')=='model_call_finished' and e.get('execution_id')==call['execution_id']
+                and e.get('domain_id')==row['domain_id'] and e.get('phase')=='review' and e.get('status')=='completed' for e in events):
+        raise _UnverifiableReview('current actual review execution audit missing')
+    # These hash-only producer fields do not change the operation/replay
+    # protocol. Older legitimate producers retain their saved basic proof.
+    if call.get('input_sha256') is not None:
+        if (call['input_sha256']!=version['input_sha256']
+                or call['review_binding_sha256']!=row['review_binding_sha256']
+                or call['audited_request_sha256']!=_hash(_json(messages))
+                or any(started.get(name)!=call.get(name) for name in
+                       ('input_sha256','review_binding_sha256','audited_request_sha256'))):
+            raise _UnverifiableReview('current original producer review hash association mismatch')
+    elif _hash(_json(messages))==operation['payload'].get('messages_sha256'):
+        # Unredacted older requests can still verify the exact input chain.
+        _verify_review_input(store,run_id,row,version,review,call,proof)
 
 def _evidence(store, run_id, candidate, proof):
     snapshot = _snapshot(store,run_id,candidate['evidence'])
@@ -326,10 +499,22 @@ class ComparisonService:
                                    binding.get('comparison_key'),binding['comparison'],binding['candidate']['field_name']]))
         old_sources = self._old_evidence(baseline,binding)
         new = None
+        verification_status,verification_reason = 'not_executed','saved semantic proof was not accepted'
         if binding['model_proof']['accepted']:
-            new = _evidence(self.store,self.run_id,binding['candidate'],binding['model_proof'])
+            # Current snapshot/baseline/rule integrity failures still propagate.
+            # Only a typed unverifiable review audit is a conservative outcome.
+            supported = _evidence(self.store,self.run_id,binding['candidate'],binding['model_proof'])
+            try:
+                row,version,review,call = _saved_review(self.store,self.run_id,candidate_id,binding['model_proof']['version'])
+                _verify_current_review(self.store,self.run_id,row,version,review,call,binding['model_proof'])
+            except _UnverifiableReview as exc:
+                verification_status,verification_reason = 'unverifiable',str(exc)
+            else:
+                new = supported
+                verification_status,verification_reason = 'verified','current saved producer, independent review and final evidence binding verified; audit redaction is separate'
+        effective_validated = binding['validated'] and verification_status=='verified'
         basis = baseline['old_value_basis']
-        if not binding['validated']:
+        if not effective_validated:
             value_kind = 'unknown'
         elif basis == 'entity_absent':
             value_kind = 'new_entity'
@@ -346,6 +531,8 @@ class ComparisonService:
         membership,membership_reason = self._membership(new,old_sources,baseline)
         quality,quality_reason = self._quality(binding,new,old_sources,baseline['normalization_policy'])
         result = {**baseline, **binding, 'old_sources':old_sources, 'new_source':new,
+                  'validated':effective_validated, 'update_eligible':binding['update_eligible'] and effective_validated,
+                  'evidence_verification_status':verification_status,'evidence_verification_reason':verification_reason,
                   'field_key':self._field_key(binding), 'task_scopes':self._task_scopes(binding),
                   'value_change_kind':value_kind, 'source_membership_kind':membership,
                   'source_membership_reason':membership_reason, 'source_quality_kind':quality,
@@ -395,6 +582,7 @@ class ComparisonService:
                     'urls':len({url for url,_ in sources}), 'validated_candidates':len(valid),
                     'rejected_candidates':sum(scope is None or scope in scopes for scopes in rejected.values()),
                     'value_changes':len({r['field_key'] for r in valid if r['value_change_kind'] in {'new_entity','added','changed'}}),
+                    'unverifiable_evidence_candidates':sum(r['evidence_verification_status']=='unverifiable' for r in items),
                     'condition_unresolved_candidates':sum(r['relation_readiness']['status']=='unresolved' for r in items),
                     'dependency_unresolved_candidates':sum(r['dependency_status']=='dependency_unresolved' for r in items),
                     'comparison_unresolved_candidates':sum(r['comparison']['status']=='comparison_unresolved' for r in items),
