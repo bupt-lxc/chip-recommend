@@ -812,7 +812,7 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-这些路径是配置模板，不能直接认定宿主机该 Python 路径存在。环境预检验证 Hermes CLI/Python、共享 data root、宿主机↔容器路径映射、token、loopback 工具 `/health`、规则根/包版本和可写运行目录；不支持时停止并输出具体缺项。env 文件只存部署侧，密钥不提交。工具服务沿用宿主机 loopback 5341；若容器映射无法通过 loopback 访问，先明确网络模式及安全地址再配置，禁止通过放宽公网绑定绕开。
+这些路径是配置模板，不能直接认定宿主机该 Python 路径存在。环境预检验证 Hermes CLI/Python、共享 data root、宿主机↔容器路径映射、token、实际 loopback 工具 `/health`、规则根/包版本和可写运行目录；不支持时停止并输出具体缺项。env 文件只存部署侧，密钥不提交。v3 复用运行时为单次执行建立的宿主机回环端点及活动预算，旧 5341 服务不作为必需能力；实际端点健康与 Token/运行 ID/合同绑定在运行时预检中核验。API 容器通过共享目录协作，不另起工具注册服务，也不通过放宽公网绑定绕开。
 
 Dockerfile 增加权威 `.hermes-skills` 及必要参考只读打包，运行数据使用同一宿主机 volume；API容器无需安装 Hermes CLI。旧 dispatcher 筛除 schema_version v3，旧安装器/队列不重叠领取。本任务产出服务配置与可运行脚本，部署前检查真实环境并展示具体差异；不自动启用旧 cron 或正式发布器。
 - [ ] **Step 4：GREEN。** domain API/Worker 和现有管理员权限测试通过；模拟 API 重启后同键仍返回同一运行，租约过期 Worker 不能覆盖新结果。
