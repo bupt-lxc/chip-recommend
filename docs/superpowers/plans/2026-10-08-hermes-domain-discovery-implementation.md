@@ -318,7 +318,7 @@ def normalize_start(payload, idempotency_key=None):
 
 **Files:** `store.py`；测试 `tests/test_domain_store.py`。复用 SQLite backup 操作，避免 `create_test_workspace` 隐式生成旧种子任务。
 
-- [ ] **Step 1：写启动键冲突和 fencing 测试。**
+- [x] **Step 1：写启动键冲突和 fencing 测试。**
 
 ```python
 import pytest
@@ -344,8 +344,8 @@ def test_stale_worker_cannot_commit(tmp_path):
 ```
 
 补充两个独立连接竞争领取、同工具请求同内容不重执行/异内容冲突、崩溃后仅恢复未完成任务、旧 v2 resume 拒绝、规则 hash 不变、正式库启用 WAL 时 backup 完整等测试。时钟依赖注入，测试不 sleep。
-- [ ] **Step 2：RED。** `python -m pytest tests/test_domain_store.py -q`。
-- [ ] **Step 3：建立两套控制表与一致性备份。**
+- [x] **Step 2：RED。** `python -m pytest tests/test_domain_store.py -q`。
+- [x] **Step 3：建立两套控制表与一致性备份。**
 
 ```sql
 CREATE TABLE IF NOT EXISTS starts (
@@ -388,8 +388,8 @@ def payload_hash(payload):
 ```
 
 run_id 严格校验并解析为允许根下的目录；任何公开 ID 不直接拼入 shell。初始化先持久化启动绑定，再建立基线与冻结规则包；崩溃续跑沿用同一 run_id，不另起基线。JSONL 从 events 按 sequence 幂等导出，记录 event_id；日志中断不丢事务结果。
-- [ ] **Step 4：GREEN。** store 测试通过；正式源连接始终只读，基线业务表在整个运行中不写。
-- [ ] **Step 5：提交。** `git add chip_model/pipeline/domain_discovery/store.py tests/test_domain_store.py`，`git commit -m "feat: persist discovery runs with idempotency and fenced leases"`。
+- [x] **Step 4：GREEN。** store 测试通过；正式源连接始终只读，基线业务表在整个运行中不写。
+- [x] **Step 5：提交。** `git add chip_model/pipeline/domain_discovery/store.py tests/test_domain_store.py`，`git commit -m "feat: persist discovery runs with idempotency and fenced leases"`。
 
 ## Task 5：累计预算、阶段和唯一终态
 
