@@ -755,6 +755,8 @@ def build_domain_prompt(run_id, domain_id, chip, bundle_hash, resume_state):
 
 后台任务的 task_key 由 URL snapshot hash、domain、phase、chunk 或 logical_candidate_id 组成，版本修订附 revision；任务状态 queued/running/completed/failed/interrupted。任务成功与候选拒绝区分；模型拒绝返回正常完成判定。Worker 重启将失去租约的 running 任务标记可恢复；保留 attempts、revision 和计费。进行中的模型/网络超时限由剩余总预算和单调用上限共同确定。
 
+URL×domain 作业复用 RunStore 队列；块、阶段、逻辑候选与修订复用 ModelService 的持久化记录及原操作回执，避免重复调度。导出同时保留完整原记录和 queued/running/completed/failed/interrupted 工作状态投影；业务拒绝或依赖未解不伪装成执行失败，未完成范围、重试和计费仍可核查。
+
 运行单元不再依 chips 数量膨胀。保留 `run_hermes_open_web_test` Python 函数名作为新版委托适配，但默认调用 v3；target_fields 非空和旧 v2 resume 明确拒绝。旧读取逻辑另行保留，不因新版异常偷偷调用 Python-only runner。stdout 只作诊断，终态读取 store，不用尾部猜测完成。
 
 日志的 executor 固定 `hermes`、`backend_extract`、`backend_review`，各阶段分别记录 loaded/executed/accepted/rejected/failed。Hermes 的加载证明来自预检实际目录与规则哈希，后端来自 load_phase 输入引用；安装成功不能替代执行证明。关联身份任务不产生新的 plan/search 阶段。
