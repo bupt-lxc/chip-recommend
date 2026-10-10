@@ -198,7 +198,7 @@ class HtmlSearchProvider:
             container = '#b_results'
         elif self.name == 'so360-html':
             endpoint = 'https://www.so.com/s'
-            selector, anchor_selector, snippet_selector = 'li.res-list', 'h3.res-title a[data-mdurl], h3.res-title a[href]', '.res-list-summary'
+            selector, anchor_selector, snippet_selector = 'li.res-list', 'h3.res-title a[data-mdurl], h3.res-title a[href]', '.res-list-summary, .res-desc'
             container = '#m-spread-left, #main, #container'
         else:
             endpoint = 'https://html.duckduckgo.com/html/'

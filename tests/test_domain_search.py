@@ -304,6 +304,62 @@ def test_html_adapter_records_actual_locale_empty_challenge_and_transport(setup)
     assert adapter.search('probe', 10, language='en').outcome == 'http_error'
 
 
+@pytest.mark.parametrize('summary_class, summary_text', [
+    ('res-desc', 'NVIDIA<em>L40S Specifications</em> L40S A100 80GB SXM Best For Universal GPU for Gen AI '
+     'Highest Perf Multi-Node AI GPU Architecture NVIDIA Ada Lovelace NVIDIA Ampere FP6...'),
+    ('res-list-summary', 'Legacy summary <em>with emphasis</em>'),
+    (None, ''),
+    ('res-desc', ''),
+], ids=['observed-layout', 'legacy-layout', 'absent-summary', 'empty-summary'])
+def test_so360_html_adapter_preserves_result_summary_and_raw_destination(summary_class, summary_text):
+    from chip_model.pipeline.domain_discovery.search import HtmlSearchProvider
+    from chip_model.pipeline.open_web_test import SoHtmlSearch
+
+    # Minimal public result DOM from the 2026-10-10 "L40S specifications"
+    # response; the summary variants cover the older layout and missing text.
+    summary = f'<p class="{summary_class}">{summary_text}</p>' if summary_class else ''
+    html = f'''<ul class="result"><li class="res-list">
+        <h3 class="res-title"><a
+            data-mdurl="https://www.voiiov.cn/product/GPU_AI/L40S.html"
+            href="https://www.so.com/link?m=eoCBiCNEUQ4JybhcTFCHdANAxyQPZzKL6FgqEOMKMuQMje4c7/D3iPalUBAp3vaFEhp9kjBEmA5VZj2jNFCfivnKQCuHtZahkw2tgcLQ6R4QCNRQOBdWf12civeAqM/Nk0ld/4dIjkYpf0gVnfDYoOhZ4ZdIfUCjf"
+        >NVIDIA <em>L40S</em>_美邦天下科技有限公司</a></h3>
+        {summary}
+    </li></ul>'''
+
+    class Session:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, url, **kwargs):
+            self.calls.append((url, kwargs))
+            return type('Response', (), {'text': html, 'status_code': 200})()
+
+    raw = SoHtmlSearch(proxy=None)
+    raw.session = Session()
+    response = HtmlSearchProvider(raw).search('L40S specifications', 10, language='en')
+
+    expected_summary = {
+        'res-desc': 'NVIDIA L40S Specifications L40S A100 80GB SXM Best For Universal GPU for Gen AI '
+                    'Highest Perf Multi-Node AI GPU Architecture NVIDIA Ada Lovelace NVIDIA Ampere FP6...',
+        'res-list-summary': 'Legacy summary with emphasis',
+    }.get(summary_class, '') if summary_text else ''
+    assert response.rows == [{
+        'url': 'https://www.voiiov.cn/product/GPU_AI/L40S.html',
+        'title': 'NVIDIA L40S _美邦天下科技有限公司',
+        'snippet': expected_summary,
+        'rank': 1,
+    }]
+    assert response.outcome == 'success'
+    assert response.http_status == 200
+    assert response.network_status == response.parse_status == 'ok'
+    assert response.endpoint == 'https://www.so.com/s'
+    assert response.locale == 'en-US'
+    assert response.error == ''
+    assert len(raw.session.calls) == 1
+    assert raw.session.calls[0][0] == response.endpoint
+    assert raw.session.calls[0][1]['params'] == {'q': 'L40S specifications'}
+
+
 def test_diagnostics_redact_secrets_and_unsafe_url_is_raw_only(setup):
     from chip_model.pipeline.domain_discovery.search import ProviderResponse
 
