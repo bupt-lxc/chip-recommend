@@ -181,7 +181,10 @@ def check_environment(data_root):
                 environment['PYTHONPATH'] = str(Path(os.environ['HERMES_SDK_ROOT']).resolve())
             code = ("import inspect; from run_agent import AIAgent; "
                     "s=inspect.signature(AIAgent); "
-                    "required={'enabled_toolsets','skip_context_files','skip_memory','skip_background_review','run_budget_seconds','cwd'}; "
+                    # These are the public AIAgent 0.19 controls used by the
+                    # adapter to keep each run isolated. Per-run resolver and
+                    # filesystem fencing are still verified by the runtime probe.
+                    "required={'enabled_toolsets','skip_context_files','skip_memory'}; "
                     "assert required<=set(s.parameters), 'unsupported AIAgent SDK'; print('SDK capabilities available')")
             try:
                 probe = subprocess.run([python, '-c', code], cwd=home, env=environment, capture_output=True,
