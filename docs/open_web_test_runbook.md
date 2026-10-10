@@ -349,3 +349,12 @@ UI 默认展开五列“实体/字段、原值与原来源、候选新值与新�
 真实六域验收应在没有外部写入的窗口，先调用同一函数保存 before，运行后再保存 after，核对完整摘要和表结构/行数；源码库不改 journal mode，不仅比较主文件或 SQLite 页 hash。外部写入导致摘要改变时，记录干扰并在静默窗口重做，不擅自停 cron。当前摘要一致只覆盖本地探针区间，尚无真实 Hermes 运行前后无写入证明。
 
 Task16 窄回归：`python -m pytest tests/test_open_web_search_probe.py -q`。项目完整回归要求 `python -m pytest -q`，唯一已执行全套为 1304 passed/3 failed；后续针对三处旧合同预期的修复与相关测试通过，但未重跑全套，不能称 full GREEN。更完整的测试与限制见验收记录。
+
+
+## 2026-10-10 继续验收的实测配置
+
+已配置的 `kimi-k2.6` 在本次 `thinking.type=disabled` 请求下，温度 1.0 返回 HTTP 400：`invalid temperature: only 0.6 is allowed for this model`。保持原 `.env` 和用户温度适配不变，在独立诊断进程使用 `DATA_AGENT_LLM_TEMPERATURE=0.6` 后，生产 `OpenAIModelTransport` 单次请求返回有效 JSON，31 输入/8 输出 token，耗时 0.838 秒。这只证明该后端连接和 JSON 传输可用，不证明完整字段提取、独立复核或 Hermes 模型通路通过。运行隔离 Worker 前应明确配置有效温度，不能将原有温度 1 的配置存在视为模型健康。
+
+360 真实页面使用 `p.res-desc`，已兼容旧 `.res-list-summary`；搜索/解析回归 82 项通过，真实单次复验的六条结果全部有摘要。Bing 部分完整多词查询仍不相关，DDG 仍为挑战页；新证据与边界见验收记录。搜索摘要仅供 Hermes 初筛，不替代正文快照和字段证据。
+
+SSH 已确认能建立 TCP 连接，但当前主机密钥不在本机信任记录中，尚未进入认证或远程 Hermes 版本检查。目标连接和可信密钥仍需核对；不能将 TCP 可达视为宿主预检通过。
