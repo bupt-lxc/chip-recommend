@@ -25,6 +25,24 @@ def test_completion_uses_selection_store_not_stdout(code, submitted, error):
     assert check(code, submitted) == error
 
 
+@pytest.mark.parametrize(('source', 'expected'), [
+    ('https://api.moonshot.cn', 'https://api.moonshot.cn/v1'),
+    ('https://api.moonshot.cn/v1/', 'https://api.moonshot.cn/v1'),
+    ('https://proxy.example/gateway', 'https://proxy.example/gateway/v1'),
+])
+def test_backend_base_url_maps_to_openai_api_root(source, expected):
+    assert runtime._openai_api_root(source) == expected
+
+
+@pytest.mark.parametrize('source', [
+    'ftp://api.moonshot.cn', 'https://user:secret@api.moonshot.cn',
+    'https://api.moonshot.cn?token=secret', 'https://api.moonshot.cn#fragment',
+])
+def test_backend_base_url_rejects_credentials_and_non_http_components(source):
+    with pytest.raises(ValueError, match=r'HTTP\(S\) API origin'):
+        runtime._openai_api_root(source)
+
+
 class Provider:
     name = 'controlled-runtime-provider'
     calls = 0
@@ -458,12 +476,22 @@ def discover_plugins():
 from pathlib import Path
 from tools.registry import registry
 class AIAgent:
+    # Match the relevant public Hermes 0.19.0 constructor surface. In
+    # particular, do not accept arbitrary kwargs: unsupported isolation flags
+    # must fail the fixture just as they fail against the installed SDK.
     def __init__(self, enabled_toolsets=None, skip_context_files=None, skip_memory=None,
-        skip_background_review=None, run_budget_seconds=None, cwd=None, prefill_messages=None, **kwargs):
+        prefill_messages=None, load_soul_identity=True, quiet_mode=False,
+        save_trajectories=True, model=None, provider=None):
         self.valid_tool_names = set(registry.entries)
         self.tools = [{'function': value['schema']} for value in registry.entries.values()]
-        Path(os.environ['HERMES_HOME'], 'agent-context.json').write_text(json.dumps({'cwd': cwd, 'toolsets': enabled_toolsets,
-            'skip_context_files': skip_context_files, 'skip_memory': skip_memory, 'skip_background_review': skip_background_review}))
+        Path(os.environ['HERMES_HOME'], 'agent-context.json').write_text(json.dumps({'toolsets': enabled_toolsets,
+            'skip_context_files': skip_context_files, 'skip_memory': skip_memory,
+            'load_soul_identity': load_soul_identity, 'prefill_messages': prefill_messages,
+            'quiet_mode': quiet_mode, 'save_trajectories': save_trajectories,
+            'model': model, 'provider': provider,
+            'openai_base_url': os.environ.get('OPENAI_BASE_URL'),
+            'openai_key_matches_fixture': os.environ.get('OPENAI_API_KEY') == 'fixture-key',
+            'backend_key_forwarded': 'DATA_AGENT_LLM_API_KEY' in os.environ}))
     def run_conversation(self, user_message):
         content = json.loads(user_message.split('\\n', 3)[3])
         binding = {'run_id': user_message.split('\\n')[0][7:], 'contract_version': 3, 'pipeline': 'hermes-open-web-v3',
@@ -488,7 +516,10 @@ class AIAgent:
     return runtime.HermesRunner(command=[sys.executable, str(sdk / 'cli.py')], python=sys.executable, sdk_root=sdk)
 
 
-def test_installed_adapter_executes_subprocess_resolver_plugin_and_three_real_http_boundaries(deps, sdk_runner):
+def test_installed_adapter_executes_subprocess_resolver_plugin_and_three_real_http_boundaries(deps, sdk_runner, monkeypatch):
+    monkeypatch.setenv('DATA_AGENT_LLM_API_KEY', 'fixture-key')
+    monkeypatch.setenv('DATA_AGENT_LLM_BASE_URL', 'https://api.moonshot.cn')
+    monkeypatch.setenv('DATA_AGENT_LLM_MODEL', 'kimi-k2.6')
     deps['hermes_runner'] = sdk_runner
     result = run(deps)
     assert result['status'] == 'no_findings', result
@@ -500,7 +531,14 @@ def test_installed_adapter_executes_subprocess_resolver_plugin_and_three_real_ht
     assert not (sdk_runner.home / '.env').exists()
     context = json.loads((sdk_runner.home / 'agent-context.json').read_text())
     assert context['toolsets'] == ['aishperf_open_web']
-    assert context['skip_context_files'] and context['skip_memory'] and context['skip_background_review']
+    assert context['skip_context_files'] and context['skip_memory']
+    assert context['load_soul_identity'] is False
+    assert context['prefill_messages'] == []
+    assert context['quiet_mode'] and context['save_trajectories'] is False
+    assert 'cwd' not in context and 'run_budget_seconds' not in context
+    assert context['model'] == 'kimi-k2.6' and context['provider'] == 'openai'
+    assert context['openai_base_url'] == 'https://api.moonshot.cn/v1'
+    assert context['openai_key_matches_fixture'] and not context['backend_key_forwarded']
 
 
 def test_installed_adapter_rejects_agent_extra_tools_before_model_conversation(deps, sdk_runner):

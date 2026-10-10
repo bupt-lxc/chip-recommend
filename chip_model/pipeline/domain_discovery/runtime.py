@@ -185,6 +185,23 @@ class HermesExecutionFailure(RuntimeError):
     """Hermes ended without completing its required selection work."""
 
 
+def _openai_api_root(base_url):
+    """Normalize the backend origin to the OpenAI-compatible API root."""
+    from urllib.parse import urlsplit, urlunsplit
+    try:
+        parts = urlsplit(str(base_url).strip())
+        if (parts.scheme not in {'http', 'https'} or not parts.netloc
+                or parts.username is not None or parts.password is not None
+                or parts.query or parts.fragment):
+            raise ValueError
+        path = parts.path.rstrip('/')
+        if path != '/v1' and not path.endswith('/v1'):
+            path += '/v1'
+        return urlunsplit((parts.scheme, parts.netloc, path, '', ''))
+    except (TypeError, ValueError):
+        raise ValueError('DATA_AGENT_LLM_BASE_URL must be an HTTP(S) API origin') from None
+
+
 def execution_state(store, run_id):
     """Project unresolved execution coverage, retaining the original records.
 
@@ -589,6 +606,7 @@ class HermesRunner:
     """
     PROVIDER_ENV = ('OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENROUTER_API_KEY',
                     'HERMES_MODEL', 'HERMES_PROVIDER', 'ANTHROPIC_API_KEY')
+    BACKEND_ENV = ('DATA_AGENT_LLM_API_KEY', 'DATA_AGENT_LLM_BASE_URL', 'DATA_AGENT_LLM_MODEL')
 
     def __init__(self, command=None, *, python=None, sdk_root=None):
         import shlex
@@ -682,15 +700,33 @@ class HermesRunner:
         project = Path(__file__).resolve().parents[3]
         for name in ('__init__.py', 'plugin.yaml', 'tool-contract.json'):
             shutil.copyfile(project / '.hermes-plugins/aishperf-open-web' / name, plugin / name)
-        # Query entrypoint names without importing any third-party plugins. The
-        # bootstrap repeats this in the actual SDK environment before discovery.
-        config = {'skills': {'external_dirs': [str(self.bundle)]},
-                  'plugins': {'enabled': ['aishperf-open-web'], 'disabled': []},
-                  'model': os.getenv('HERMES_MODEL', '')}
-        (self.home / 'config.json').write_text(_json(config), encoding='utf-8')
+        # The child gets only platform essentials and explicitly named provider
+        # variables; container-wide environment/config files are not inherited.
         self.environment = {key: os.environ[key] for key in ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP',
             'HOME', 'USERPROFILE', 'LANG', 'SSL_CERT_FILE', 'SSL_CERT_DIR') if key in os.environ}
         self.environment.update({key: os.environ[key] for key in self.PROVIDER_ENV if key in os.environ})
+        # Backend and Hermes providers use different base-URL conventions and
+        # variable names. DATA_AGENT_LLM_* is the container's authoritative
+        # configuration, mapped explicitly to Hermes' OpenAI-compatible mode.
+        backend = {key: os.environ.get(key, '') for key in self.BACKEND_ENV}
+        present = [bool(value) for value in backend.values()]
+        if any(present) and not all(present):
+            raise RuntimeError('DATA_AGENT_LLM provider configuration is incomplete')
+        configured_model = self.environment.get('HERMES_MODEL', '')
+        if all(present):
+            self.environment.update({
+                'OPENAI_API_KEY': backend['DATA_AGENT_LLM_API_KEY'],
+                'OPENAI_BASE_URL': _openai_api_root(backend['DATA_AGENT_LLM_BASE_URL']),
+                'HERMES_MODEL': backend['DATA_AGENT_LLM_MODEL'],
+                'HERMES_PROVIDER': 'openai',
+            })
+            configured_model = backend['DATA_AGENT_LLM_MODEL']
+        # Query entrypoint names without importing third-party plugins. The
+        # bootstrap repeats this in the actual SDK environment before discovery.
+        config = {'skills': {'external_dirs': [str(self.bundle)]},
+                  'plugins': {'enabled': ['aishperf-open-web'], 'disabled': []},
+                  'model': configured_model}
+        (self.home / 'config.json').write_text(_json(config), encoding='utf-8')
         self.environment.update({'HERMES_HOME': str(self.home), 'HERMES_ENABLE_PROJECT_PLUGINS': '0',
             'HERMES_BUNDLED_PLUGINS': str(self.home / 'empty-bundled-plugins'), 'PYTHONUTF8': '1',
             'PYTHONDONTWRITEBYTECODE': '1', 'TERMINAL_CWD': str(self.cwd)})
@@ -784,8 +820,7 @@ from tools import skills_tool
 from hermes_cli.plugins import discover_plugins
 from tools.registry import registry
 from run_agent import AIAgent
-required = {'enabled_toolsets', 'skip_context_files', 'skip_memory', 'skip_background_review', 'run_budget_seconds',
-            'cwd', 'prefill_messages'}
+required = {'enabled_toolsets', 'skip_context_files', 'skip_memory', 'load_soul_identity', 'prefill_messages'}
 if not required.issubset(inspect.signature(AIAgent).parameters):
     raise RuntimeError('Unsupported installed AIAgent isolation capabilities')
 manifest = json.loads((bundle / 'bundle.manifest.json').read_text(encoding='utf-8'))
@@ -839,11 +874,15 @@ if mode == 'execute':
     saved = json.loads((home / 'prompt.json').read_text(encoding='utf-8'))
     # The verified complete phase input includes the full Skill, machine
     # contract and every public reference; references cannot require shell/web.
+    # Hermes 0.19.0 has no per-agent cwd, run budget or background-review
+    # switch. The parent owns cwd and the hard timeout (Popen + process-group
+    # cancellation); the SDK only receives options in its public signature.
+    # Memory and Skill review nudges are inert because the agent is restricted
+    # below to the three audited tools, with no `memory` or `skill_manage`.
     agent = AIAgent(model=os.environ.get('HERMES_MODEL', ''),
                     provider=os.environ.get('HERMES_PROVIDER') or None,
                     enabled_toolsets=['aishperf_open_web'], skip_context_files=True,
-                    skip_memory=True, skip_background_review=True,
-                    run_budget_seconds=saved['timeout'], cwd=str(home / 'work'),
+                    load_soul_identity=False, skip_memory=True,
                     prefill_messages=[], quiet_mode=True, save_trajectories=False)
     if set(agent.valid_tool_names) != set(names) or {t['function']['name'] for t in agent.tools} != set(names):
         raise RuntimeError('Actual Hermes agent enabled uncontrolled tools')
