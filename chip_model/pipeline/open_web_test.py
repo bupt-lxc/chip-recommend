@@ -650,6 +650,12 @@ class OpenAICompatibleExtractor:
         ).rstrip("/")
         self.api_key = api_key or os.getenv("DATA_AGENT_LLM_API_KEY") or ""
         self.model_name = model or os.getenv("DATA_AGENT_LLM_MODEL") or "kimi-k2.6"
+        try:
+            self.temperature = float(os.getenv("DATA_AGENT_LLM_TEMPERATURE", "0.6"))
+        except ValueError as exc:
+            raise ValueError("DATA_AGENT_LLM_TEMPERATURE 须为 0–2 之间的数值。") from exc
+        if not 0 <= self.temperature <= 2:
+            raise ValueError("DATA_AGENT_LLM_TEMPERATURE 须为 0–2 之间的数值。")
         self.timeout = timeout
         if not self.base_url or not self.api_key:
             raise ValueError(
@@ -712,7 +718,7 @@ class OpenAICompatibleExtractor:
                     {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
                 ],
                 "stream": False,
-                "temperature": 0.6,
+                "temperature": self.temperature,
                 "thinking": {"type": "disabled"},
             },
             timeout=self.timeout,

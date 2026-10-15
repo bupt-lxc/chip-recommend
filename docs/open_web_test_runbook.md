@@ -100,3 +100,8 @@ python scripts/run_hermes_open_web_test.py \
 ```bash
 python -m pytest -q
 ```
+
+## 本地模型温度配置
+
+保留本地适配：`DATA_AGENT_LLM_TEMPERATURE` 可设置 0–2 的有限数值，默认 0.6，沿用远程关闭 thinking 的请求参数。本地现有配置为 1。
+`DATA_AGENT_LLM_BASE_URL` 填接口根地址，不含 `/v1/chat/completions`。进程启动前需加载环境变量，密钥不得写入版本库。
