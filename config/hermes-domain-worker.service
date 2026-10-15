@@ -1,0 +1,13 @@
+[Unit]
+Description=AISHPerf Hermes domain discovery worker
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/lxc/chip-recommend
+EnvironmentFile=/home/lxc/chip-recommend/config/hermes-domain-worker.env
+ExecStart=/home/lxc/chip-recommend/.venv/bin/python scripts/hermes_domain_worker.py --data-root /home/lxc/chip-recommend/data
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

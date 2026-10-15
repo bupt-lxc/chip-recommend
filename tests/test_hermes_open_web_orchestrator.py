@@ -1,14 +1,16 @@
-import json
 import sqlite3
 from pathlib import Path
+
+import pytest
 
 from chip_model.pipeline.hermes_open_web_orchestrator import (
     build_hermes_prompt,
     run_hermes_open_web_test,
 )
+from tests.test_domain_acceptance import logical_digest
 
 
-SCHEMA = (Path(__file__).parents[1] / "schema.sql").read_text(encoding="utf-8")
+SCHEMA = (Path(__file__).parents[1] / 'schema.sql').read_text(encoding='utf-8')
 
 
 def _database(path: Path) -> Path:
@@ -34,42 +36,25 @@ def test_prompt_only_passes_run_context_and_leaves_process_to_skill() -> None:
     assert "10 条" not in prompt
 
 
-def test_orchestrator_passes_skill_and_toolset_to_hermes(tmp_path: Path) -> None:
+def test_orchestrator_rejects_custom_fields_before_runner_or_store(tmp_path: Path) -> None:
     formal = _database(tmp_path / "data.db")
-    captured = {}
+    before, _ = logical_digest(formal, tmp_path / 'Fixture-before-fields.db')
+    calls = []
 
     def runner(command, **kwargs):
-        captured["command"] = command
-        prompt = command[-1]
-        run_id = prompt.split("RUN_ID=", 1)[1].splitlines()[0].strip()
-        unit_id = prompt.split("UNIT_ID=", 1)[1].splitlines()[0].strip()
-        folder = formal.parent / "test_runs" / run_id
-        unit_path = folder / "units" / unit_id / "manifest.json"
-        manifest = json.loads(unit_path.read_text(encoding="utf-8"))
-        manifest.update({
-            "status": "success", "stage": "completed",
-            "finished_at": "2026-09-29T12:00:00Z",
-        })
-        unit_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
-        return type("Completed", (), {"returncode": 0, "stdout": "done", "stderr": ""})()
+        calls.append(command)
+        pytest.fail('Deprecated field overrides must not invoke a legacy runner')
 
-    result = run_hermes_open_web_test(
-        source_db=formal,
-        skill="chip-specs",
-        target_chip="NVIDIA H100",
-        target_fields=["vram_gb"],
-        runner=runner,
-        hermes_command=["hermes"],
-    )
-
-    assert result["status"] == "success"
-    assert "--skills" in captured["command"]
-    assert captured["command"][captured["command"].index("--skills") + 1] == "chip-specs"
-    assert "--toolsets" in captured["command"]
-    assert captured["command"][captured["command"].index("--toolsets") + 1] == "aishperf_open_web"
+    with pytest.raises(ValueError, match='字段范围已停用'):
+        run_hermes_open_web_test(source_db=formal, skill='chip-specs', target_chip='NVIDIA H100',
+                                target_fields=['vram_gb'], runner=runner, hermes_command=['hermes'])
+    after, _ = logical_digest(formal, tmp_path / 'Fixture-after-fields.db')
+    assert before == after and calls == []
+    assert not (tmp_path / 'test_runs').exists()
+    assert not (tmp_path / 'domain_runs').exists()
 
 
-def test_all_scope_runs_every_chip_and_discovery_as_one_parent(tmp_path: Path) -> None:
+def test_subprocess_only_runner_cannot_create_per_chip_units_or_fake_v3_success(tmp_path: Path) -> None:
     formal = _database(tmp_path / "data.db")
     with sqlite3.connect(formal) as db:
         db.executemany(
@@ -77,29 +62,16 @@ def test_all_scope_runs_every_chip_and_discovery_as_one_parent(tmp_path: Path) -
             [("Chip A", "Vendor"), ("Chip B", "Vendor")],
         )
     calls = []
+    before, _ = logical_digest(formal, tmp_path / 'Fixture-before-legacy-runner.db')
 
     def runner(command, **kwargs):
         calls.append(command)
-        prompt = command[-1]
-        run_id = prompt.split("RUN_ID=", 1)[1].splitlines()[0].strip()
-        unit_id = prompt.split("UNIT_ID=", 1)[1].splitlines()[0].strip()
-        unit_path = formal.parent / "test_runs" / run_id / "units" / unit_id / "manifest.json"
-        manifest = json.loads(unit_path.read_text(encoding="utf-8"))
-        manifest.update({"status": "success", "stage": "completed", "finished_at": "done"})
-        unit_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
-        return type("Completed", (), {"returncode": 0, "stdout": "done", "stderr": ""})()
+        pytest.fail('Subprocess callbacks cannot replace the audited V3 Hermes adapter')
 
-    result = run_hermes_open_web_test(
-        source_db=formal,
-        skill="chip-specs",
-        target_chip=None,
-        runner=runner,
-        hermes_command=["hermes"],
-    )
-
-    assert result["scope"] == "all"
-    assert result["status"] == "success"
-    assert result["counts"]["units_total"] == 3
-    assert result["counts"]["units_completed"] == 3
-    assert len(calls) == 3
-    assert any("SCOPE_TYPE=discovery" in command[-1] for command in calls)
+    with pytest.raises(ValueError, match='需要 Hermes preflight/run'):
+        run_hermes_open_web_test(source_db=formal, skill='chip-specs', target_chip=None,
+                                runner=runner, hermes_command=['hermes'])
+    after, _ = logical_digest(formal, tmp_path / 'Fixture-after-legacy-runner.db')
+    assert before == after and calls == []
+    assert not (tmp_path / 'test_runs').exists()
+    assert not (tmp_path / 'domain_runs').exists()

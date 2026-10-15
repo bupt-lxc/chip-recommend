@@ -1,0 +1,54 @@
+{
+  "classification": "Fixture",
+  "warning": "ExampleSilicon is fictional. L40S rows, all responses and all URLs are controlled fixtures, not live verification.",
+  "domains": {
+    "identity": {
+      "positive": [{"field_name":"chip_type","value":"GPU","quote":"NVIDIA L40S 48GB PCIe GPU","unit":null}],
+      "negative": [{"field_name":"release_date","value":"2026","quote":"Copyright 2026","unit":null}],
+      "independent_review": {"verdict":"accept","reason":"Fixture explicit vendor and exact SKU."},
+      "negative_review": {"verdict":"reject","reason":"Copyright year is not a release statement."},
+      "expected": {"status":"success","new_entities":0}
+    },
+    "specs": {
+      "positive": [{"field_name":"vram_gb","value":48,"quote":"NVIDIA L40S 48GB PCIe GPU: 48 GB GDDR6","unit":"GB"}],
+      "negative": [{"field_name":"tdp_w","value":2400,"quote":"NVIDIA L40S 48GB PCIe server total power: 2400 W","unit":"W"}],
+      "independent_review": {"verdict":"accept","reason":"Fixture explicit single-card capacity."},
+      "negative_review": {"verdict":"reject","reason":"Server total power cannot become card TDP."},
+      "expected": {"status":"success","new_entities":0}
+    },
+    "compute": {
+      "positive": [{"field_name":"sm_count","value":142,"quote":"NVIDIA L40S 48GB PCIe GPU: SM count 142","unit":"count"}],
+      "negative": [{"field_name":"sm_count","value":999,"quote":"NVIDIA L40S 48GB PCIe GPU: SM count 142","unit":"count"}],
+      "independent_review": {"verdict":"accept","reason":"Fixture explicit SM count."},
+      "negative_review": {"verdict":"reject","reason":"Quoted SM count contradicts extracted value."},
+      "expected": {"status":"success","new_entities":0}
+    },
+    "compatibility": {
+      "positive": [{"field_name":"compat_status","value":"vendor_claimed","quote":"NVIDIA L40S 48GB PCIe GPU supports org/Fixture-7B BF16 on PyTorch 2.5 according to vendor statement","unit":null,"target_table":"chip_model_compatibility","relation":true}],
+      "negative": [{"field_name":"compat_status","value":"verified","quote":"NVIDIA L40S 48GB PCIe GPU supports org/Fixture-7B BF16 on PyTorch 2.5 according to vendor statement","unit":null,"target_table":"chip_model_compatibility","relation":true}],
+      "independent_review": {"verdict":"accept","reason":"Fixture preserves vendor_claimed classification."},
+      "negative_review": {"verdict":"reject","reason":"A vendor claim supplies no actual verification."},
+      "expected": {"status":"success","new_entities":0}
+    },
+    "benchmark": {
+      "positive": [{"field_name":"throughput_tok_s","value":100,"quote":"NVIDIA L40S 48GB PCIe GPU org/Fixture-7B inference BF16 2 cards Fixture-report configuration-A batch 4 input 128 output 256: 100 tokens/s","unit":"tokens/s","target_table":"chip_model_benchmarks","relation":true}],
+      "negative": [{"field_name":"throughput_tok_s","value":100,"quote":"NVIDIA L40S 48GB PCIe GPU org/Fixture-7B inference BF16 2 cards Fixture-report configuration-A: 2x faster","unit":"tokens/s","target_table":"chip_model_benchmarks","relation":true}],
+      "independent_review": {"verdict":"accept","reason":"Fixture exact workload, configuration and absolute metric."},
+      "negative_review": {"verdict":"reject","reason":"Relative speedup is not an absolute throughput measurement."},
+      "expected": {"status":"success","new_entities":0}
+    },
+    "deployment": {
+      "positive": [{"field_name":"backend","value":"vLLM","quote":"Fixture Guide: NVIDIA L40S 48GB PCIe GPU org/Fixture-7B backend vLLM 0.6.2; 2 cards BF16; launch API_KEY=example vllm serve org/Fixture-7B --tensor-parallel-size 2","unit":null,"target_table":"deployment_guides","relation":true}],
+      "negative": [{"field_name":"backend","value":"TensorRT-LLM","quote":"Fixture Guide: NVIDIA L40S 48GB PCIe GPU org/Fixture-7B backend vLLM 0.6.2; 2 cards BF16; launch API_KEY=example vllm serve org/Fixture-7B --tensor-parallel-size 2","unit":null,"target_table":"deployment_guides","relation":true}],
+      "independent_review": {"verdict":"accept","reason":"Fixture exact backend with command retained for display."},
+      "negative_review": {"verdict":"reject","reason":"Backend disagrees with exact guide."},
+      "expected": {"status":"success","new_entities":0}
+    }
+  },
+  "new_entity": {"vendor":"ExampleSilicon","chip_model":"X64 64GB PCIe","value":64,"quote":"ExampleSilicon X64 64GB PCIe GPU: 64 GB HBM3"},
+  "second_variant": {"vendor":"ExampleSilicon","chip_model":"X64 80GB SXM","value":80,"quote":"ExampleSilicon X64 80GB SXM GPU: 80 GB HBM3"},
+  "model_id":"org/Fixture-7B",
+  "missing_model_id":"outside/Fixture-Dependency",
+  "paging_url_count":23,
+  "urls": {"positive":"https://fixture.example/positive","negative":"https://fixture.example/negative","empty":"https://fixture.example/healthy-no-fields","unreachable":"https://fixture.example/unreachable"}
+}

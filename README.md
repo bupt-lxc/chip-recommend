@@ -8,7 +8,7 @@ AISHPerf 将芯片规格、模型元数据、兼容关系、训练与推理实�
 - **算力推荐**：根据模型和训练、推理等场景估算显存与卡数，结合生态、实测、算力和性价比评分，支持国产偏好、厂商偏好及卡数、价格约束。
 - **实测与来源追溯**：查询芯片 × 模型的测试条件、吞吐和延迟，通过 `field_provenance` 查看字段来源、置信度及新旧值。
 - **数据维护**：提供来源链接库、抓取与增量更新流水线、候选校验和发布，以及 Hugging Face 模型元数据同步。
-- **开放互联网隔离测试**：由 Hermes 执行分类 Skill，保留搜索、网页快照、字段提取与运行记录；Web 状态页展示结果，运行由后端启动。
+- **开放互联网隔离测试**：由 Hermes 执行六个数据域的 Skill，保留搜索、网页快照、提取、独立审核与比较记录；管理员提交运行请求，由宿主机 Worker 执行。
 
 ## 快速开始
 
@@ -36,10 +36,10 @@ source .venv/bin/activate
 
 ```bash
 python -m pip install -r requirements.txt
-python -m pip install pytest
+python -m pip install pytest jsonschema
 ```
 
-使用 uv 时，也可通过 `uv venv` 创建环境，再执行 `uv pip install -r requirements.txt pytest`。`requirements.txt` 包含工作簿导入与 PDF 提取所需的附加依赖。
+使用 uv 时，也可通过 `uv venv` 创建环境，再执行 `uv pip install -r requirements.txt pytest jsonschema`。`requirements.txt` 包含工作簿导入与 PDF 提取所需的附加依赖，`jsonschema` 用于六域合同验证测试。
 
 ### 2. 准备数据库
 
@@ -193,17 +193,19 @@ CLI 配置保存在用户目录的 `.parse1/config.yaml`。数据写入应使用
 
 ## 开放互联网测试
 
-Hermes 主链路需另行安装 Hermes、项目插件和工具服务，并配置工具令牌及提取模型 API。完整安装、变量与产物说明见[操作手册](docs/open_web_test_runbook.md)。
+当前主链路为 `hermes-open-web-v3`，需另行安装兼容的 Hermes SDK、项目插件与宿主机 Worker，并分别配置 Hermes 和后端提取/审核模型。Worker 为每次运行创建临时回环工具服务，完整安装、预检、变量与产物说明见[操作手册](docs/open_web_test_runbook.md)。
 
-配置完成后，先针对单颗芯片运行一个 Skill，例如：
+通过环境预检后，启动一个数据域运行；可选芯片名称仅作为线索，例如：
 
 ```bash
-python scripts/run_hermes_open_web_test.py --db data/data.db --chip "NVIDIA H100" --skill chip-specs --field vram_gb
+python scripts/run_hermes_open_web_test.py --db data/data.db --domain specs --chip "NVIDIA H100"
 ```
 
-支持 `chip-identity`、`chip-specs`、`chip-compute`、`chip-compatibility`、`chip-benchmark`、`chip-deployment` 六类 Skill。省略 `--chip` 会处理数据库快照中的全部芯片，并执行开放发现；使用 `--resume <run_id>` 续跑。
+支持 `identity`、`specs`、`compute`、`compatibility`、`benchmark`、`deployment` 六个数据域，也接受对应的 `--skill chip-<domain>` 别名。省略 `--chip` 时启动一个数据域开放发现运行，任务数不随库中芯片数增加。旧 `--field`、`--workers` 参数已停用；使用 `--resume <run_id>` 续跑，响应丢失时用同一 `--request-id` 和参数重试。
 
-运行产物默认位于 `data/test_runs/<run_id>/`；自定义数据库路径时，位于该数据库同级的 `test_runs/<run_id>/`。产物包含隔离数据库、父运行及单元 manifest、搜索计划、URL 决定、提取字段和网页快照。正式数据库仅用于复制与前后指纹核验；验收应确认 `formal_database_modified` 为 `false`。新发现芯片进入候选文件，不动态加入本轮芯片队列。旧版 `run_open_web_test.py` 等脚本用于旧流程回归，主链路以 Hermes 操作手册为准。
+运行状态持久保存在 `data/domain_runs/control.sqlite3` 和 `<run_id>/run.sqlite3`，并导出 manifest、工作清单与事件记录。每个运行保留冻结的业务基线、完整 Skill 包、网页快照和模型审核证据；自定义数据库路径时，`domain_runs/` 位于该数据库同级。正式业务表与 `field_provenance` 不写入，候选仅供复核；正式 Publisher 和持续更新 heartbeat 尚未启用。旧版运行记录和回归脚本仍保留。
+
+当前真实端到端验收尚未通过：已有搜索、访问和筛选证据，但小规模运行未产生有效字段或新实体，模型超时、候选相关性与发现范围仍需处理。实现与受控测试通过不代表正式更新可用，详见[验收记录](docs/acceptance/2026-10-08-hermes-domain-discovery.md)、[当前工作状态](docs/acceptance/2026-10-10-work-status.md)和[小规模对照结果](docs/acceptance/2026-10-10-tavily-small-run-tuning.md)。
 
 ## 开发与验证
 
@@ -232,8 +234,8 @@ static/              Web 前端及运行历史页面资源
 data/                来源资料与本地运行数据库
 config/              数据更新等配置文件
 tests/               pytest 测试
-.agents/skills/      Codex 芯片查询、选型与信息采集技能
-.hermes-skills/      Hermes 技能
+.agents/skills/      Codex 查询/选型技能及六域技能的生成副本
+.hermes-skills/      六域信息采集技能的权威规则
 .hermes-plugins/     Hermes 开放互联网工具插件
 docs/                设计、验证与部署文档
 schema.sql           SQLite 建表与索引定义

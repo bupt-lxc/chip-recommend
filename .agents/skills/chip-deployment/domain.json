@@ -1,0 +1,98 @@
+{
+  "domain_id": "deployment",
+  "label": "部署指南与启动说明",
+  "skill_name": "chip-deployment",
+  "rule_version": "3.0.0",
+  "fields": {
+    "deployment_guides": [
+      "backend",
+      "notes"
+    ]
+  },
+  "entity_keys": {
+    "deployment_guides": [
+      "url",
+      "title",
+      "chip_model",
+      "model_id",
+      "source_type"
+    ]
+  },
+  "conditions": {
+    "entity_matching": {
+      "preserve": [
+        "sku_suffix",
+        "capacity",
+        "form_factor"
+      ],
+      "strip_suffix_or_capacity": false
+    },
+    "candidate_metadata": [
+      "source_url",
+      "source_type",
+      "confidence"
+    ],
+    "candidate_metadata_namespace": "separate_from_business_fields",
+    "ambiguous_history": {
+      "candidate_status": "validated",
+      "comparison_status": "comparison_unresolved",
+      "overwrite": false
+    },
+    "discovery": {
+      "mode": "open",
+      "chip_hint": "optional_existing_or_unknown",
+      "enumerate_full_database": false
+    },
+    "entity_scope": {
+      "relation": "guide_with_chip_and_model_applicability",
+      "unspecified_applicability": "unknown_or_explicitly_generic"
+    },
+    "commands": "display_only",
+    "details_storage": {
+      "fields": [
+        "notes"
+      ],
+      "metadata": [
+        "version",
+        "commands",
+        "dependencies",
+        "topology"
+      ]
+    },
+    "guide_requirements": {
+      "explicit_source_url": true,
+      "preserve": [
+        "software_versions",
+        "dependencies",
+        "launch_commands",
+        "topology",
+        "chip_count",
+        "precision",
+        "model_variant"
+      ],
+      "missing_optional_details": "unknown"
+    },
+    "source_type_namespace": {
+      "entity_key": "guide_source_classification",
+      "candidate_metadata": "evidence_source_classification",
+      "separate_namespaces": true
+    },
+    "execution": {
+      "run_commands": false,
+      "install_dependencies": false
+    }
+  },
+  "units": {
+    "topology": {
+      "preserve_card_count_and_node_count": true
+    },
+    "versions": {
+      "preserve_exact_version_constraints": true
+    }
+  },
+  "references": [
+    "_shared/rules.md",
+    "chip-deployment/references/deployment-rules.md",
+    "_shared/tool-contract.json"
+  ]
+}

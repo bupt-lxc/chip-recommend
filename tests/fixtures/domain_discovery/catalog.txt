@@ -1,0 +1,15 @@
+NVIDIA L40S 48GB PCIe GPU
+NVIDIA L40S 48GB PCIe GPU: 48 GB GDDR6
+NVIDIA L40S 48GB PCIe GPU: SM count 142
+NVIDIA L40S 48GB PCIe GPU supports org/Fixture-7B BF16 on PyTorch 2.5 according to vendor statement
+NVIDIA L40S 48GB PCIe GPU org/Fixture-7B inference BF16 2 cards Fixture-report configuration-A batch 4 input 128 output 256: 100 tokens/s
+Fixture Guide: NVIDIA L40S 48GB PCIe GPU org/Fixture-7B backend vLLM 0.6.2; 2 cards BF16; launch API_KEY=example vllm serve org/Fixture-7B --tensor-parallel-size 2
+ExampleSilicon X64 64GB PCIe GPU: 64 GB HBM3
+64 GB
+PCIe
+ExampleSilicon X64 80GB SXM GPU: 80 GB HBM3
+80 GB
+SXM
+NVIDIA L40S 48GB PCIe server total power: 2400 W
+NVIDIA L40S 48GB PCIe GPU org/Fixture-7B inference BF16 2 cards Fixture-report configuration-A: 2x faster
+Copyright 2026

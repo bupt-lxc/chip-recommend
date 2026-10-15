@@ -1,0 +1,144 @@
+{
+  "domain_id": "specs",
+  "label": "硬件与互联规格",
+  "skill_name": "chip-specs",
+  "rule_version": "3.0.0",
+  "fields": {
+    "chips": [
+      "architecture",
+      "arch_codename",
+      "generation",
+      "process_node_nm",
+      "foundry",
+      "die_size_mm2",
+      "transistors_b",
+      "package_type",
+      "is_chiplet",
+      "vram_gb",
+      "vram_type",
+      "vram_bus_bit",
+      "vram_bw_gb_s",
+      "vram_clock_mhz",
+      "l1_cache_kb",
+      "l2_cache_mb",
+      "on_chip_sram_mb",
+      "base_clock_mhz",
+      "boost_clock_mhz",
+      "tdp_w",
+      "max_power_w",
+      "psu_w",
+      "power_connector",
+      "board_length_mm",
+      "board_width_mm",
+      "slot_width",
+      "form_factor",
+      "bus_interface",
+      "interconnect_bw_gb_s",
+      "interconnect_tech",
+      "network_interface"
+    ]
+  },
+  "entity_keys": {
+    "chips": [
+      "vendor",
+      "chip_model"
+    ]
+  },
+  "conditions": {
+    "entity_matching": {
+      "preserve": [
+        "sku_suffix",
+        "capacity",
+        "form_factor"
+      ],
+      "strip_suffix_or_capacity": false
+    },
+    "candidate_metadata": [
+      "source_url",
+      "source_type",
+      "confidence"
+    ],
+    "candidate_metadata_namespace": "separate_from_business_fields",
+    "ambiguous_history": {
+      "candidate_status": "validated",
+      "comparison_status": "comparison_unresolved",
+      "overwrite": false
+    },
+    "discovery": {
+      "mode": "open",
+      "chip_hint": "optional_existing_or_unknown",
+      "enumerate_full_database": false
+    },
+    "entity_scope": {
+      "default": [
+        "chip",
+        "single_card"
+      ],
+      "exclude": [
+        "server",
+        "cluster"
+      ],
+      "exception_fields": [
+        "psu_w"
+      ]
+    },
+    "psu_w": {
+      "meaning": "recommended_system_psu_for_card_or_configuration",
+      "requires_card_or_configuration_context": true,
+      "exclude": [
+        "installed_server_psu",
+        "tdp_w"
+      ]
+    },
+    "bandwidth": {
+      "preserve_source_context": true,
+      "unknown_direction_or_aggregation": "unknown",
+      "do_not_equate_link_and_aggregate": true
+    },
+    "power": {
+      "distinguish": [
+        "tdp_w",
+        "max_power_w",
+        "psu_w"
+      ]
+    }
+  },
+  "units": {
+    "process_node_nm": "nm",
+    "die_size_mm2": "mm²",
+    "transistors_b": "billion",
+    "vram_gb": {
+      "unit": "GB",
+      "preserve_decimal_or_binary_basis": true
+    },
+    "vram_bus_bit": "bit",
+    "vram_bw_gb_s": "GB/s",
+    "vram_clock_mhz": "MHz",
+    "l1_cache_kb": "KB",
+    "l2_cache_mb": "MB",
+    "on_chip_sram_mb": "MB",
+    "base_clock_mhz": "MHz",
+    "boost_clock_mhz": "MHz",
+    "tdp_w": "W",
+    "max_power_w": "W",
+    "psu_w": "W",
+    "board_length_mm": "mm",
+    "board_width_mm": "mm",
+    "slot_width": "slots",
+    "interconnect_bw_gb_s": "GB/s",
+    "bandwidth": {
+      "preserve": [
+        "bit_or_byte",
+        "direction",
+        "per_link_or_aggregate"
+      ],
+      "source_unit_in_metadata": true,
+      "conversion": "only_when_unit_and_scope_are_explicit"
+    }
+  },
+  "references": [
+    "_shared/rules.md",
+    "chip-specs/references/specs-rules.md",
+    "_shared/tool-contract.json"
+  ]
+}

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import requests
@@ -389,7 +391,7 @@ def test_large_diff_is_truncated_but_counts_and_candidate_fields_are_kept(
         (FakeResponse(429, headers={"Retry-After": "120"}), "retry_wait", "http_429"),
         (FakeResponse(503), "retry_wait", "http_503"),
         (
-            FakeResponse(200, b"%PDF", headers={"Content-Type": "application/pdf"}),
+            FakeResponse(200, b"image", headers={"Content-Type": "image/png"}),
             "unsupported",
             "unsupported_content_type",
         ),
@@ -417,6 +419,62 @@ def test_http_and_content_failures_are_classified(
     state = fetch_row(temp_db, "SELECT * FROM source_monitor_state WHERE link_id=1")
     assert state["failure_count"] == 1
     assert state["content_hash"] is None
+
+
+def test_pdf_without_parser_dependency_is_unsupported(
+    temp_db: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setitem(sys.modules, "pypdf", None)
+    response = FakeResponse(200, b"%PDF", headers={"Content-Type": "application/pdf"})
+    refresher, _ = make_refresher(temp_db, tmp_path, [response], max_attempts=1)
+
+    summary = refresher.run([1], apply_state=True)
+
+    result = summary.results[0]
+    assert summary.status == "partial"
+    assert result["outcome"] == "unsupported"
+    assert result["error_code"] == "unsupported_content_type"
+    assert result["error_message"] == "PDF 解析组件未安装。"
+    check = fetch_row(temp_db, "SELECT * FROM source_checks WHERE link_id=1")
+    assert check["outcome"] == "unsupported"
+    assert check["error_code"] == "unsupported_content_type"
+    assert check["error_message"] == "PDF 解析组件未安装。"
+    state = fetch_row(temp_db, "SELECT * FROM source_monitor_state WHERE link_id=1")
+    assert state["failure_count"] == 1
+    assert state["content_hash"] is None
+    assert state["last_error_code"] == "unsupported_content_type"
+    assert state["last_error_message"] == "PDF 解析组件未安装。"
+
+
+def test_pdf_parse_failure_is_failed_content(
+    temp_db: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Isolate the optional parser boundary so installation/version cannot change classification.
+    def reject_pdf(stream):
+        raise ValueError("invalid PDF fixture")
+
+    parser = ModuleType("pypdf")
+    parser.PdfReader = reject_pdf
+    monkeypatch.setitem(sys.modules, "pypdf", parser)
+    response = FakeResponse(200, b"%PDF", headers={"Content-Type": "application/pdf"})
+    refresher, _ = make_refresher(temp_db, tmp_path, [response], max_attempts=1)
+
+    summary = refresher.run([1], apply_state=True)
+
+    result = summary.results[0]
+    assert summary.status == "partial"
+    assert result["outcome"] == "failed"
+    assert result["error_code"] == "empty_content"
+    assert result["error_message"] == "PDF 文本提取失败：invalid PDF fixture。"
+    check = fetch_row(temp_db, "SELECT * FROM source_checks WHERE link_id=1")
+    assert check["outcome"] == "failed"
+    assert check["error_code"] == "empty_content"
+    assert check["error_message"] == "PDF 文本提取失败：invalid PDF fixture。"
+    state = fetch_row(temp_db, "SELECT * FROM source_monitor_state WHERE link_id=1")
+    assert state["failure_count"] == 1
+    assert state["content_hash"] is None
+    assert state["last_error_code"] == "empty_content"
+    assert state["last_error_message"] == "PDF 文本提取失败：invalid PDF fixture。"
 
 
 def test_timeout_retries_then_schedules_retry(temp_db: Path, tmp_path: Path):
