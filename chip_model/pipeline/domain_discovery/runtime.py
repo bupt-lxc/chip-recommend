@@ -298,6 +298,8 @@ def build_domain_prompt(run, bundle_root, resume_state):
         'instructions': '执行完整冻结 Skill 的 plan/select/complete。初始10条短词查询，使用三个审计工具 '
         'open_web_search/open_web_preview/open_web_submit_selection；分页读取500字符预览，对主URL逐条提交选择或拒绝理由、'
         '预计信息和可选其他域。chip只是最初线索。finalize receipt仅代表选择完成，后台全文提取、独立审核和比较尚未完成。'
+        '不允许在搜索结束后直接退出；必须读取全部results分页，按批逐URL初访，再对每个URL提交select/reject决定，直到finalize成功。'
+        '若resume_state.continuation为true，只处理remaining_candidates中的未决URL，不重复搜索或重做已保存决定；完成后立即finalize。'
         '不得调用terminal/web/cron或发布。'}))
 
 
@@ -386,12 +388,37 @@ def _execute_domain(store, run_id, generation, owner, budget, deps):
             'selection': selection, 'search': search._state(), 'tasks': store.list_tasks(run_id)})
         store.update_metadata(run_id, generation, 'domain_executor_audit.v1', lambda state: (state or {}, None,
             {'kind': 'executed', 'executor': 'hermes', 'phase': 'plan/select/complete'}))
-        completed = runner.run(prompt=prompt, bundle_root=bundle, context=context, service=service,
-                               timeout=_remaining(budget, 1800))
-        selection = store.metadata(run_id, SELECTION_KEY) or {}
+        attempts = []
+        continuation_count = 0
+        while True:
+            completed = runner.run(prompt=prompt, bundle_root=bundle, context=context, service=service,
+                                   timeout=_remaining(budget, 1800))
+            attempts.append({'returncode': completed.returncode,
+                'stdout_tail': redact(str(getattr(completed, 'stdout', '') or ''))[-4000:],
+                'stderr_tail': redact(str(getattr(completed, 'stderr', '') or ''))[-2000:]})
+            selection = store.metadata(run_id, SELECTION_KEY) or {}
+            if completed.returncode != 0 or selection.get('finalized') or continuation_count >= 2:
+                break
+            search_state = search._state()
+            plans = sorted(search_state['plans'].values(), key=lambda item: item['model_payload']['round_number'])
+            latest_plan = plans[-1] if plans else None
+            version = latest_plan.get('list_version') if latest_plan else None
+            snapshot = search_state['versions'].get(version, {}) if version else {}
+            decisions = selection.get('decisions', {})
+            remaining = [item for item in snapshot.get('items', [])
+                         if item['candidate_id'] not in decisions]
+            page_state = pages._state()
+            remaining = [{**item, 'saved_preview': (page_state.get('visits', {}).get(item['candidate_id']) or {}).get('preview'),
+                          'visit_status': (page_state.get('visits', {}).get(item['candidate_id']) or {}).get('status')}
+                         for item in remaining]
+            resume = {'continuation': True, 'list_version': version,
+                'completed_decision_count': len(decisions), 'remaining_candidates': remaining,
+                'selection_finalized': False}
+            prompt = build_domain_prompt({**run['payload'], 'run_id': run_id}, bundle, resume)
+            continuation_count += 1
         diagnostic = {'returncode': completed.returncode,
-            'stdout_tail': redact(str(getattr(completed, 'stdout', '') or ''))[-4000:],
-            'stderr_tail': redact(str(getattr(completed, 'stderr', '') or ''))[-2000:]}
+            'stdout_tail': attempts[-1]['stdout_tail'], 'stderr_tail': attempts[-1]['stderr_tail'],
+            'continuation_count': continuation_count, 'attempts': attempts}
         error = hermes_completion_error(completed.returncode, selection.get('finalized', False))
         store.update_metadata(run_id, generation, 'domain_hermes_diagnostic.v1', lambda _: (diagnostic, None,
             {'kind': 'failed' if error else 'accepted', 'executor': 'hermes', 'phase': 'complete', 'error': error}))
@@ -526,9 +553,12 @@ def run_domain(request, dependencies):
         if budget.snapshot()['active_ms'] >= budget.snapshot()['active_limit_ms']:
             raise TimeoutError('active budget exhausted')
         threading.Thread(target=worker, daemon=True, name='domain-' + run_id).start()
-        while not done.wait(0.05):
+        while True:
+            completed = done.wait(1.0)
             if deps.get('stop_event') is not None and deps['stop_event'].is_set():
                 raise KeyboardInterrupt('worker shutdown')
+            if completed:
+                break
             _remaining(budget, 1800)
             store.renew(run_id, generation, 5)
         _remaining(budget, 1800)
@@ -881,14 +911,41 @@ if mode == 'execute':
     # below to the three audited tools, with no `memory` or `skill_manage`.
     agent = AIAgent(model=os.environ.get('HERMES_MODEL', ''),
                     provider=os.environ.get('HERMES_PROVIDER') or None,
+                    base_url=os.environ.get('OPENAI_BASE_URL') or None,
+                    api_key=os.environ.get('OPENAI_API_KEY') or None,
                     enabled_toolsets=['aishperf_open_web'], skip_context_files=True,
                     load_soul_identity=False, skip_memory=True,
                     prefill_messages=[], quiet_mode=True, save_trajectories=False)
     if set(agent.valid_tool_names) != set(names) or {t['function']['name'] for t in agent.tools} != set(names):
         raise RuntimeError('Actual Hermes agent enabled uncontrolled tools')
+    def canonical_provider_schema(value):
+        if isinstance(value, list):
+            return [canonical_provider_schema(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        union = value.get('anyOf')
+        if isinstance(union, list) and len(union) == 2:
+            nullable = [item for item in union if isinstance(item, dict) and item.get('type') == 'null']
+            concrete = [item for item in union if item not in nullable]
+            if len(nullable) == 1 and len(concrete) == 1:
+                result = canonical_provider_schema(concrete[0])
+                result['nullable'] = True
+                result.update({key: canonical_provider_schema(item) for key, item in value.items()
+                               if key != 'anyOf' and not (key == 'default' and item is None)})
+                return result
+        result = {}
+        for key, item in value.items():
+            if key == 'default' and item is None:
+                continue
+            result[key] = sorted(item) if key == 'required' and isinstance(item, list) else canonical_provider_schema(item)
+        return result
     for tool in agent.tools:
         frozen = next(s for s in contract['tools'] if s['name'] == tool['function']['name'])
-        if tool['function']['parameters'] != frozen['parameters']:
+        if canonical_provider_schema(tool['function']['parameters']) != canonical_provider_schema(frozen['parameters']):
             raise RuntimeError('Actual agent provider schema differs from audited object contract')
-    agent.run_conversation(user_message=saved['prompt'])
+    result = agent.run_conversation(user_message=saved['prompt'])
+    summary = {'executor': 'hermes', 'api_call_count': getattr(agent, '_api_call_count', None),
+               'max_iterations': getattr(agent, 'max_iterations', None),
+               'result_type': type(result).__name__}
+    print(json.dumps(summary, separators=(',', ':')), flush=True)
 '''

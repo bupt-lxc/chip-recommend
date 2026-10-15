@@ -54,6 +54,8 @@ class DiscoverySearchQuery(BaseModel):
     def validate_text(cls, value):
         if not value.strip() or any(unicodedata.category(c) in {'Cc', 'Cs'} for c in value):
             raise ValueError('search text must be nonblank Unicode without controls')
+        if re.search(r'(?<!\d)(?:19|20)\d{2}(?!\d)', value):
+            raise ValueError('search text must not pin discovery to a fixed year')
         return value
 
 

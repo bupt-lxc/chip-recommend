@@ -731,3 +731,27 @@ def test_reconciliation_never_uses_older_finished_outcome_for_newer_unknown_exec
     assert resumed.preview(version)['items'][0]['extractable']
     assert len(fresh.calls) == 1
     assert next(iter(budget.snapshot()['logical_operations'].values()))['execution_count'] == 3
+
+def test_single_page_attempt_is_durable_and_does_not_retry(setup, monkeypatch):
+    monkeypatch.setenv('DOMAIN_PAGE_MAX_ATTEMPTS','1')
+    reader, session = service(setup,[requests.ConnectionError('down')])
+    version = save_list(setup)
+    result = reader.preview(version)['items'][0]
+    assert result['visited'] and not result['extractable']
+    reader.preview(version)
+    assert len(session.calls) == 1
+    monkeypatch.setenv('DOMAIN_PAGE_MAX_ATTEMPTS','2')
+    with pytest.raises(ValueError,match='immutable'):
+        service(setup,[])
+
+
+def test_render_html_uses_identity_for_tree_membership(monkeypatch):
+    from bs4 import Tag
+    from chip_model.pipeline.domain_discovery.pages import render_html
+    def forbidden_equality(self, other):
+        raise AssertionError('structural subtree equality must not be used')
+    monkeypatch.setattr(Tag, '__eq__', forbidden_equality)
+    html = b'<body><header><span>Menu</span></header><header><main><h1>GPU</h1><p>24 GB*</p></main></header><footer><div class="notes"><p>* per card</p></div></footer></body>'
+    result = render_html(html, 'utf-8')
+    assert 'GPU' in str(result) and '24 GB' in str(result)
+    assert 'per card' in str(result) and 'Menu' not in str(result)

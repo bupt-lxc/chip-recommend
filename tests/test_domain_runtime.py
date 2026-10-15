@@ -43,6 +43,37 @@ def test_backend_base_url_rejects_credentials_and_non_http_components(source):
         runtime._openai_api_root(source)
 
 
+def test_provider_schema_canonicalization_only_accepts_exact_sdk_equivalences():
+    import ast
+    tree = ast.parse(runtime._HERMES_BOOTSTRAP)
+    function = next(node for node in ast.walk(tree)
+                    if isinstance(node, ast.FunctionDef) and node.name == 'canonical_provider_schema')
+    module = ast.Module(body=[function], type_ignores=[])
+    namespace = {}
+    exec(compile(module, runtime.__file__, 'exec'), namespace)
+    canonical = namespace['canonical_provider_schema']
+
+    frozen = {'type': 'object', 'properties': {'limit': {'anyOf': [
+        {'type': 'integer', 'minimum': 1}, {'type': 'null'}], 'default': None}},
+        'required': ['query', 'limit'], 'additionalProperties': False}
+    sdk = {'type': 'object', 'properties': {'limit': {
+        'type': 'integer', 'minimum': 1, 'nullable': True}},
+        'required': ['limit', 'query'], 'additionalProperties': False}
+    assert canonical(frozen) == canonical(sdk)
+
+    changed_schemas = [
+        {**sdk, 'additionalProperties': True},
+        {**sdk, 'required': ['query']},
+        {'type': 'object', 'properties': {'limit': {
+            'type': 'integer', 'minimum': 1, 'nullable': True, 'maximum': 10}},
+         'required': ['limit', 'query'], 'additionalProperties': False},
+        {'anyOf': [{'type': 'integer'}, {'type': 'null'}, {'type': 'string'}]},
+        {'type': 'object', 'description': 'changed', 'properties': sdk['properties'],
+         'required': ['limit', 'query'], 'additionalProperties': False},
+    ]
+    assert all(canonical(frozen) != canonical(changed) for changed in changed_schemas)
+
+
 class Provider:
     name = 'controlled-runtime-provider'
     calls = 0
@@ -128,6 +159,7 @@ def test_default_discovery_is_one_run_with_frozen_skill_and_no_chip_units(deps):
     prompt = deps['hermes_runner'].prompts[0]
     assert all(item in prompt for item in ('RUN_ID=', 'SCHEMA_VERSION=hermes-open-web-v3',
         'BUNDLE_SHA=', 'resume_state', 'plan', 'select', 'complete'))
+    assert '不允许在搜索结束后直接退出' in prompt and '直到finalize成功' in prompt
     assert len(deps['call_model'].calls) == 1
     artifact = Path(result['artifact_path']) / 'manifest.json'
     assert artifact.is_file(), 'terminal snapshot must be exported from authoritative store'
@@ -220,6 +252,29 @@ def test_no_findings_requires_real_healthy_search_and_no_selection_does_not_comp
     assert not deps['store'].metadata(result['run_id'], 'domain_selection.v1')
 
 
+def test_hermes_gets_bounded_continuation_when_it_stops_after_search(deps):
+    class StopsAfterSearchOnce(Runner):
+        def run(self, *, prompt, context, service, **kwargs):
+            if self.calls == 0:
+                self.calls = 1
+                self.prompts.append(prompt)
+                binding = {'contract_version': 3, 'pipeline': 'hermes-open-web-v3',
+                    'run_id': context.run_id,
+                    **{k: context.store.get_run(context.run_id)['payload'][k]
+                       for k in ('domain', 'scope_type', 'chip')}}
+                service.handle('search', {**binding, 'action': 'execute', 'request_id': 'search', 'plan': plan()})
+                return SimpleNamespace(returncode=0, stdout='stopped after search', stderr='')
+            return super().run(prompt=prompt, context=context, service=service, **kwargs)
+
+    runner = deps['hermes_runner'] = StopsAfterSearchOnce()
+    result = run(deps)
+
+    assert result['status'] == 'no_findings', result
+    assert runner.calls == 2
+    assert deps['search_provider'][0].calls == 10
+    assert deps['store'].metadata(result['run_id'], 'domain_selection.v1')['finalized']
+
+
 def test_independent_business_rejection_completes_without_unnecessary_identity_work(deps):
     from tests.test_domain_entities import fact
     class RejectModel(Model):
@@ -248,6 +303,28 @@ def test_program_rejection_does_not_claim_independent_review_was_executed(deps):
     audit = [row['payload'] for row in deps['store'].events(result['run_id'])]
     assert any(row.get('executor') == 'backend_extract' and row['kind'] == 'rejected' for row in audit)
     assert not any(row.get('executor') == 'backend_review' for row in audit)
+
+
+def test_supervisor_heartbeats_are_bounded_during_blocking_hermes_execution(deps):
+    import time
+
+    class SlowRunner(Runner):
+        started_at = None
+        finished_at = None
+
+        def run(self, **kwargs):
+            self.started_at = time.time()
+            time.sleep(1.2)
+            self.finished_at = time.time()
+            return super().run(**kwargs)
+
+    slow_runner = deps['hermes_runner'] = SlowRunner()
+    result = run(deps)
+    assert result['status'] == 'no_findings', result
+    heartbeat_events = [event for event in deps['store'].events(result['run_id'])
+                        if event['payload'].get('kind') == 'active_heartbeat'
+                        and slow_runner.started_at <= event['created_at'] <= slow_runner.finished_at]
+    assert len(heartbeat_events) <= 2
 
 
 def test_finalized_selection_survives_restart_without_repeating_search_or_pages(deps):
@@ -481,16 +558,35 @@ class AIAgent:
     # must fail the fixture just as they fail against the installed SDK.
     def __init__(self, enabled_toolsets=None, skip_context_files=None, skip_memory=None,
         prefill_messages=None, load_soul_identity=True, quiet_mode=False,
-        save_trajectories=True, model=None, provider=None):
+        save_trajectories=True, model=None, provider=None, base_url=None, api_key=None):
+        def provider_schema(value):
+            if isinstance(value, list): return [provider_schema(item) for item in value]
+            if not isinstance(value, dict): return value
+            union = value.get('anyOf')
+            if isinstance(union, list) and len(union) == 2:
+                nullable = [item for item in union if isinstance(item, dict) and item.get('type') == 'null']
+                concrete = [item for item in union if item not in nullable]
+                if len(nullable) == 1 and len(concrete) == 1:
+                    result = provider_schema(concrete[0]); result['nullable'] = True
+                    result.update({key: provider_schema(item) for key, item in value.items()
+                        if key != 'anyOf' and not (key == 'default' and item is None)})
+                    return result
+            result = {}
+            for key, item in value.items():
+                if key == 'default' and item is None: continue
+                result[key] = sorted(item) if key == 'required' and isinstance(item, list) else provider_schema(item)
+            return result
         self.valid_tool_names = set(registry.entries)
-        self.tools = [{'function': value['schema']} for value in registry.entries.values()]
+        self.tools = [{'function': {**value['schema'],
+            'parameters': provider_schema(value['schema']['parameters'])}}
+            for value in registry.entries.values()]
         Path(os.environ['HERMES_HOME'], 'agent-context.json').write_text(json.dumps({'toolsets': enabled_toolsets,
             'skip_context_files': skip_context_files, 'skip_memory': skip_memory,
             'load_soul_identity': load_soul_identity, 'prefill_messages': prefill_messages,
             'quiet_mode': quiet_mode, 'save_trajectories': save_trajectories,
             'model': model, 'provider': provider,
-            'openai_base_url': os.environ.get('OPENAI_BASE_URL'),
-            'openai_key_matches_fixture': os.environ.get('OPENAI_API_KEY') == 'fixture-key',
+            'openai_base_url': base_url,
+            'openai_key_matches_fixture': api_key == 'fixture-key',
             'backend_key_forwarded': 'DATA_AGENT_LLM_API_KEY' in os.environ}))
     def run_conversation(self, user_message):
         content = json.loads(user_message.split('\\n', 3)[3])
@@ -523,6 +619,8 @@ def test_installed_adapter_executes_subprocess_resolver_plugin_and_three_real_ht
     deps['hermes_runner'] = sdk_runner
     result = run(deps)
     assert result['status'] == 'no_findings', result
+    diagnostic = deps['store'].metadata(result['run_id'], 'domain_hermes_diagnostic.v1')
+    assert 'api_call_count' in diagnostic['stdout_tail']
     report = deps['store'].metadata(result['run_id'], 'domain_hermes_preflight.v1')
     assert report['version'] == 'controlled-SDK-fixture'
     assert len(report['resolver']['files']) == 20

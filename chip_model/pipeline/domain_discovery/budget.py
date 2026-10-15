@@ -176,7 +176,7 @@ class RunBudget:
             query_results = state['query_results'].get(query_id, [])
             new_results = list(dict.fromkeys(query_results + candidate_ids))
             main = list(dict.fromkeys(state['main_candidates'] + candidate_ids))
-            if len(new_results) > 10 or len(main) > 100:
+            if len(new_results) > 5 or len(main) > 50:
                 raise ValueError('result/main candidate budget exhausted')
             state['query_results'][query_id] = new_results
             state['main_candidates'] = main

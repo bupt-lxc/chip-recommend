@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from chip_model.pipeline.domain_discovery.contracts import (
     DOMAINS,
+    DiscoverySearchQuery,
     DomainContract,
     load_domain,
     validate_domain_schema,
@@ -17,6 +18,12 @@ from chip_model.pipeline.domain_discovery.contracts import (
 
 PROJECT = Path(__file__).resolve().parents[1]
 BUNDLES = PROJECT / ".hermes-skills"
+
+
+@pytest.mark.parametrize("text", ["AI芯片2025发布", "2026 AI accelerator launch", "H100 2024 datasheet"])
+def test_discovery_query_rejects_fixed_years_to_keep_search_fresh(text):
+    with pytest.raises(ValidationError, match="fixed year"):
+        DiscoverySearchQuery(query_id="fresh-query", text=text, language="zh", reason="recent product information", page_type="product")
 EXPECTED_FIELDS = {
     "identity": {"chips": "vendor vendor_display vendor_region chip_series chip_model chip_type usage tier release_date production_status eol_date target_market is_released expected_release_date".split()},
     "specs": {"chips": "architecture arch_codename generation process_node_nm foundry die_size_mm2 transistors_b package_type is_chiplet vram_gb vram_type vram_bus_bit vram_bw_gb_s vram_clock_mhz l1_cache_kb l2_cache_mb on_chip_sram_mb base_clock_mhz boost_clock_mhz tdp_w max_power_w psu_w power_connector board_length_mm board_width_mm slot_width form_factor bus_interface interconnect_bw_gb_s interconnect_tech network_interface".split()},

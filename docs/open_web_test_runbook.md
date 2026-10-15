@@ -358,3 +358,8 @@ Task16 窄回归：`python -m pytest tests/test_open_web_search_probe.py -q`。�
 360 真实页面使用 `p.res-desc`，已兼容旧 `.res-list-summary`；搜索/解析回归 82 项通过，真实单次复验的六条结果全部有摘要。Bing 部分完整多词查询仍不相关，DDG 仍为挑战页；新证据与边界见验收记录。搜索摘要仅供 Hermes 初筛，不替代正文快照和字段证据。
 
 SSH 已确认能建立 TCP 连接，但当前主机密钥不在本机信任记录中，尚未进入认证或远程 Hermes 版本检查。目标连接和可信密钥仍需核对；不能将 TCP 可达视为宿主预检通过。
+
+## 本地模型温度配置
+
+保留本地适配：`DATA_AGENT_LLM_TEMPERATURE` 可设置 0–2 的有限数值，默认 0.6，沿用远程关闭 thinking 的请求参数。本地现有配置为 1。
+`DATA_AGENT_LLM_BASE_URL` 填接口根地址，不含 `/v1/chat/completions`。进程启动前需加载环境变量，密钥不得写入版本库。

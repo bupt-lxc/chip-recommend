@@ -214,7 +214,7 @@ def test_preflight_verifies_mount_actual_cli_sdk_and_package(deps, monkeypatch):
     monkeypatch.setattr(subprocess,'run',probe)
     report = worker_module().check_environment(root)
     sdk_probe = next(command[-1] for command in probes if len(command) >= 3 and command[1] == '-c')
-    assert "required={'enabled_toolsets','skip_context_files','skip_memory'}" in sdk_probe
+    assert "required={'enabled_toolsets','skip_context_files','skip_memory','base_url','api_key'}" in sdk_probe
     assert "'skip_background_review'" not in sdk_probe
     assert "'run_budget_seconds'" not in sdk_probe
     assert "'cwd'" not in sdk_probe

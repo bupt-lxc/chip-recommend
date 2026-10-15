@@ -72,11 +72,15 @@ def render_html(raw, encoding):
     # navigation or executable/style content cannot make a note necessary.
     excluded_marker_ancestors = {'footer', 'nav', 'script', 'style', 'noscript',
                                  'template', 'svg', 'iframe', 'form', 'button', 'head'}
+    # Tree membership is identity-based; Tag equality recursively compares subtrees.
+    core_ancestor_ids = {id(parent) for parent in core.parents} if core is not None else set()
+    removable_header_ids = {id(header) for header in root.find_all('header')
+                            if header is not core and id(header) not in core_ancestor_ids
+                            and not header.find(['h1', 'h2', 'h3'])}
     retained_text = ' '.join(str(node) for node in root.strings
                             if not isinstance(node, Comment) and not any(
                                 parent.name in excluded_marker_ancestors or
-                                (parent.name == 'header' and parent is not core
-                                 and core not in parent.descendants and not parent.find(['h1', 'h2', 'h3']))
+                                id(parent) in removable_header_ids
                                 for parent in node.parents))
     # Inline markup (especially <sup>) and ordinary typesetting can insert
     # whitespace before a marker. Associate a visible footer note by its exact
@@ -96,7 +100,8 @@ def render_html(raw, encoding):
     # Move relevant footnotes to the footer's position before removing chrome.
     for footer in list(root.find_all('footer')):
         notes = [tag for tag in footer.find_all(True) if is_note(tag) or visible_note(tag)]
-        notes = [tag for tag in notes if not any(parent in notes for parent in tag.parents)]
+        note_ids = {id(tag) for tag in notes}
+        notes = [tag for tag in notes if not any(id(parent) in note_ids for parent in tag.parents)]
         if is_note(footer):
             footer.name = 'div'
             continue
@@ -108,7 +113,7 @@ def render_html(raw, encoding):
                                   'nav', 'form', 'button', 'head'])):
         tag.decompose()
     for tag in list(root.find_all('header')):
-        if tag is not core and core not in tag.descendants and not tag.find(['h1', 'h2', 'h3']):
+        if id(tag) in removable_header_ids:
             tag.decompose()
     for comment in root.find_all(string=lambda item: isinstance(item, Comment)):
         comment.extract()
@@ -131,7 +136,7 @@ def render_html(raw, encoding):
         if parts:
             cursor += 1
         start = cursor
-        if core_start is None and (core is None or node is core or core in node.parents):
+        if core_start is None and (core is None or node is core or any(parent is core for parent in node.parents)):
             core_start = start
         parts.append(value)
         cursor += len(value)
@@ -284,6 +289,8 @@ class PageService:
         if type(fetch_seconds) not in (int, float) or not math.isfinite(fetch_seconds) or not 0 < fetch_seconds <= 1800:
             raise ValueError('fetch_seconds must be finite in (0,1800]')
         self.store, self.run_id, self.generation, self.budget = store, run_id, generation, budget
+        from .search import frozen_run_limit
+        self.max_attempts = frozen_run_limit(store, budget, 'DOMAIN_PAGE_MAX_ATTEMPTS', 3, 3)
         self.root = store.run_path(run_id)
         self.monotonic, self.fetch_seconds, self.max_bytes = monotonic or time.monotonic, fetch_seconds, max_bytes
         if backoff is not None and not callable(backoff):
@@ -584,7 +591,7 @@ class PageService:
                 self.read_snapshot(saved['snapshot_id'])
             self._finished_receipt(candidate, logical, saved['attempt'])
             return saved
-        for attempt in range(3):
+        for attempt in range(self.max_attempts):
             try:
                 receipt = self._finished_receipt(candidate, logical, attempt)
                 if receipt is None:
@@ -609,7 +616,7 @@ class PageService:
                     if record['attempt'] == attempt and record.get('diagnostic') is not None]
             if last and not last[-1]['diagnostic']['recoverable']:
                 break
-            if attempt < 2:
+            if attempt < self.max_attempts - 1:
                 stopped = self._retry_wait(logical, attempt)
                 if stopped is not None:
                     return self._pending_visit(candidate, stopped)

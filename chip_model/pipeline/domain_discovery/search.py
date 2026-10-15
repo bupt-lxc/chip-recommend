@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import os
 import re
 import time
 import uuid
@@ -27,6 +28,38 @@ HEALTHY = frozenset({'success', 'healthy_empty'})
 OUTCOMES = HEALTHY | {'network_error', 'http_error', 'parse_error'}
 QUERY_FAILURES = (OUTCOMES - HEALTHY) | {'retry_budget_exhausted'}
 MAX_RESPONSE_CHARS = 12000
+_ROUTE_UNREACHABLE = re.compile(r'\[(?:Errno\s+)?(?:101|113)\]|network is unreachable|no route to host', re.I)
+
+# Keep all Hermes-generated queries, but bound the URL review queue so a
+# single run can finish its 30-minute isolated budget. Dropped hits remain
+# explicit per-query budget exclusions in the audit record.
+RESULTS_PER_QUERY = 5
+MAIN_CANDIDATE_LIMIT = 50
+
+
+def frozen_run_limit(store, budget, name, default, maximum):
+    """Optional lower ceilings are durable; resumes cannot change them."""
+    raw = os.environ.get(name)
+    saved = store.metadata(budget.run_id, 'domain_limits.v1') or {}
+    try:
+        value = int(raw) if raw is not None else saved.get(name, default)
+    except ValueError:
+        raise ValueError('invalid ' + name) from None
+    if not 1 <= value <= maximum:
+        raise ValueError('invalid ' + name)
+    # Older runs predate frozen limits and used the documented defaults.
+    legacy = store.metadata(budget.run_id,
+        'domain_pages.v1' if name == 'DOMAIN_PAGE_MAX_ATTEMPTS' else 'domain_search.v1') or {}
+    already_started = bool(legacy.get('attempts') or legacy.get('queries'))
+    if name not in saved and already_started and value != default:
+        raise ValueError('run limits are immutable: legacy ' + name)
+    def freeze(state):
+        state = dict(state or {})
+        if name in state and state[name] != value:
+            raise ValueError('run limits are immutable: ' + name)
+        state[name] = value
+        return state, value, None
+    return store.update_metadata(budget.run_id, budget.generation, 'domain_limits.v1', freeze)
 _TRACKING = frozenset({'gclid', 'fbclid', 'msclkid', 'yclid', '_ga', 'mc_cid', 'mc_eid'})
 _SECRET_NAME = r'(?:api[_-]?key|access[_-]?token|token|(?:proxy[-_])?authorization|password|secret|credential)'
 _SECRET_KEYS = re.compile(r'^' + _SECRET_NAME + r'$', re.I)
@@ -117,6 +150,14 @@ def _redact_plain(value):
     value = re.sub(r'(?i)(bearer\s+)[^\s&,;]+', r'\1[REDACTED]', value)
     return re.sub(r'(?i)(' + _SECRET_NAME + r'\s*[=:]\s*)[^\s&;,]+',
                   r'\1[REDACTED]', value)
+
+
+def _route_unreachable(error):
+    """Identify stable host/network route failures that cannot improve on retry."""
+    import errno
+    if isinstance(error, OSError) and error.errno in {errno.ENETUNREACH, errno.EHOSTUNREACH}:
+        return True
+    return bool(_ROUTE_UNREACHABLE.search(str(error or '')))
 
 
 def canonical_url(value):
@@ -212,7 +253,8 @@ class HtmlSearchProvider:
                                             proxies=self.adapter.proxies,
                                             headers={'Accept-Language': 'en-US,en;q=0.9' if language == 'en' else 'zh-CN,zh;q=0.9'})
         except requests.RequestException as exc:
-            response.outcome, response.network_status = 'network_error', 'error'
+            response.outcome = 'network_error'
+            response.network_status = 'unreachable' if _route_unreachable(exc) else 'error'
             response.parse_status, response.error = 'not_attempted', redact(str(exc))
         else:
             response.http_status = http.status_code
@@ -250,7 +292,67 @@ class HtmlSearchProvider:
         return response
 
 
+class TavilySearchProvider:
+    """Search only: preserve Hermes queries and leave page fetching untouched.
+
+    One POST per call; SearchExecutor owns retries and physical request budgets.
+    No synthesized answer, raw-page extraction or automatic depth upgrade.
+    """
+
+    name = 'tavily'
+
+    def __init__(self, *, api_key=None, session=None, timeout=20):
+        self._api_key = (api_key or os.environ.get('TAVILY_API_KEY', '')).strip()
+        if not self._api_key:
+            raise ValueError('Tavily requires TAVILY_API_KEY')
+        self.session = session if session is not None else requests.Session()
+        self.timeout = timeout
+
+    def search(self, query, limit, *, language):
+        if language not in {'zh', 'en'} or type(limit) is not int or not 1 <= limit <= 20:
+            raise ValueError('unsupported search language or result limit')
+        started = time.monotonic()
+        result = ProviderResponse(endpoint='https://api.tavily.com/search', locale=language)
+        try:
+            response = self.session.post(result.endpoint,
+                headers={'Authorization': 'Bearer ' + self._api_key},
+                json={'query': query, 'max_results': limit, 'search_depth': 'basic',
+                      'topic': 'general', 'auto_parameters': False,
+                      'include_answer': False, 'include_raw_content': False},
+                timeout=self.timeout, allow_redirects=False)
+            result.http_status = response.status_code
+            if not 200 <= response.status_code < 300:
+                result.outcome, result.parse_status = 'http_error', 'not_attempted'
+                result.error = 'Tavily HTTP ' + str(response.status_code)
+            else:
+                data = response.json()
+                rows = data.get('results') if isinstance(data, dict) else None
+                if not isinstance(rows, list) or any(not isinstance(row, dict) or
+                        not isinstance(row.get('url'), str) or not row['url'] or
+                        not isinstance(row.get('title', ''), str) or
+                        not isinstance(row.get('content', ''), str) for row in rows):
+                    raise ValueError('invalid Tavily results payload')
+                result.rows = [{'url': row['url'], 'title': row.get('title', ''),
+                                'snippet': row.get('content', ''), 'rank': i + 1}
+                               for i, row in enumerate(rows[:limit])]
+                result.outcome = 'success' if result.rows else 'healthy_empty'
+        except requests.RequestException as exc:
+            result.outcome, result.network_status, result.parse_status = 'network_error', 'error', 'not_attempted'
+            # Do not persist exception text: requests may include auth payloads.
+            result.error = 'Tavily transport failure: ' + type(exc).__name__
+        except (ValueError, TypeError):
+            result.outcome, result.parse_status = 'parse_error', 'error'
+            result.error = 'invalid Tavily results payload'
+        result.elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
+        return result
+
+
 def default_providers(*, proxy=None):
+    backend = os.environ.get('DOMAIN_SEARCH_BACKEND', 'html').strip().lower()
+    if backend == 'tavily':
+        return (TavilySearchProvider(),)
+    if backend != 'html':
+        raise ValueError('unsupported DOMAIN_SEARCH_BACKEND')
     from ..open_web_test import BingHtmlSearch, SoHtmlSearch, DuckDuckGoHtmlSearch
     return tuple(HtmlSearchProvider(adapter(proxy=proxy)) for adapter in (BingHtmlSearch, SoHtmlSearch, DuckDuckGoHtmlSearch))
 
@@ -269,6 +371,8 @@ class SearchExecutor:
             raise ValueError('search store must be the budget store')
         self.store, self.budget = store, budget
         self.run_id, self.generation = budget.run_id, budget.generation
+        self.results_per_query = frozen_run_limit(store, budget, 'DOMAIN_RESULTS_PER_QUERY', 5, 5)
+        self.main_candidate_limit = frozen_run_limit(store, budget, 'DOMAIN_MAIN_CANDIDATE_LIMIT', 50, 50)
         self.providers = tuple(providers)
         if not self.providers or len(self.providers) > 8 or len({p.name for p in self.providers}) != len(self.providers):
             raise ValueError('require 1..8 distinct instrumented providers')
@@ -372,7 +476,7 @@ class SearchExecutor:
     def _capture(self, query, provider, provider_index, attempt):
         """Persist raw hits and diagnostics before signaling confirmed failure."""
         try:
-            response = provider.search(query['text'], 10, language=query['language'])
+            response = provider.search(query['text'], RESULTS_PER_QUERY, language=query['language'])
             if not isinstance(response, ProviderResponse) or response.outcome not in OUTCOMES or not isinstance(response.rows, list):
                 raise ValueError('provider must return instrumented ProviderResponse')
             raw = []
@@ -392,7 +496,7 @@ class SearchExecutor:
             diagnostic = redact({'query_id': query['query_id'], 'provider': provider.name, 'language': query['language'],
                                  'original_query': query['text'], 'actual_query': query['text'],
                                  'outcome': response.outcome, 'http_status': response.http_status,
-                                 'network_status': 'error' if response.outcome == 'network_error' else response.network_status,
+                                 'network_status': response.network_status,
                                  'parse_status': 'error' if response.outcome == 'parse_error' else response.parse_status,
                                  'valid_url_count': valid_count, 'raw_hit_count': len(raw), 'fallback': provider_index > 0,
                                  'attempt': attempt, 'endpoint': response.endpoint, 'locale': response.locale,
@@ -419,9 +523,11 @@ class SearchExecutor:
 
     @staticmethod
     def _error_diagnostic(query, provider, index, attempt, outcome, exc):
+        network_status = 'unreachable' if outcome == 'network_error' and _route_unreachable(exc) else (
+            'error' if outcome == 'network_error' else 'ok')
         return redact({'query_id': query['query_id'], 'provider': provider.name, 'language': query['language'],
                        'original_query': query['text'], 'actual_query': query['text'], 'outcome': outcome,
-                       'http_status': None, 'network_status': 'error' if outcome == 'network_error' else 'ok',
+                       'http_status': None, 'network_status': network_status,
                        'parse_status': 'error' if outcome == 'parse_error' else 'not_attempted',
                        'valid_url_count': 0, 'raw_hit_count': 0, 'fallback': index > 0,
                        'attempt': attempt, 'endpoint': '', 'locale': '', 'elapsed_ms': 0, 'error': str(exc)})
@@ -434,6 +540,9 @@ class SearchExecutor:
             if provider.name in self._state()['queries'][qid].get('provider_stops', {}):
                 continue
             logical = 'search-' + _hash(_json([qid, provider.name]))
+            if self._provider_unreachable(provider.name):
+                self._provider_stop(query, provider, index, logical, reason='network_unreachable')
+                continue
             for attempt in range(3):
                 try:
                     receipt = self.budget.operation(logical, {'stage': 'searching', 'query': query, 'provider': provider.name},
@@ -450,13 +559,20 @@ class SearchExecutor:
                     return False
                 if receipt['state'] == 'completed':
                     break
+                latest = next((saved_attempt for saved_attempt in reversed(
+                    self._state()['queries'][qid]['attempts']) if saved_attempt['provider'] == provider.name), None)
+                if latest and latest['diagnostic'].get('network_status') == 'unreachable':
+                    self._provider_stop(query, provider, index, logical, reason='network_unreachable')
+                    break
                 if attempt < 2:
                     self.backoff(attempt)
         saved = self._state()['queries'][qid]
         healthy = [a for a in saved['attempts'] if a['diagnostic']['outcome'] in HEALTHY]
         rows = [(a['provider'], row) for a in healthy for row in a['raw_hits']]
+        stopped = list(saved.get('provider_stops', {}).values())
         outcome = (('success' if rows else 'healthy_empty') if healthy else
-                   saved['attempts'][-1]['diagnostic']['outcome'] if saved['attempts'] else 'retry_budget_exhausted')
+                   saved['attempts'][-1]['diagnostic']['outcome'] if saved['attempts'] else
+                   stopped[-1]['outcome'] if stopped else 'retry_budget_exhausted')
         admitted = set()
         for row_index, (provider_name, row) in enumerate(rows):
             try:
@@ -470,8 +586,12 @@ class SearchExecutor:
             # for Hermes' later preview-based selection.
             hint_match = self._matches_hint(self.chip_hint, row) if self.chip_hint else None
             cid = _hash(url)
-            if cid not in admitted and len(admitted) == 10:
+            if cid not in admitted and len(admitted) == self.results_per_query:
                 self._exclude(qid, provider_name, row_index, row, 'per_query_budget')
+                continue
+            current = self._state()['candidates']
+            if cid not in current and len(current) >= self.main_candidate_limit:
+                self._exclude(qid, provider_name, row_index, row, 'main_candidate_budget')
                 continue
             try:
                 self.budget.admit_results('search-admit-' + _hash(_json([qid, cid])), qid, [cid])
@@ -501,13 +621,20 @@ class SearchExecutor:
         self._update(finish)
         return True
 
-    def _provider_stop(self, query, provider, index, logical):
+    def _provider_unreachable(self, name):
+        return any(attempt['provider'] == name and
+                   attempt['diagnostic'].get('network_status') == 'unreachable'
+                   for query in self._state()['queries'].values() for attempt in query['attempts'])
+
+    def _provider_stop(self, query, provider, index, logical, *, reason=None):
         """Audit a denied execution separately from actual provider attempts."""
-        physical_count = self.budget.snapshot()['logical_operations'][logical]['execution_count']
+        physical_count = self.budget.snapshot()['logical_operations'].get(logical, {}).get('execution_count', 0)
         diagnostic = redact({'query_id': query['query_id'], 'provider': provider.name, 'language': query['language'],
                              'original_query': query['text'], 'actual_query': None, 'http_status': None,
-                             'network_status': 'not_executed', 'parse_status': 'not_attempted',
-                             'outcome': 'retry_budget_exhausted', 'query_outcome': None,
+                             'network_status': 'unreachable' if reason == 'network_unreachable' else 'not_executed',
+                             'parse_status': 'not_attempted',
+                             'outcome': 'network_error' if reason == 'network_unreachable' else 'retry_budget_exhausted',
+                             'stop_reason': reason, 'query_outcome': None,
                              'physical_execution_count': physical_count, 'valid_url_count': 0,
                              'raw_hit_count': 0, 'fallback': index > 0,
                              'budget_ref': f'{self.budget.KEY}/logical_operations/{logical}'})

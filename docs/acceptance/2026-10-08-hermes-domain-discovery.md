@@ -119,3 +119,27 @@ Task16 本地交付已通过独立 **SPEC→QUALITY** 及最终集成审查，�
 - SSH 日志确认 TCP 已建立，目标提供 ED25519 指纹 `SHA256:xLhTQ7LZpP5GthOdNO8Zfrw/Fvyk8F8pnDi64G+24g4`，但本机没有匹配的可信记录；这是观测指纹，尚未确认信任。未进入远程认证/版本检查，未修改 known_hosts，未部署。真实宿主机六域运行和候选抽查仍未执行，整体验收仍未通过。
 
 脱敏材料在忽略目录：`.tmp/task16-relevance-diagnosis.json`、`task16-relevance-report.md`、`task17-360-snippet-{red,green,offline}.log`、`task16-360-postfix-live.json`、`runtime-model-preflight.json`、`runtime-model-preflight-temperature06.json`、`ssh-runtime-verbose-preflight.json`。360 单次复验的 UTF-8 JSON 已保存，临时命令打印混合 Unicode 时出现 GBK 编码错误，随后离线读取 JSON 核实结果，没有重复该 HTTP 请求。诊断 HTML hash 已分别标明 Windows 写入前脱敏文本、实际归档字节与解码/换行口径；这些是诊断归档，不是 PageService 不可变原快照证明。
+
+
+### SSH 恢复后的真实宿主预检
+
+用户提供目标登录信息并授权连接后，已成功以 ubuntu 登录目标；会话校验先前观测的主机指纹，不修改 known_hosts。只读 sudo 可用。安装包元数据为 hermes-agent 0.19.0；hermes-gateway、hermes-manual-run-dispatcher、hermes-webui 三个服务均 active/running。Gateway 使用 /usr/local/lib/hermes-agent/venv/bin/python，工作目录 /root/.hermes，配置模型为 kimi-k2.6、provider 为 custom:moonshot-platform-cn。Skills 位于 /root/.hermes/skills，共 25 个 SKILL.md；目录枚举不能证明实际运行使用了某个 Skill。
+
+现有 chip-recommend 容器仍使用 chip-recommend:hermes-skill-first-73b4c38 镜像，数据挂载 /home/lxc/chip-recommend/data → /app/data，宿主端口 5340。本轮新实现尚未部署到该服务。
+
+真实 SDK 源码签名核验发现硬阻塞：AIAgent.__init__ 不支持当前适配器要求并传入的 skip_background_review、run_budget_seconds、cwd。当前预检会拒绝该 SDK；仅删除预检要求仍会在实例化时失败。必须先审查该版本的等效隔离与预算机制，再适配并回归验证，不能将删除隔离检查当作通过。已经派发独立静态兼容审查。
+
+凭据未写入文件、未输出，未读取或导出远程模型密钥；未修改远程服务、Skills、业务数据库或镜像。证据位于忽略目录 .tmp/inspect-hermes-host.json、.tmp/host-runtime-preflight.json、.tmp/host-sdk-source.json。真实六域运行、候选人工抽查及其业务库零写入证明仍未完成；整体验收未通过。前一段 SSH 未认证记录描述的是提供登录信息之前的状态，当前连接阻塞已解除。
+
+### 2026-10-10 隔离新镜像端到端验收
+
+按用户确认，本次只验收开放发现、字段/来源候选生成链路、界面和手动运行；正式业务表与 `field_provenance` 不写入，heartbeat 和正式服务不启用。使用 Hermes 0.19.0 的隔离容器镜像 `chip-recommend:hermes-acceptance-final6`，仅将独立验收目录挂到容器 `/app/data`，宿主端口仅绑定 loopback `127.0.0.1:18473`；正式 `chip-recommend` 容器、端口 5340 和业务数据库未触碰。镜像构建归档 SHA256：`599128419409CDEB54AD5F9FC216CACA19A4D40BB63CA98DF3ED4D66921D2607`；实际加载 Skill bundle SHA256：`380d76070aa906d33ec9dda8e0666d98b6275144d541f9291774dd2001bfa0d3`。
+
+| 域 / run | 搜索与选择 | 页面 / 抽取 | 结果 |
+|---|---|---|---|
+| identity / `run-f1293ce6844545d18c4a76b9e4c0d8fe` | 45 个去重候选全部访问并完成模型判定，全部拒绝；其中 19 页访问失败（主要为 403） | 无候选进入提取 | `partial`；没有字段候选、独立复核或来源候选 |
+| specs / `run-3b2d4818b74c41c8a02c3ead2a7cac18` | 25 个去重候选全部访问并完成判定；选择 1 个页面，12 个页面成功、13 个失败 | 3 个关联域提取任务完成，事实列表均为空；3 个复核任务因此未执行 | `partial`；没有字段候选、独立复核或来源候选 |
+
+验收目录中的 run artifacts 显示两次实际调用都成功走过 Hermes 搜索词生成、搜索工具、URL 去重/访问、页面判断与 finalization；specs 还走过关联域提取任务。搜索词本身仍出现过固定年份、宽泛词或低相关词；identity 结果包含词典、泛 AI 页面和消费级产品页面，specs 误选消费级 GPU 价格页。新 identity Skill 能拒绝消费级游戏卡，但搜索相关性和页面可访问性仍不足以产出有效事实。UI/API 与人工运行入口可用，然而本轮未得到可供人工核验的字段/来源候选，因此**端到端验收未通过**，不能据此启用六域正式更新或 heartbeat。
+
+正式写入边界核对：隔离容器的数据卷仅指向 `.acceptance/hermes-v3-20261010-426405d/data`；运行结果记录 `formal_database_modified=false`、`formal_business_writes=0`、`formal_provenance_writes=0`。本轮没有调用 Publisher、没有修改正式数据库、没有启用 heartbeat，也没有替换或重启正式服务。隔离镜像继续运行于远程主机 loopback `127.0.0.1:18473` 供验收查看；完成复核前不应提升为正式镜像。

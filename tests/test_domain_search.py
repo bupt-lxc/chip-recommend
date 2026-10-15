@@ -150,18 +150,61 @@ def test_source_failure_is_retained_with_healthy_fallback_and_language_success(s
     assert all(a['diagnostic']['query_outcome'] == 'healthy_empty' for a in attempts)
 
 
+def test_unreachable_provider_is_circuit_broken_for_rest_of_run(setup):
+    from chip_model.pipeline.domain_discovery.search import ProviderResponse
+
+    class Unreachable(Provider):
+        name = 'unreachable'
+
+        def search(self, query, limit, *, language):
+            self.calls.append((query, limit, language))
+            return ProviderResponse(outcome='network_error', network_status='unreachable',
+                                    error='[Errno 101] Network is unreachable')
+
+    dead, fallback = Unreachable(), Provider(outcome='healthy_empty')
+    search = executor(setup, dead, fallback)
+    result = search.execute('initial', plan())
+
+    assert len(dead.calls) == 1
+    assert len(fallback.calls) == 10
+    state = setup[0].metadata('run-a', search.KEY)
+    assert all(query['outcome'] == 'healthy_empty' for query in state['queries'].values())
+    assert all(query['provider_stops']['unreachable']['stop_reason'] == 'network_unreachable'
+               for query in state['queries'].values())
+    assert not result['incomplete']
+
+
+def test_html_adapter_classifies_no_route_as_unreachable():
+    import errno
+    import requests
+    from types import SimpleNamespace
+    from chip_model.pipeline.domain_discovery.search import HtmlSearchProvider
+
+    class Session:
+        def get(self, *args, **kwargs):
+            raise requests.ConnectionError(OSError(errno.ENETUNREACH, 'Network is unreachable'))
+
+    provider = HtmlSearchProvider(SimpleNamespace(name='duckduckgo-html', session=Session(),
+                                                  timeout=3, proxies=None))
+    response = provider.search('AI accelerator', 10, language='en')
+    assert response.outcome == 'network_error'
+    assert response.network_status == 'unreachable'
+
+
 def test_main_and_per_query_exclusions_remain_auditable_and_versions_immutable(setup):
     provider = Provider(count=12)
     search = executor(setup, provider)
     first = search.execute('initial', plan())
-    assert first['total'] == 100
+    assert first['total'] == 50
+    assert all(limit == 5 for _, limit, _ in provider.calls)
     initial_page = search.results(first['list_version'])
     second = search.execute('supplement', plan(1, 5, 's'))
-    assert second['total'] == 100
+    assert second['total'] == 50
     assert search.results(first['list_version']) == initial_page
     state = setup[0].metadata('run-a', search.KEY)
     reasons = {e['reason'] for q in state['queries'].values() for e in q['exclusions']}
     assert {'per_query_budget', 'main_candidate_budget'} <= reasons
+    assert all(len(setup[1].snapshot()['query_results'][f'q{i}']) <= 5 for i in range(10))
     assert setup[1].snapshot()['query_count'] == 15
 
 
@@ -474,7 +517,7 @@ def test_full_main_list_still_merges_supplementary_references(setup):
     provider = Provider(count=10)
     search = executor(setup, provider)
     first = search.execute('initial', plan())
-    assert first['total'] == 100
+    assert first['total'] == 50
     provider.shared = True
     # Match a URL already admitted by initial q0; total stays fixed but refs grow.
     provider.calls.clear()
@@ -488,7 +531,7 @@ def test_full_main_list_still_merges_supplementary_references(setup):
     assert old
     new = setup[0].metadata('run-a', search.KEY)['versions'][third['list_version']]['items']
     assert all(any(ref['query_id'] == 't0' for ref in item['references']) for item in new if '/2/' in item['url'])
-    assert third['total'] == 100
+    assert third['total'] == 50
 
 
 def test_intent_completion_live_state_is_separate_from_immutable_search_snapshot(setup):
@@ -713,3 +756,23 @@ assert redact(unrelated) == unrelated
     except subprocess.TimeoutExpired:
         pytest.fail('quoted redaction exceeded its subprocess deadline on malformed backslashes')
     assert result.returncode == 0, result.stderr
+
+def test_search_queue_limits_preserve_all_query_intents(setup, monkeypatch):
+    monkeypatch.setenv('DOMAIN_RESULTS_PER_QUERY','2')
+    monkeypatch.setenv('DOMAIN_MAIN_CANDIDATE_LIMIT','20')
+    provider = Provider(count=5)
+    search = executor(setup,provider)
+    result = search.execute('initial',plan())
+    assert result['total'] == 20
+    assert len(provider.calls) == 10
+    assert all(call[1] == 5 for call in provider.calls)
+    monkeypatch.setenv('DOMAIN_RESULTS_PER_QUERY','3')
+    with pytest.raises(ValueError,match='immutable'):
+        executor(setup,provider)
+
+def test_legacy_started_run_cannot_change_search_limits(setup, monkeypatch):
+    store,budget = setup
+    store.update_metadata(budget.run_id,budget.generation,'domain_search.v1',lambda state: ({'queries':{'old':{}}},None,None))
+    monkeypatch.setenv('DOMAIN_RESULTS_PER_QUERY','2')
+    with pytest.raises(ValueError,match='legacy'):
+        executor(setup,Provider())
