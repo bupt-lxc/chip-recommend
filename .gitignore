@@ -17,6 +17,7 @@ build/
 .claude/settings.local.json
 *.log
 .gstack/
+.codegraph/
 .tmp/
 .worktrees/
 outputs/
