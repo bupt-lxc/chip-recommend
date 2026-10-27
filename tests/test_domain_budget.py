@@ -104,16 +104,20 @@ def test_results_and_main_candidates_dedupe_and_limits(setup):
     budget = make_budget(setup)
     budget.reserve_queries('initial', [str(i) for i in range(10)], round_number=0)
     for i in range(10):
-        ids = [f'url-{i}-{j}' for j in range(10)]
+        ids = [f'url-{i}-{j}' for j in range(5)]
         budget.admit_results('batch-' + str(i), str(i), ids)
-    assert len(budget.snapshot()['main_candidates']) == 100
+    assert len(budget.snapshot()['main_candidates']) == 50
     budget.admit_results('dup', '0', ['url-0-0'])
-    with pytest.raises(ValueError):
+    before = budget.snapshot()
+    with pytest.raises(ValueError, match='result/main candidate budget exhausted'):
         budget.admit_results('extra-result', '0', ['new'])
+    assert budget.snapshot() == before
     budget.reserve_queries('supp', ['extra'], round_number=1)
-    with pytest.raises(ValueError):
+    before = budget.snapshot()
+    with pytest.raises(ValueError, match='result/main candidate budget exhausted'):
         budget.admit_results('extra-main', 'extra', ['new'])
-    assert len(budget.snapshot()['main_candidates']) == 100
+    assert budget.snapshot() == before
+    assert len(budget.snapshot()['main_candidates']) == 50
 
 
 def test_details_and_revisions_are_stable_logical_keys(setup):
