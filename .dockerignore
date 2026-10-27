@@ -5,6 +5,8 @@ __pycache__
 *.pyc
 .pytest_cache
 .env
+.env.*
+!.env.example
 docs
 tests
 data/crawl_all
@@ -15,3 +17,14 @@ data/*.backup_*
 *.log
 .server.pid
 .claude/settings.local.json
+.worktrees
+.tmp
+.codegraph
+.gstack
+outputs
+chip-recommend-server-backups
+data/*.db*
+data/manual_control
+data/domain_runs
+data/test_runs
+data/source_snapshots
