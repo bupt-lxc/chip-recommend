@@ -1,0 +1,1197 @@
+{
+  "date": "2026-10-21",
+  "scope": "Skill instructions and metadata paths aligned to existing strict schemas; same saved TPU v8 full body only",
+  "status": "diagnostic_replay_complete_not_full_acceptance",
+  "changes": [
+    "compute metadata uses conversion.precision/source_unit/dense_or_sparse/calculation_basis and raw_value",
+    "shared instructions distinguish candidate conversion object from nullable review response candidate",
+    "four schema-checked illustrative fragments; numeric values separate units; no implicit coercion",
+    "authority, generated copies and installation manifests synchronized; frozen historical runs preserved"
+  ],
+  "tdd": {
+    "before": {
+      "failed": 7,
+      "passed": 4
+    },
+    "after_focused": {
+      "passed": 11
+    }
+  },
+  "regression": {
+    "tests": 222,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "production_validation_and_comparison_files_unchanged_this_round": {
+    "chip_model/pipeline/domain_discovery/models.py": true,
+    "chip_model/pipeline/domain_discovery/compare.py": true,
+    "chip_model/pipeline/domain_discovery/entities.py": true
+  },
+  "strict_model_config": {
+    "extra": "forbid",
+    "strict": true
+  },
+  "candidate_schema_sha256": "5ef79b0df8f3e0211e2f0811355ed63579112edc51c62903090ff373edb5e370",
+  "review_schema_sha256": "be426bdf1d6348531ae81a910186820bdd691a8ae90b747a7baffafc577caf21",
+  "previous_specs_replay": {
+    "domain": "specs",
+    "run_id": "run-ae6847ec102a4078b265985c566fabb8",
+    "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+    "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+    "body_length": 5810,
+    "bundle_sha256": null,
+    "seconds": 33.18,
+    "state": "partial",
+    "main_body_complete": false,
+    "all_tasks_complete": false,
+    "tasks": [
+      {
+        "domain": "specs",
+        "scope": "main",
+        "state": "running",
+        "identity_dependency": false,
+        "coverage": {
+          "pending": [
+            {
+              "start": 0,
+              "end": 5810
+            }
+          ],
+          "processed": [],
+          "failed": [],
+          "body_length": 5810,
+          "complete": false
+        }
+      },
+      {
+        "domain": "identity",
+        "scope": "identity:333033ad4b45b4b1219f25858020aa88a2ceb2b3c046a5b875fe06a56f3e86de",
+        "state": "completed",
+        "identity_dependency": true,
+        "coverage": {
+          "pending": [],
+          "processed": [
+            {
+              "start": 0,
+              "end": 5810
+            }
+          ],
+          "failed": [],
+          "body_length": 5810,
+          "complete": true
+        }
+      }
+    ],
+    "call_statuses": {
+      "completed": 3
+    },
+    "call_phases": {
+      "extract": 2,
+      "review": 1
+    },
+    "candidate_statuses": {
+      "program_rejected": 5,
+      "awaiting_identity": 1
+    },
+    "identity_output": {
+      "facts": 3,
+      "explicit_conversion_null": 3,
+      "conversion_omitted": 0,
+      "conversion_object": 0,
+      "schema_valid": 0
+    },
+    "candidates": [
+      {
+        "domain": "identity",
+        "field": "release_date",
+        "entity": {
+          "chip_model": "TPU v8",
+          "vendor": "Google"
+        },
+        "raw_value": "2026年4月22日",
+        "normalized_value": "2026-04-22",
+        "conversion_present": true,
+        "conversion": null,
+        "status": "program_rejected",
+        "program": [
+          {
+            "reason": "1 validation error for FactCandidate\nconversion\n  Input should be a valid dictionary or instance of Conversion [type=model_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/model_type",
+            "status": "rejected"
+          }
+        ],
+        "reviews": [],
+        "reason": "1 validation error for FactCandidate\nconversion\n  Input should be a valid dictionary or instance of Conversion [type=model_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/model_type"
+      },
+      {
+        "domain": "specs",
+        "field": "process_node_nm",
+        "entity": {
+          "chip_model": "TPU 8i",
+          "vendor": "Google"
+        },
+        "raw_value": "2nm",
+        "normalized_value": 2,
+        "conversion_present": true,
+        "conversion": {
+          "aggregation": "unknown",
+          "basis": "decimal",
+          "dense_or_sparse": "unknown",
+          "description": "从字符串 '2nm' 提取数值 2，单位保留 nm",
+          "direction": "unknown",
+          "factor": 1,
+          "source_unit": "nm"
+        },
+        "status": "program_rejected",
+        "program": [
+          {
+            "reason": "numeric field requires a single numeric raw value",
+            "status": "rejected"
+          }
+        ],
+        "reviews": [],
+        "reason": "numeric field requires a single numeric raw value"
+      },
+      {
+        "domain": "identity",
+        "field": "vendor",
+        "entity": {
+          "chip_model": "TPU v8",
+          "vendor": "Google"
+        },
+        "raw_value": "Google",
+        "normalized_value": "Google",
+        "conversion_present": true,
+        "conversion": null,
+        "status": "program_rejected",
+        "program": [
+          {
+            "reason": "1 validation error for FactCandidate\nconversion\n  Input should be a valid dictionary or instance of Conversion [type=model_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/model_type",
+            "status": "rejected"
+          }
+        ],
+        "reviews": [],
+        "reason": "1 validation error for FactCandidate\nconversion\n  Input should be a valid dictionary or instance of Conversion [type=model_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/model_type"
+      },
+      {
+        "domain": "identity",
+        "field": "chip_type",
+        "entity": {
+          "chip_model": "TPU v8",
+          "vendor": "Google"
+        },
+        "raw_value": "TPU",
+        "normalized_value": "TPU",
+        "conversion_present": true,
+        "conversion": null,
+        "status": "program_rejected",
+        "program": [
+          {
+            "reason": "1 validation error for FactCandidate\nconversion\n  Input should be a valid dictionary or instance of Conversion [type=model_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/model_type",
+            "status": "rejected"
+          }
+        ],
+        "reviews": [],
+        "reason": "1 validation error for FactCandidate\nconversion\n  Input should be a valid dictionary or instance of Conversion [type=model_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/model_type"
+      },
+      {
+        "domain": "specs",
+        "field": "process_node_nm",
+        "entity": {
+          "chip_model": "TPU 8t",
+          "vendor": "Google"
+        },
+        "raw_value": "2nm",
+        "normalized_value": 2,
+        "conversion_present": true,
+        "conversion": {
+          "aggregation": "unknown",
+          "basis": "decimal",
+          "dense_or_sparse": "unknown",
+          "description": "从字符串 '2nm' 提取数值 2，单位保留 nm",
+          "direction": "unknown",
+          "factor": 1,
+          "source_unit": "nm"
+        },
+        "status": "program_rejected",
+        "program": [
+          {
+            "reason": "numeric field requires a single numeric raw value",
+            "status": "rejected"
+          }
+        ],
+        "reviews": [],
+        "reason": "numeric field requires a single numeric raw value"
+      },
+      {
+        "domain": "specs",
+        "field": "tdp_w",
+        "entity": {
+          "chip_model": "TPU v8",
+          "vendor": "Google"
+        },
+        "raw_value": 1300,
+        "normalized_value": 1300,
+        "conversion_present": true,
+        "conversion": {
+          "aggregation": "per_chip",
+          "basis": "decimal",
+          "dense_or_sparse": "unknown",
+          "direction": "unknown",
+          "factor": 1,
+          "source_unit": "W"
+        },
+        "status": "awaiting_identity",
+        "program": [
+          {
+            "reason": "contract_and_exact_evidence_passed",
+            "status": "program_valid"
+          }
+        ],
+        "reviews": [
+          {
+            "candidate": null,
+            "needs_identity": true,
+            "reason": "The candidate references 'TPU v8' as a chip model with a specific power consumption (1300W). However, 'TPU v8' is not a confirmed public SKU name in the provided baseline or standard Google TPU naming conventions (which typically use codenames like Ironwood for Gen 7, etc.). The source text mentions 'TPU 8t' and 'TPU 8i' as sub-variants later, but the entity key uses 'TPU v8'. Without verified identity matching against the frozen contract's allowed entities or official datasheets confirming 'TPU v8' as a distinct, valid chip_model entity (distinct from the specific 8t/8i SKUs), the identity is ambiguous. Furthermore, the source is a third-party vendor news page (web_crawl), not an official datasheet, making the extraction of specific hardware specs like TDP highly dependent on accurate entity resolution which cannot be performed here.",
+            "verdict": "unresolved",
+            "version": 0
+          }
+        ],
+        "reason": "The candidate references 'TPU v8' as a chip model with a specific power consumption (1300W). However, 'TPU v8' is not a confirmed public SKU name in the provided baseline or standard Google TPU naming conventions (which typically use codenames like Ironwood for Gen 7, etc.). The source text mentions 'TPU 8t' and 'TPU 8i' as sub-variants later, but the entity key uses 'TPU v8'. Without verified identity matching against the frozen contract's allowed entities or official datasheets confirming 'TPU v8' as a distinct, valid chip_model entity (distinct from the specific 8t/8i SKUs), the identity is ambiguous. Furthermore, the source is a third-party vendor news page (web_crawl), not an official datasheet, making the extraction of specific hardware specs like TDP highly dependent on accurate entity resolution which cannot be performed here."
+      }
+    ],
+    "statistics": {
+      "independent_fields": 0,
+      "source_candidates": 0,
+      "urls": 0,
+      "validated_candidates": 0,
+      "rejected_candidates": 5,
+      "value_changes": 0,
+      "unverifiable_evidence_candidates": 0,
+      "condition_unresolved_candidates": 0,
+      "dependency_unresolved_candidates": 1,
+      "comparison_unresolved_candidates": 0,
+      "ambiguous_entity_candidates": 0,
+      "new_entities": 0,
+      "main": {
+        "independent_fields": 0,
+        "source_candidates": 0,
+        "urls": 0,
+        "validated_candidates": 0,
+        "rejected_candidates": 2,
+        "value_changes": 0,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 1,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0
+      },
+      "linked": {
+        "independent_fields": 0,
+        "source_candidates": 0,
+        "urls": 0,
+        "validated_candidates": 0,
+        "rejected_candidates": 0,
+        "value_changes": 0,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 0,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0
+      },
+      "formal_business_writes": 0,
+      "formal_provenance_writes": 0,
+      "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+    },
+    "source_db_hash_unchanged": true,
+    "frozen_baseline_hash_unchanged": true,
+    "empty_baseline_table_rows_after": {
+      "chips": 0,
+      "models": 0,
+      "chip_model_benchmarks": 0,
+      "chip_model_compatibility": 0,
+      "field_provenance": 0,
+      "link_library": 0,
+      "source_registry": 0,
+      "benchmark_workbook_rows": 0,
+      "source_discovery_edges": 0,
+      "deployment_guides": 0,
+      "update_runs": 0,
+      "update_run_events": 0,
+      "source_monitor_state": 0,
+      "source_checks": 0,
+      "source_diffs": 0,
+      "source_auto_applies": 0,
+      "data_agent_jobs": 0,
+      "parse_ledger": 0,
+      "extraction_candidates": 0,
+      "candidate_baselines": 0,
+      "skill_inbox": 0,
+      "entity_aliases": 0,
+      "candidate_publications": 0
+    },
+    "exceptions": []
+  },
+  "current_cases": [
+    {
+      "domain": "specs",
+      "run_id": "run-86830f6072f34a82b182a19eab94cb6a",
+      "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+      "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+      "body_length": 5810,
+      "bundle_sha256": "8d2d60de567beefc697cf959040231eb1357ca11ef1904311c54d2e4f58ba09a",
+      "seconds": 245.14,
+      "state": "completed",
+      "main_body_complete": true,
+      "all_tasks_complete": true,
+      "tasks": [
+        {
+          "domain": "specs",
+          "scope": "main",
+          "state": "completed",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 5810
+              }
+            ],
+            "failed": [],
+            "body_length": 5810,
+            "complete": true
+          }
+        },
+        {
+          "domain": "identity",
+          "scope": "identity:fee4039628b36217cb80fea615324f144d421bc702dbe959b733dbdd6523397f",
+          "state": "completed",
+          "identity_dependency": true,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 5810
+              }
+            ],
+            "failed": [],
+            "body_length": 5810,
+            "complete": true
+          }
+        },
+        {
+          "domain": "identity",
+          "scope": "identity:c26bed52ab8f636b7c13beaf26c394eb6de89669ad382f8dac9ba0b7a15f8e40",
+          "state": "completed",
+          "identity_dependency": true,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 5810
+              }
+            ],
+            "failed": [],
+            "body_length": 5810,
+            "complete": true
+          }
+        }
+      ],
+      "call_statuses": {
+        "completed": 16
+      },
+      "call_phases": {
+        "extract": 3,
+        "review": 13
+      },
+      "candidate_statuses": {
+        "validated": 7,
+        "semantic_rejected": 3,
+        "unresolved": 2,
+        "program_rejected": 1
+      },
+      "identity_output": {
+        "facts": 16,
+        "explicit_conversion_null": 0,
+        "conversion_omitted": 0,
+        "conversion_object": 16,
+        "schema_valid": 16
+      },
+      "candidates": [
+        {
+          "domain": "identity",
+          "field": "vendor",
+          "entity": {
+            "chip_model": "TPU 8i",
+            "vendor": "Google"
+          },
+          "raw_value": "Google",
+          "normalized_value": "Google",
+          "conversion_present": true,
+          "conversion": {},
+          "status": "validated",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "候选字段 vendor='Google' 与页面正文“谷歌TPU v8”及“Google Cloud Next ’26大会”一致，证据位置准确。来源为链力液冷官网新闻（第三方行业分析），source_type 正确标记为 web_crawl，未误标为官方公告。实体键包含厂商与具体型号 TPU 8i，符合身份域提取规范。",
+              "verdict": "accept",
+              "version": 0
+            }
+          ],
+          "reason": "候选字段 vendor='Google' 与页面正文“谷歌TPU v8”及“Google Cloud Next ’26大会”一致，证据位置准确。来源为链力液冷官网新闻（第三方行业分析），source_type 正确标记为 web_crawl，未误标为官方公告。实体键包含厂商与具体型号 TPU 8i，符合身份域提取规范。"
+        },
+        {
+          "domain": "specs",
+          "field": "process_node_nm",
+          "entity": {
+            "chip_model": "TPU 8i",
+            "vendor": "Google"
+          },
+          "raw_value": 2,
+          "normalized_value": 2,
+          "conversion_present": true,
+          "conversion": {},
+          "status": "validated",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The candidate correctly identifies the source as web_crawl (third-party news site lianliwork.com, not official Google announcement). The evidence quote explicitly states TPU 8i is locked to TSMC 2nm process. Entity key matches chip_model 'TPU 8i' and vendor 'Google'. Field 'process_node_nm' with value 2 and unit 'nm' aligns with contract units. Confidence medium is appropriate for third-party reporting of future/unconfirmed specs. No identity issues since entity clues are clear in text.",
+              "verdict": "accept",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate correctly identifies the source as web_crawl (third-party news site lianliwork.com, not official Google announcement). The evidence quote explicitly states TPU 8i is locked to TSMC 2nm process. Entity key matches chip_model 'TPU 8i' and vendor 'Google'. Field 'process_node_nm' with value 2 and unit 'nm' aligns with contract units. Confidence medium is appropriate for third-party reporting of future/unconfirmed specs. No identity issues since entity clues are clear in text."
+        },
+        {
+          "domain": "identity",
+          "field": "chip_series",
+          "entity": {
+            "chip_model": "TPU 8i",
+            "vendor": "Google"
+          },
+          "raw_value": "TPU v8",
+          "normalized_value": "TPU v8",
+          "conversion_present": true,
+          "conversion": {},
+          "status": "semantic_rejected",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The candidate attempts to extract 'chip_series' (TPU v8) for the entity 'TPU 8i'. However, 'chip_series' is not a valid field in the frozen identity domain contract (fields: vendor, chip_model, chip_type, etc.). Furthermore, the evidence quote provided ('谷歌TPU v8全面液冷如何重构全球AI供应链') is from the article title/header and does not explicitly link this series name to the specific SKU 'TPU 8i' in the manner required for identity verification; the text later distinguishes TPU 8t and TPU 8i as sub-variants of v8. Since the target field is invalid per contract schema, the candidate must be rejected.",
+              "verdict": "reject",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate attempts to extract 'chip_series' (TPU v8) for the entity 'TPU 8i'. However, 'chip_series' is not a valid field in the frozen identity domain contract (fields: vendor, chip_model, chip_type, etc.). Furthermore, the evidence quote provided ('谷歌TPU v8全面液冷如何重构全球AI供应链') is from the article title/header and does not explicitly link this series name to the specific SKU 'TPU 8i' in the manner required for identity verification; the text later distinguishes TPU 8t and TPU 8i as sub-variants of v8. Since the target field is invalid per contract schema, the candidate must be rejected."
+        },
+        {
+          "domain": "identity",
+          "field": "release_date",
+          "entity": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "raw_value": "2026年4月22日",
+          "normalized_value": "2026-04-22",
+          "conversion_present": true,
+          "conversion": {
+            "description": "Converted Chinese date format to ISO 8601 YYYY-MM-DD"
+          },
+          "status": "unresolved",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": true,
+              "reason": "The candidate claims a specific release date for 'TPU 8t' based on evidence mentioning the 'eighth-generation TPU' (TPU v8) announcement. The provided text discusses the generation (v8) and mentions TPU 8t as a sub-variant (training chip), but does not explicitly state that the specific SKU 'TPU 8t' was released or announced with its own distinct date on April 22, 2026; it attributes the date to the general 'eighth-generation TPU' launch event. Identity rules require precise SKU matching ('X1 32GB and X1 64GB do not merge'). Without explicit confirmation that 'TPU 8t' itself has this specific release date distinct from the family/generation announcement, the identity link between the specific entity key 'TPU 8t' and the evidence is ambiguous/unconfirmed. Additionally, the source is a third-party industry news site (web_crawl/community), which is correctly classified, but the fact requires verified identity linkage.",
+              "verdict": "unresolved",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate claims a specific release date for 'TPU 8t' based on evidence mentioning the 'eighth-generation TPU' (TPU v8) announcement. The provided text discusses the generation (v8) and mentions TPU 8t as a sub-variant (training chip), but does not explicitly state that the specific SKU 'TPU 8t' was released or announced with its own distinct date on April 22, 2026; it attributes the date to the general 'eighth-generation TPU' launch event. Identity rules require precise SKU matching ('X1 32GB and X1 64GB do not merge'). Without explicit confirmation that 'TPU 8t' itself has this specific release date distinct from the family/generation announcement, the identity link between the specific entity key 'TPU 8t' and the evidence is ambiguous/unconfirmed. Additionally, the source is a third-party industry news site (web_crawl/community), which is correctly classified, but the fact requires verified identity linkage."
+        },
+        {
+          "domain": "specs",
+          "field": "process_node_nm",
+          "entity": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "raw_value": 2,
+          "normalized_value": 2,
+          "conversion_present": true,
+          "conversion": {},
+          "status": "validated",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The candidate correctly identifies the source as 'web_crawl' because the page is a third-party news article from a liquid cooling vendor (Lianli), not an official Google announcement. The evidence quote explicitly states that TPU 8t is locked to TSMC's 2nm process ('均锁定台积电2nm制程'). The extracted value (2 nm) matches the text, and the entity key (Google, TPU 8t) is supported by the context distinguishing it from TPU 8i. The classification of source_type and extraction of the process node are accurate according to the contract rules.",
+              "verdict": "accept",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate correctly identifies the source as 'web_crawl' because the page is a third-party news article from a liquid cooling vendor (Lianli), not an official Google announcement. The evidence quote explicitly states that TPU 8t is locked to TSMC's 2nm process ('均锁定台积电2nm制程'). The extracted value (2 nm) matches the text, and the entity key (Google, TPU 8t) is supported by the context distinguishing it from TPU 8i. The classification of source_type and extraction of the process node are accurate according to the contract rules."
+        },
+        {
+          "domain": "identity",
+          "field": "chip_type",
+          "entity": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "raw_value": "TPU",
+          "normalized_value": "TPU",
+          "conversion_present": true,
+          "conversion": {
+            "description": "Normalized to contract enum value 'TPU'"
+          },
+          "status": "semantic_rejected",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The evidence quote '第八代TPU的发布并未刻意聚焦于散热方案' (The release of the eighth-generation TPU did not deliberately focus on cooling solutions) does not explicitly state that the chip type is 'TPU'. While the article discusses TPUs, the specific sentence used as evidence for the field `chip_type` lacks the direct assertion required by the contract ('actual type... must have verbatim evidence'). Furthermore, the entity key specifies 'TPU 8t', but the evidence text refers generally to 'eighth-generation TPU' without linking it specifically to the '8t' SKU in that exact context. The claim that TPU falls under ASIC is an external inference not supported by the provided page text. Therefore, the candidate is rejected due to insufficient explicit evidence for the specific value and entity association.",
+              "verdict": "reject",
+              "version": 0
+            }
+          ],
+          "reason": "The evidence quote '第八代TPU的发布并未刻意聚焦于散热方案' (The release of the eighth-generation TPU did not deliberately focus on cooling solutions) does not explicitly state that the chip type is 'TPU'. While the article discusses TPUs, the specific sentence used as evidence for the field `chip_type` lacks the direct assertion required by the contract ('actual type... must have verbatim evidence'). Furthermore, the entity key specifies 'TPU 8t', but the evidence text refers generally to 'eighth-generation TPU' without linking it specifically to the '8t' SKU in that exact context. The claim that TPU falls under ASIC is an external inference not supported by the provided page text. Therefore, the candidate is rejected due to insufficient explicit evidence for the specific value and entity association."
+        },
+        {
+          "domain": "identity",
+          "field": "usage",
+          "entity": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "raw_value": "训练芯片",
+          "normalized_value": "training",
+          "conversion_present": true,
+          "conversion": {
+            "description": "Translated '训练芯片' to standard usage category 'training'"
+          },
+          "status": "validated",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The candidate correctly identifies 'TPU 8t' as a training chip based on the explicit quote \"TPU v8分拆为训练芯片TPU 8t\". The source is a third-party industry news article (web_crawl), not an official Google announcement, so the classification is accurate. The normalization of '训练芯片' to 'training' is valid for the usage field in the identity domain.",
+              "verdict": "accept",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate correctly identifies 'TPU 8t' as a training chip based on the explicit quote \"TPU v8分拆为训练芯片TPU 8t\". The source is a third-party industry news article (web_crawl), not an official Google announcement, so the classification is accurate. The normalization of '训练芯片' to 'training' is valid for the usage field in the identity domain."
+        },
+        {
+          "domain": "identity",
+          "field": "vendor",
+          "entity": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "raw_value": "Google",
+          "normalized_value": "Google",
+          "conversion_present": true,
+          "conversion": {},
+          "status": "validated",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The candidate correctly identifies 'Google' as the vendor for the chip model 'TPU 8t'. The evidence quote explicitly links 'TPU 8t' to the 'TPU v8' series, and the article context (referencing Google Cloud Next) supports this attribution. The source_type is appropriately classified as 'web_crawl' because the page is a third-party industry news article from Lianli Work, not an official Google announcement or datasheet. The confidence level 'medium' reflects the secondary nature of the source while acknowledging the specific SKU details provided.",
+              "verdict": "accept",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate correctly identifies 'Google' as the vendor for the chip model 'TPU 8t'. The evidence quote explicitly links 'TPU 8t' to the 'TPU v8' series, and the article context (referencing Google Cloud Next) supports this attribution. The source_type is appropriately classified as 'web_crawl' because the page is a third-party industry news article from Lianli Work, not an official Google announcement or datasheet. The confidence level 'medium' reflects the secondary nature of the source while acknowledging the specific SKU details provided."
+        },
+        {
+          "domain": "identity",
+          "field": "chip_model",
+          "entity": {
+            "chip_model": "TPU 8i",
+            "vendor": "Google"
+          },
+          "raw_value": "TPU 8i",
+          "normalized_value": "TPU 8i",
+          "conversion_present": true,
+          "conversion": {},
+          "status": "validated",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The evidence quote explicitly identifies 'TPU 8i' as the inference chip SKU within the TPU v8 family, distinguishing it from 'TPU 8t'. The source is a third-party industry news article (web_crawl), which correctly classifies the publisher type. The extracted value matches the raw text and entity key.",
+              "verdict": "accept",
+              "version": 0
+            }
+          ],
+          "reason": "The evidence quote explicitly identifies 'TPU 8i' as the inference chip SKU within the TPU v8 family, distinguishing it from 'TPU 8t'. The source is a third-party industry news article (web_crawl), which correctly classifies the publisher type. The extracted value matches the raw text and entity key."
+        },
+        {
+          "domain": "identity",
+          "field": "production_status",
+          "entity": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "raw_value": "已发布",
+          "normalized_value": "released",
+          "conversion_present": true,
+          "conversion": {
+            "description": "Mapped '发布' (release/announcement) to normalized status 'released'"
+          },
+          "status": "program_rejected",
+          "program": [
+            {
+              "reason": "chips.production_status 须使用项目既有中文状态，而非英文枚举。",
+              "status": "rejected"
+            }
+          ],
+          "reviews": [],
+          "reason": "chips.production_status 须使用项目既有中文状态，而非英文枚举。"
+        },
+        {
+          "domain": "identity",
+          "field": "usage",
+          "entity": {
+            "chip_model": "TPU 8i",
+            "vendor": "Google"
+          },
+          "raw_value": "推理",
+          "normalized_value": "inference",
+          "conversion_present": true,
+          "conversion": {
+            "description": "将中文“推理”规范化为英文标准术语 inference"
+          },
+          "status": "validated",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The candidate correctly identifies 'TPU 8i' as an inference chip based on the explicit text in the source article. The source_type is appropriately classified as 'web_crawl' because the page is a third-party industry news report (from a liquid cooling supplier) rather than a first-party Google announcement. The normalization of '推理' to 'inference' and the evidence location are accurate.",
+              "verdict": "accept",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate correctly identifies 'TPU 8i' as an inference chip based on the explicit text in the source article. The source_type is appropriately classified as 'web_crawl' because the page is a third-party industry news report (from a liquid cooling supplier) rather than a first-party Google announcement. The normalization of '推理' to 'inference' and the evidence location are accurate."
+        },
+        {
+          "domain": "specs",
+          "field": "tdp_w",
+          "entity": {
+            "chip_model": "TPU v8",
+            "vendor": "Google"
+          },
+          "raw_value": 1300,
+          "normalized_value": 1300,
+          "conversion_present": true,
+          "conversion": {},
+          "status": "semantic_rejected",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            },
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": {
+                "conditions": {},
+                "confidence": "medium",
+                "confidence_reason": "来源为第三方液冷设备商新闻页面，非Google官方技术文档或公告，但具体数值表述清晰且无歧义。",
+                "context_refs": [],
+                "conversion": {},
+                "domain_id": "specs",
+                "entity_key": {
+                  "chip_model": "TPU v8",
+                  "vendor": "Google"
+                },
+                "evidence": {
+                  "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+                  "end": 449,
+                  "quote": "TPU v8单芯片功耗达1300W",
+                  "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+                  "start": 432
+                },
+                "evidence_kind": "explicit",
+                "explanation": "文章明确陈述TPU v8单芯片功耗为1300W，符合芯片级TDP定义。来源为第三方行业媒体/供应商新闻页，非官方文档。",
+                "field_name": "tdp_w",
+                "normalized_value": 1300,
+                "raw_value": 1300,
+                "scope": "chip",
+                "source_type": "web_crawl",
+                "target_table": "chips",
+                "unit": "W"
+              },
+              "needs_identity": false,
+              "reason": "候选的 source_type 分类错误。根据公共规则，official_news 要求第一方制造商/所有者公告，而该页面来自第三方液冷设备商（链力）的新闻/博客文章，属于 web_crawl 或 community。此外，证据文本“TPU v8单芯片功耗达1300W”位于正文段落中，并非表格标题、脚注等特定结构元素，context_refs 中的 table_header 引用与当前字段提取无直接关联且未用于支持该数值，建议移除无关 context_ref 并修正 source_type。",
+              "verdict": "revise",
+              "version": 0
+            },
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "来源为第三方液冷设备商（链力）的新闻页面，属于 web_crawl 或 community，非 Google 官方文档。文中提及的“TPU v8”及“1300W”缺乏官方规格表佐证，且 TPU v8 尚未发布（截至当前最新公开信息主要为 v5/v6），该数值极可能为推测、误传或虚构，不符合 specs 域对明确 SKU 官方参数的要求。证据不支持该事实作为已验证候选。",
+              "verdict": "reject",
+              "version": 1
+            }
+          ],
+          "reason": "来源为第三方液冷设备商（链力）的新闻页面，属于 web_crawl 或 community，非 Google 官方文档。文中提及的“TPU v8”及“1300W”缺乏官方规格表佐证，且 TPU v8 尚未发布（截至当前最新公开信息主要为 v5/v6），该数值极可能为推测、误传或虚构，不符合 specs 域对明确 SKU 官方参数的要求。证据不支持该事实作为已验证候选。"
+        },
+        {
+          "domain": "identity",
+          "field": "chip_model",
+          "entity": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "raw_value": "TPU 8t",
+          "normalized_value": "TPU 8t",
+          "conversion_present": true,
+          "conversion": {},
+          "status": "unresolved",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": true,
+              "reason": "The candidate identifies 'TPU 8t' as a specific chip model based on the text 'TPU v8分拆为训练芯片TPU 8t...'. However, the source is a third-party industry analysis article (web_crawl) discussing supply chain implications, not an official Google announcement or datasheet. While the text explicitly names the model, verifying if 'TPU 8t' is the final commercial SKU name versus a codename/series designation requires identity confirmation against official baselines or verified sources. The entity key uses 'TPU 8t' which may be ambiguous without official product catalog evidence confirming it as the distinct marketable SKU separate from the series 'TPU v8'. Therefore, identity cannot be fully confirmed as a new validated entity in this context.",
+              "verdict": "unresolved",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate identifies 'TPU 8t' as a specific chip model based on the text 'TPU v8分拆为训练芯片TPU 8t...'. However, the source is a third-party industry analysis article (web_crawl) discussing supply chain implications, not an official Google announcement or datasheet. While the text explicitly names the model, verifying if 'TPU 8t' is the final commercial SKU name versus a codename/series designation requires identity confirmation against official baselines or verified sources. The entity key uses 'TPU 8t' which may be ambiguous without official product catalog evidence confirming it as the distinct marketable SKU separate from the series 'TPU v8'. Therefore, identity cannot be fully confirmed as a new validated entity in this context."
+        }
+      ],
+      "statistics": {
+        "independent_fields": 7,
+        "source_candidates": 1,
+        "urls": 1,
+        "validated_candidates": 7,
+        "rejected_candidates": 4,
+        "value_changes": 7,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 1,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0,
+        "new_entities": 2,
+        "main": {
+          "independent_fields": 2,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 2,
+          "rejected_candidates": 1,
+          "value_changes": 2,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 1,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "linked": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 0,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "formal_business_writes": 0,
+        "formal_provenance_writes": 0,
+        "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+      },
+      "source_db_hash_unchanged": true,
+      "frozen_baseline_hash_unchanged": true,
+      "empty_baseline_table_rows_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0,
+        "link_library": 0,
+        "source_registry": 0,
+        "benchmark_workbook_rows": 0,
+        "source_discovery_edges": 0,
+        "deployment_guides": 0,
+        "update_runs": 0,
+        "update_run_events": 0,
+        "source_monitor_state": 0,
+        "source_checks": 0,
+        "source_diffs": 0,
+        "source_auto_applies": 0,
+        "data_agent_jobs": 0,
+        "parse_ledger": 0,
+        "extraction_candidates": 0,
+        "candidate_baselines": 0,
+        "skill_inbox": 0,
+        "entity_aliases": 0,
+        "candidate_publications": 0
+      },
+      "exceptions": []
+    },
+    {
+      "domain": "identity",
+      "run_id": "run-00d8210d562f443a80851787b1fd84c6",
+      "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+      "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+      "body_length": 5810,
+      "bundle_sha256": "8d2d60de567beefc697cf959040231eb1357ca11ef1904311c54d2e4f58ba09a",
+      "seconds": 52.58,
+      "state": "completed",
+      "main_body_complete": true,
+      "all_tasks_complete": true,
+      "tasks": [
+        {
+          "domain": "identity",
+          "scope": "main",
+          "state": "completed",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 5810
+              }
+            ],
+            "failed": [],
+            "body_length": 5810,
+            "complete": true
+          }
+        }
+      ],
+      "call_statuses": {
+        "completed": 4
+      },
+      "call_phases": {
+        "extract": 1,
+        "review": 3
+      },
+      "candidate_statuses": {
+        "validated": 2,
+        "unresolved": 1
+      },
+      "identity_output": {
+        "facts": 3,
+        "explicit_conversion_null": 0,
+        "conversion_omitted": 0,
+        "conversion_object": 3,
+        "schema_valid": 3
+      },
+      "candidates": [
+        {
+          "domain": "identity",
+          "field": "release_date",
+          "entity": {
+            "chip_model": "TPU v8",
+            "vendor": "Google"
+          },
+          "raw_value": "2026年4月22日",
+          "normalized_value": "2026-04-22",
+          "conversion_present": true,
+          "conversion": {
+            "aggregation": "unknown",
+            "basis": "decimal",
+            "calculation_basis": null,
+            "dense_or_sparse": "unknown",
+            "description": "Converted Chinese date format 'YYYY年M月D日' to ISO 8601 'YYYY-MM-DD'.",
+            "direction": "unknown",
+            "factor": 1,
+            "precision": null,
+            "source_unit": null
+          },
+          "status": "validated",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The candidate correctly identifies the source as 'web_crawl' (third-party report by Lianli) rather than 'official_news'. The evidence quote explicitly states the release date of TPU v8 at Google Cloud Next '26. The conversion from Chinese date format to ISO 8601 is accurate and documented. The entity key matches the chip discussed in the text.",
+              "verdict": "accept",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate correctly identifies the source as 'web_crawl' (third-party report by Lianli) rather than 'official_news'. The evidence quote explicitly states the release date of TPU v8 at Google Cloud Next '26. The conversion from Chinese date format to ISO 8601 is accurate and documented. The entity key matches the chip discussed in the text."
+        },
+        {
+          "domain": "identity",
+          "field": "chip_type",
+          "entity": {
+            "chip_model": "TPU v8",
+            "vendor": "Google"
+          },
+          "raw_value": "TPU",
+          "normalized_value": "TPU",
+          "conversion_present": true,
+          "conversion": {},
+          "status": "unresolved",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": {
+                "conditions": {},
+                "confidence": "high",
+                "confidence_reason": "The acronym TPU is used consistently throughout the text to identify the chip family, and the specific model 'TPU 8t' is explicitly named in the context of performance metrics.",
+                "context_refs": [],
+                "conversion": {},
+                "domain_id": "identity",
+                "entity_hints": {},
+                "entity_key": {
+                  "chip_model": "TPU 8t",
+                  "vendor": "Google"
+                },
+                "evidence": {
+                  "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+                  "end": 244,
+                  "quote": "谷歌TPU v8全面液冷如何重构全球AI供应链",
+                  "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+                  "start": 221
+                },
+                "evidence_kind": "explicit",
+                "explanation": "The text identifies 'TPU 8t' as a training chip within the TPU v8 generation. TPU corresponds to Tensor Processing Unit, an AI accelerator type listed in the domain contract examples. The entity key has been corrected from the generation label 'TPU v8' to the specific SKU 'TPU 8t' found in the body text ('TPU v8分拆为训练芯片TPU 8t...').",
+                "field_name": "chip_type",
+                "normalized_value": "TPU",
+                "raw_value": "TPU",
+                "scope": "chip",
+                "source_type": "web_crawl",
+                "target_table": "chips",
+                "unit": null
+              },
+              "needs_identity": false,
+              "reason": "The candidate's entity_key uses 'TPU v8', which is a generation identifier rather than the specific chip SKU required by the identity domain contract. The source text explicitly distinguishes two sub-models: 'TPU 8t' (training) and 'TPU 8i' (inference). Identity rules require preserving capacity, suffixes, and variants, and prohibit treating series/generation labels as concrete SKUs. Therefore, the chip_type evidence supports specific models like 'TPU 8t' or 'TPU 8i', not 'TPU v8'. A revision to a confirmed specific model is necessary.",
+              "verdict": "revise",
+              "version": 0
+            }
+          ],
+          "reason": "revision_changes_entity_scope"
+        },
+        {
+          "domain": "identity",
+          "field": "chip_model",
+          "entity": {
+            "chip_model": "TPU v8",
+            "vendor": "Google"
+          },
+          "raw_value": "TPU v8",
+          "normalized_value": "TPU v8",
+          "conversion_present": true,
+          "conversion": {},
+          "status": "validated",
+          "program": [
+            {
+              "reason": "contract_and_exact_evidence_passed",
+              "status": "program_valid"
+            }
+          ],
+          "reviews": [
+            {
+              "candidate": null,
+              "needs_identity": false,
+              "reason": "The candidate correctly identifies 'TPU v8' as the chip model based on explicit textual evidence in the provided web page. The source type is accurately classified as 'web_crawl' (third-party industry news/analysis from a liquid cooling vendor site, not an official Google announcement). The entity key (Google, TPU v8) and field value are supported by the quote.",
+              "verdict": "accept",
+              "version": 0
+            }
+          ],
+          "reason": "The candidate correctly identifies 'TPU v8' as the chip model based on explicit textual evidence in the provided web page. The source type is accurately classified as 'web_crawl' (third-party industry news/analysis from a liquid cooling vendor site, not an official Google announcement). The entity key (Google, TPU v8) and field value are supported by the quote."
+        }
+      ],
+      "statistics": {
+        "independent_fields": 2,
+        "source_candidates": 1,
+        "urls": 1,
+        "validated_candidates": 2,
+        "rejected_candidates": 0,
+        "value_changes": 2,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 0,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0,
+        "new_entities": 1,
+        "main": {
+          "independent_fields": 2,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 2,
+          "rejected_candidates": 0,
+          "value_changes": 2,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "linked": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 0,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "formal_business_writes": 0,
+        "formal_provenance_writes": 0,
+        "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+      },
+      "source_db_hash_unchanged": true,
+      "frozen_baseline_hash_unchanged": true,
+      "empty_baseline_table_rows_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0,
+        "link_library": 0,
+        "source_registry": 0,
+        "benchmark_workbook_rows": 0,
+        "source_discovery_edges": 0,
+        "deployment_guides": 0,
+        "update_runs": 0,
+        "update_run_events": 0,
+        "source_monitor_state": 0,
+        "source_checks": 0,
+        "source_diffs": 0,
+        "source_auto_applies": 0,
+        "data_agent_jobs": 0,
+        "parse_ledger": 0,
+        "extraction_candidates": 0,
+        "candidate_baselines": 0,
+        "skill_inbox": 0,
+        "entity_aliases": 0,
+        "candidate_publications": 0
+      },
+      "exceptions": []
+    }
+  ],
+  "safety": {
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_writes": 0,
+    "fixture_model_responses": 0,
+    "model": "qwen3.8-flash",
+    "production_deployment": false
+  },
+  "manual_review_notes": [
+    "Structure improved: all 19 identity raw facts across two scopes fit FactCandidate; these are not 19 unique fields.",
+    "One English production_status value remains correctly program-rejected by the existing Chinese-status rule.",
+    "Reviewer incorrectly claims chip_series is absent although frozen identity domain.json includes it.",
+    "Reviewer uses unsupported external assertions about latest published TPU generations; do not endorse them as facts.",
+    "Standalone identity accepts TPU v8 as chip_model while another review proposes changing the same generation to TPU 8t; entity-scope revision guard leaves this unresolved.",
+    "Specs scope retains one unresolved entity dependency. Complete task coverage is not semantic acceptance. Empty-baseline new_entities counts are not discoveries against the formal database."
+  ],
+  "limits": [
+    "one saved page, two run scopes; not a general model accuracy estimate",
+    "format, semantic review and entity resolution must be assessed separately",
+    "Qwen diagnostic transport only; no production provider switch or shared env edits"
+  ],
+  "artifacts": {
+    "summary": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-skill-schema-replay\\summary.json",
+    "junit": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\skill-schema-regression.xml",
+    "sha256": {
+      ".hermes-skills/_shared/rules.md": "4eb379bc3e8abfc000008dbfb272b0918d554f92cea750778d5b05f2a447a1b4",
+      ".hermes-skills/chip-compute/domain.json": "7f7591e912171560e26b892c066a319a30b3e2b0f1d558b1d2186b19084ad0df",
+      ".hermes-skills/chip-compute/references/compute-rules.md": "d1da8e0a4ff83716d707f067617e9848c2c5d92ecb0dda7889f6d3586eb17c8b",
+      "tests/test_domain_models.py": "407db2faf998b70b7eba1998225b87b5fd9f08e6f905abb7667879e0a966071a",
+      ".tmp/replay-tpu-v8-skill-schema.py": "036b8349a8e398a5a017cc40c1f26e981e6c38e4f9f009c64c9adc81976e2800",
+      ".tmp/replay-tpu-v8-skill-schema-effective.py": "e2fe2bad0d69729368369c1774526c2a972ce1017b54c4314f7e1b5d6e2388ac",
+      ".tmp/qwen_replay_transport.py": "f69c3b072e2f6e7a556ca61c93f23b5c45b802284b17da07114e83b21de4095c"
+    }
+  }
+}

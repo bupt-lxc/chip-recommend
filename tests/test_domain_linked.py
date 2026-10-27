@@ -56,7 +56,7 @@ def test_linked_new_sku_gets_same_snapshot_identity_dependency(runtime, entities
     first = scheduled.schedule_identity(job(env, 'specs', True), result['candidates'])
     assert len(first) == 1
     task = env[0].list_tasks('run-a')[0]['payload']
-    assert task['domain'] == 'identity' and task['task_scope'] == 'identity'
+    assert task['domain'] == 'identity' and task['task_scope'].startswith('identity:')
     assert task['identity_dependency'] and task['snapshot_id'] == env[-1]['snapshot_id']
     assert task['entity_hint']['full_sku'] == 'X80 64GB PCIe'
     assert scheduled.schedule_identity(job(env), result['candidates']) == first

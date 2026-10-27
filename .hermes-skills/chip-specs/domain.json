@@ -45,6 +45,11 @@
     ]
   },
   "conditions": {
+    "sku_value_binding": {
+      "mode": "local_claim_or_exclusive_header",
+      "unbound": "unresolved",
+      "inherit_parent": false
+    },
     "entity_matching": {
       "preserve": [
         "sku_suffix",

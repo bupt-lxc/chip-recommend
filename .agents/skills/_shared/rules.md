@@ -38,6 +38,27 @@
 
 部署业务表的 source_type 是指南分类，可如 `official_doc`；它在 entity_key 下，与公共证据来源枚举分别保存。实测 evidence_level 与 measured/extrapolated/theoretical 独立记录，使用不同标识与可信等级；不能把外推或理论升为实测。公用来源字段不是业务字段所有权。
 
+## 候选 JSON 输出与 Schema 对齐
+
+提取与复核修订均以本次请求的 `required_schema` 和 `candidate_schema` 为实际 JSON 输出合同；`domain.json` 决定业务字段归属、单位和条件，文字中的概念名称不能自行变成 JSON 属性。`raw_value` 保存原值，`normalized_value` 保存规范化值，`unit` 单独保存单位；禁止额外创建 `source_value` 或 `source_precision` 属性。算力原始精度放在 `conversion.precision`，原单位放在 `conversion.source_unit`，原始数值放在 `raw_value`，稀疏口径和计算依据分别放在 `conversion.dense_or_sparse` 与 `conversion.calculation_basis`。
+
+`conversion` 是对象，可以省略以使用默认对象，或在无需换算/规范化说明时输出 `{}`；禁止 `conversion: null`。不要把复核响应顶层的 `candidate: null` 规则套用到候选内部。非数值原值与规范化值不同（如厂商别名、状态码、字符串转结构）时必须提供 `conversion.description`，不能用空对象省掉解释。数值字段的两个值均用 JSON 数字，不能输出带单位字符串（如 `"2nm"`、`"1300W"`）；`unit` 与 `conversion.source_unit` 保留单位，必要换算保留 factor/basis。原始引文仍逐字保留单位，不为凑格式改写证据。
+
+`entity_hints`、`conditions` 无内容时省略或输出 `{}`，不能输出 null；无证据的可选提示项直接省略。未知值只能在实际 Schema/领域合同允许的枚举位置使用 `unknown`；缺乏支持的事实应省略或未解析，不能给数值填 null/unknown。不要自行附加候选 ID、URL 或时间等 Schema 未声明的属性，运行系统在外层记录这些审计信息。
+
+以下数组仅展示四种**候选字段片段**（虚构格式示例，不是待提取事实、不是完整响应）；完整候选仍须提供当前领域、实体、逐字证据等全部必需属性，不得抄入当前页面未支持的值：
+
+```json
+[
+  {"raw_value":"Vendor","normalized_value":"Vendor","unit":null,"conversion":{}},
+  {"raw_value":"谷歌","normalized_value":"Google","unit":null,"conversion":{"description":"将来源中的厂商中文名规范化为对应英文名；仅在来源支持该别名时使用"}},
+  {"raw_value":2,"normalized_value":2,"unit":"nm","conversion":{"source_unit":"nm","factor":1,"basis":"decimal"}},
+  {"raw_value":256,"normalized_value":"INT8=256TOPS","unit":"TOPS","conversion":{"source_unit":"TOPS","precision":"INT8","dense_or_sparse":"unknown","calculation_basis":"来源明确的单芯片理论峰值；未注明稀疏口径","description":"将来源明示的 INT8 数值与单位规范为 precision_perf 字符串"}}
+]
+```
+
+复核 `accept/reject/unresolved` 时顶层 `candidate` 省略或为 null；只有 `revise` 必须返回完整替代候选（不是仅含修改字段的片段），再经过同样的严格校验。格式错误不能通过解释或技术重试次数获得豁免。
+
 ## 程序检查、独立复核与一层关联
 
 后端 extract 与 review 是**分开的模型执行器调用**，二者都接收同一冻结完整 Skill、全部必需参考、合同、页面/候选范围及实体基线。不是 Hermes CLI 自己读取全文。完整正文按标题/表格/段落分块，保留表头与脚注，记录处理和未处理范围，禁止静默截断后宣称全文完成。
@@ -45,6 +66,18 @@
 先程序核验字段归属、键、值、单位、范围、引文与快照位置，再独立语义复核证据是否支持该实体、值、条件、来源等级。复核器不能改值后直接通过；每个逻辑候选最多 1 次语义修订，修订再经程序检查和 1 次后续复核，保留版本链，换 ID 不重置额度。技术重试（最多 2 次）单独计数。只有两关均通过才 `validated`；服务不可用不能降级为“格式通过”。无该域事实可返回空候选。
 
 只可建议六域中的其他域，不包括当前域；同 URL×其他域去重，只创建一层业务关联，复用同一快照，不新增搜索，不继续业务扩域。所有主域和关联域共用必要身份核验依赖：即使新型号先出现在关联域，也按 URL×完整实体线索使用 identity 规则核验；这不是进一步业务扩域。identity 核验本身不派生业务域任务。关联失败单独记录，不能被主域通过掩盖。
+
+## 逐字段复核边界
+
+**先实体键，后字段值**：实体键必须是来源支持的具体 SKU；字段值正确不能豁免错误实体键。已知父代际不是“尚待确认的具体型号”。若来源已拆分多个子型号，用父代际键提交的 vendor/chip_type/release_date 等候选同样不能 accept，也不能通过 needs_identity=true 换一个子型号解除等待，应 reject/unresolved 且 needs_identity=false。具体型号的字段证据缺失（如功耗仅属于父代际）也不是身份依赖，确认身份不会补足该值的证据。
+
+登记模块对同一规范化厂商、完整型号和变体存在的真实 chip_model 拒绝/未解析复核保留冲突，其他身份字段单独通过不能覆盖该冲突。冲突实体不计 new，不解除规格等待；其他型号、发布日期等非型号字段的拒绝不构成此类实体冲突。保留原候选、模型理由及登记决定版本，不改写失败为成功。
+
+复核先从本次冻结合同的 `fields[target_table]` 核对当前 `field_name`；后端 FIELD OWNERSHIP 提示是该合同的只读投影，不是模型或网页提供的白名单。不得凭记忆缩短字段列表，不得因为不熟悉字段而宣称它不在合同中。字段属于本域只是可审核，不是事实通过；证据、实体、单位和该字段适用的合同条件仍逐项检查。
+
+每次仅判断当前字段：完整型号有逐字证据不要求同时证明发布日期、量产或官方目录收录；空基线不构成拒绝理由。正文明确命名的具体变体可按来源等级复核，不能擅自加“必须官方来源”的门槛。来源质量/置信度与证据是否支持该值分别判断；传闻、预计与实际发布仍不得混淆。不得用模型记忆中的“当前最新产品”“该型号尚不存在”覆盖本次正文或补造事实。本轮没有外部查证工具，不能声称已核对官方目录。
+
+识别代际/系列和具体 SKU 时读取同页明确的层级/变体关系；一旦正文把一个代际拆成多个具体型号，不能将父代际再作为具体芯片。值归属不明确应 reject/unresolved，不能为通过而把实体键换成子型号。父代际的规格、日期不能自动分摊到每个变体；系列名称只有在原文明确关联时才可作为具体变体的 chip_series。复核理由应指出实际引文、字段和缺失条件，不得杜撰合同限制。
 
 ## 实体、比较和状态
 

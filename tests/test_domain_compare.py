@@ -5,6 +5,7 @@ import importlib.util
 import json
 import sqlite3
 import stat
+import shutil
 from contextlib import closing
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from chip_model.pipeline.domain_discovery.budget import RunBudget
 from chip_model.pipeline.domain_discovery.entities import EntityResolver
 from chip_model.pipeline.domain_discovery.models import ModelService
 from chip_model.pipeline.domain_discovery.pages import PageService
-from chip_model.pipeline.domain_discovery.rules import freeze_bundle
+from chip_model.pipeline.domain_discovery.rules import freeze_bundle, build_installation_manifest
 from chip_model.pipeline.domain_discovery.store import RunStore, _file_hash, _hash, _json
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,7 +65,7 @@ def factory(tmp_path):
         db.executescript('CREATE TABLE models (id TEXT); CREATE TABLE field_provenance (id INTEGER PRIMARY KEY, table_name TEXT,row_id TEXT,field_name TEXT,new_value TEXT,source_url TEXT,source_type TEXT,confidence TEXT,evidence_ref_json TEXT);')
         db.execute("INSERT INTO models VALUES ('org/Model-7B')")
         db.execute("INSERT INTO chips(vendor,chip_model,vram_gb,form_factor,tdp_w) VALUES ('Vendor A','X80 80GB SXM','80','SXM','400')")
-    def create(run_id='run-a', changes=None, provenance=(), manifest=None):
+    def create(run_id='run-a', changes=None, provenance=(), manifest=None, legacy_value_binding=False):
         if changes:
             with closing(sqlite3.connect(source)) as db, db:
                 for field, value in changes.items():
@@ -78,13 +79,25 @@ def factory(tmp_path):
         gen = store.claim(run_id, 'worker', 100000)
         budget = RunBudget(store,run_id,gen,monotonic=lambda:1000,epoch=lambda:1000)
         bundle = store.run_path(run_id) / 'skill_bundle'
-        frozen = freeze_bundle(ROOT / '.hermes-skills',bundle)
+        authority = ROOT / '.hermes-skills'
+        if legacy_value_binding:
+            # Historical weak-quote tests deliberately reproduce the frozen
+            # predecessor contract. Current runs still use the strict authority.
+            authority = tmp_path / ('legacy-rules-'+run_id)
+            shutil.copytree(ROOT / '.hermes-skills', authority)
+            contract_path = authority / 'chip-specs/domain.json'
+            contract = json.loads(contract_path.read_text(encoding='utf-8'))
+            contract['conditions'].pop('sku_value_binding')
+            contract_path.write_text(json.dumps(contract,ensure_ascii=False),encoding='utf-8')
+            (authority / 'installed.manifest.json').write_text(
+                json.dumps(build_installation_manifest(authority),ensure_ascii=False),encoding='utf-8')
+        frozen = freeze_bundle(authority,bundle)
         store.ensure_baseline(run_id,gen,source,rule_bundle_hash=frozen['bundle_sha256'],manifest=manifest)
         return {'store':store,'id':run_id,'gen':gen,'budget':budget,'bundle':bundle,'source':source}
     return create
 
 
-def capture(ctx, url='https://vendor.example/spec', text='Vendor A X80 80GB SXM GPU: 80 GB; 400 W; 1 TB/s; 1000 GB/s.'):
+def capture(ctx, url='https://vendor.example/spec', text='Vendor A X80 80GB SXM GPU: 80 GB; X80 80GB SXM power 400 W; X80 80GB SXM bandwidth 1 TB/s; X80 80GB SXM bandwidth 1000 GB/s.'):
     pages = PageService(ctx['store'],ctx['id'],ctx['gen'],ctx['budget'],session=Session(text),resolver=lambda _:['93.184.216.34'],monotonic=lambda:1000,backoff=lambda _:None)
     result = pages.visit({'candidate_id':url,'url':url})
     snapshot = pages.read_snapshot(result['snapshot_id'])
@@ -171,7 +184,7 @@ def test_missing_old_evidence_is_unknown_not_official_upgrade(comparison,factory
 
 
 def archived(factory, *, quote=None, value=80, conversion=None):
-    old=factory('old-run')
+    old=factory('old-run',legacy_value_binding=True)
     snapshot=capture(old,url='https://old.example/spec',text=f'Vendor A X80 80GB SXM GPU; X80: {value} GB.')
     identity(old,snapshot)
     candidate=fact(snapshot,value=value)
@@ -769,7 +782,7 @@ def test_current_candidate_bytes_are_bound_to_original_producer_review(compariso
 @pytest.mark.parametrize('variant',['compat_dict','blank_sku','deployment_dict_model'])
 def test_saved_program_rejections_skip_before_binding_valid_siblings_continue(comparison,factory,variant):
     ctx=factory()
-    snap=capture(ctx,url='https://vendor.example/guide',text='Vendor A X80 80GB SXM GPU: 80 GB; 400 W. org/Model-7B vendor support. Guide title backend vLLM.')
+    snap=capture(ctx,url='https://vendor.example/guide',text='Vendor A X80 80GB SXM GPU: 80 GB; X80 80GB SXM power 400 W. org/Model-7B vendor support. Guide title backend vLLM.')
     identity(ctx,snap)
     if variant=='compat_dict':
         common={'target_table':'chip_model_compatibility','scope':'relation','entity_key':{'chip_model':'X80 80GB SXM','model_id':'org/Model-7B'},'entity_hints':{'vendor':'Vendor A','full_sku':'X80 80GB SXM','entity_type':'board_sku'}}
@@ -837,3 +850,44 @@ def test_statistics_retains_pre_skip_rejected_comparison_and_filters_reentry(com
     assert stats['independent_fields']==stats['source_candidates']==0
     assert compare.snapshot()['comparisons'][identifier]==[old]
     assert compare.snapshot()['skipped_inputs'][identifier]['candidate_status']=='program_rejected'
+
+
+@pytest.mark.parametrize('omitted',[('entity_hints',),('conditions',),('entity_hints','conditions')])
+def test_comparison_accepts_schema_optional_objects_without_rewriting_proof(comparison,factory,omitted):
+    ctx=factory();snap=capture(ctx);identity(ctx,snap)
+    candidate=fact(snap)
+    for name in omitted:candidate.pop(name)
+    row=audit(ctx,snap,[candidate])[0];assert row['status']=='validated'
+    original=copy.deepcopy(ctx['store'].metadata(ctx['id'],ModelService.KEY))
+    baseline=_file_hash(ctx['store'].run_path(ctx['id'])/'data.db')
+    compare=service(comparison,ctx)
+    assert compare.comparison_input(row['logical_candidate_id'])['is_comparable']
+    result=compare.compare_candidate(row['logical_candidate_id'])
+    assert result['validated'] and result['value_change_kind']=='unchanged'
+    assert compare.statistics()['validated_candidates']==1
+    assert ctx['store'].metadata(ctx['id'],ModelService.KEY)==original
+    assert _file_hash(ctx['store'].run_path(ctx['id'])/'data.db')==baseline
+    assert all(name not in result['candidate'] for name in omitted)
+
+
+@pytest.mark.parametrize('name',['entity_hints','conditions'])
+@pytest.mark.parametrize('invalid',[None,[], 'invalid'])
+def test_comparison_keeps_explicit_invalid_optional_objects_rejected(comparison,factory,name,invalid):
+    ctx=factory();snap=capture(ctx)
+    row=audit(ctx,snap,[fact(snap,**{name:invalid})])[0]
+    assert row['status']=='program_rejected'
+    result=service(comparison,ctx).compare_candidate(row['logical_candidate_id'])
+    assert result['status']=='skipped' and result['reason']=='saved_program_rejected'
+
+
+def test_missing_optional_conditions_keeps_generic_guide_unresolved_without_crash(comparison,factory):
+    ctx=factory();snap=capture(ctx,text='Generic vLLM deployment guide')
+    candidate=fact(snap,'deployment',field='backend',value='vLLM',unit=None,target_table='deployment_guides',
+        scope='relation',entity_key={'chip_model':'generic','model_id':'not_applicable','url':'https://vendor.example/guide',
+        'title':'Generic guide','source_type':'official'},entity_hints={})
+    candidate.pop('conditions')
+    row=audit(ctx,snap,[candidate])[0];assert row['status']=='unresolved'
+    compare=service(comparison,ctx)
+    assert compare.comparison_input(row['logical_candidate_id'])['is_comparable']
+    result=compare.compare_candidate(row['logical_candidate_id'])
+    assert not result['validated'] and result['relation_readiness']['status']=='unresolved'

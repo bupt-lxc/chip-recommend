@@ -88,10 +88,9 @@ class LinkedDomainScheduler:
             row, candidate, _ = resolver._proof(supplied['logical_candidate_id'])
             if row['versions'][-1].get('program', {}).get('status') != 'program_valid':
                 continue
-            if row['status'] != 'validated':
-                # Independent rejection/unresolved evidence is a completed
-                # business decision. It needs no new identity model work to
-                # become a terminal, non-validated comparison outcome.
+            if row['status'] not in {'validated', 'awaiting_identity'}:
+                # Rejections and ordinary unresolved conditions are terminal.
+                # Only the typed identity wait may create new identity work.
                 continue
             if candidate['evidence']['snapshot_id'] != job['snapshot_id']:
                 raise ValueError('identity dependency candidate snapshot mismatch')
@@ -106,7 +105,7 @@ class LinkedDomainScheduler:
                 continue  # Preserve incomplete candidates; never guess a vendor/SKU.
             key = 'identity-dependency-' + _hash(_json([job['url'], canonical_hint]))
             payload = {**job, 'domain':'identity', 'linked':True, 'depth':1,
-                       'task_scope':'identity', 'identity_dependency':True,
+                       'task_scope':'identity:' + _hash(_json(canonical_hint)), 'identity_dependency':True,
                        'entity_hint':hint, 'canonical_entity_hint':canonical_hint}
             existing = next((task for task in self.store.list_tasks(self.run_id)
                              if task['task_key'] == key), None)
@@ -134,7 +133,7 @@ class LinkedDomainScheduler:
             return task['result']
         job = task['payload']
         self._job(job)
-        scope = 'identity' if job.get('identity_dependency') else 'linked' if job['linked'] else 'main'
+        scope = job.get('task_scope', 'identity') if job.get('identity_dependency') else 'linked' if job['linked'] else 'main'
         service = model_factory(job['domain'], scope)
         if (not isinstance(service, ModelService) or service.store is not self.store
                 or service.run_id != self.run_id or service.generation != self.generation
@@ -149,7 +148,10 @@ class LinkedDomainScheduler:
         # The original clue is immutable. Never inject later entity resolutions
         # into cached extraction/review inputs on recovery.
         context = {'initial_chip_clue': clue} if clue else {}
-        result = service.extract_page(job['snapshot_id'], identity_context=context)
+        # Target is unverified routing data, not a change to factual review
+        # context. Ordinary and dependency tasks share the same immutable proof.
+        result = service.extract_page(job['snapshot_id'], identity_context=context,
+            identity_target=job['entity_hint'] if job.get('identity_dependency') else None)
         resolver = EntityResolver(self.store, self.run_id, self.generation)
         if job['domain'] == 'identity':
             for row in result['candidates']:
@@ -432,18 +434,33 @@ def _execute_domain(store, run_id, generation, owner, budget, deps):
     if client is None:
         client = OpenAIModelTransport()
     audited = _AuditModel(client, store, run_id, generation, bundle)
+    review_client = deps.get('review_call_model')
+    review_model = deps.get('review_model') or os.getenv('DATA_AGENT_REVIEW_MODEL')
+    if review_client is None and review_model:
+        review_client = OpenAIModelTransport(model=review_model)
+    audited_review = _AuditModel(review_client, store, run_id, generation, bundle) if review_client is not None else audited
     scheduler = LinkedDomainScheduler(store, run_id, generation)
     def factory(domain, scope):
         return ModelService(store, run_id, generation, budget, pages, bundle, domain_id=domain,
-            task_scope=scope, client=audited, backoff=deps.get('backoff'),
+            task_scope=scope, client=audited, review_client=audited_review, backoff=deps.get('backoff'),
             model_seconds=deps.get('model_seconds', 60))
     processed = set()
+    identity_resumed = set()
     while True:
         # Process each pending/running task once per worker; partial remains
         # recoverable. Completed tasks never call extract/review again.
         task = next((t for t in store.list_tasks(run_id) if t['state'] != 'completed' and t['task_id'] not in processed), None)
         if task is None:
-            break
+            resolver = EntityResolver(store, run_id, generation)
+            models_state = store.metadata(run_id, ModelService.KEY) or {}
+            ready_snapshots = {row['original_raw']['evidence']['snapshot_id']
+                for row in models_state.get('candidates', {}).values() if row['status']=='awaiting_identity'
+                and resolver.resolve_entity(candidate_entity_hint(row['versions'][-1]['candidate']))['status'] in {'new','existing'}}
+            task = next((t for t in store.list_tasks(run_id) if t['state']!='completed' and t['task_id'] not in identity_resumed
+                and not t['payload'].get('identity_dependency') and t['payload']['snapshot_id'] in ready_snapshots), None)
+            if task is None:
+                break
+            identity_resumed.add(task['task_id'])
         _remaining(budget, 60)
         processed.add(task['task_id'])
         result = scheduler.execute_task(task['task_id'], factory)

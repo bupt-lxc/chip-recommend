@@ -208,6 +208,9 @@ def _verify_review_input(store, run_id, row, version, review, call, proof):
         raise _UnverifiableReview('archived review selected frozen baseline mismatch')
     binding = {name:payload[name] for name in ('phase','scope_type','bundle_sha256','contract_sha256',
                'reference_hashes','page','identity_context','required_schema','candidate_schema')}
+    for name in ('backend_protocol_version','model_name'):
+        if name in payload:
+            binding[name] = payload[name]
     binding['baseline'] = {'baseline_sha256':baseline['baseline_sha256'],'created_at':baseline['created_at'],
                            'chips':[],'relations':[],'field_provenance':[]}
     digest = _hash(_json(binding))
@@ -470,7 +473,8 @@ class ComparisonService:
             reason = 'raw_fact_not_an_object'
         elif (any(name not in candidate for name in ('domain_id','target_table','field_name','entity_key','evidence'))
               or any(not isinstance(candidate.get(name),str) for name in ('domain_id','target_table','field_name'))
-              or any(not isinstance(candidate.get(name),dict) for name in ('entity_key','entity_hints','conditions','evidence'))
+              or any(not isinstance(candidate.get(name),dict) for name in ('entity_key','evidence'))
+              or any(not isinstance(candidate.get(name,{}),dict) for name in ('entity_hints','conditions'))
               or any(name not in candidate.get('evidence',{}) for name in ('snapshot_id','body_hash','start','end','quote'))
               or any(value is not None and not isinstance(value,str) for value in
                      (candidate.get('entity_key',{}).get('vendor'),candidate.get('entity_key',{}).get('chip_model'),

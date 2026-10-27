@@ -1,0 +1,1288 @@
+{
+  "date": "2026-10-21",
+  "status": "targeted_numeric_binding_fixed_extraction_stability_not_accepted",
+  "scope": "same complete 5810-character saved body and fixed source-grounded controls; numeric chip fields in specs only",
+  "changes": [
+    "New frozen specs contract enables local_claim_or_exclusive_header numeric binding",
+    "Numeric source claim must locally contain exact target SKU and value/unit or explicit shared claim",
+    "Exclusive declared heading/table header can bind unnamed quantity; mixed/omitted intervening SKU headings cannot",
+    "Unbound evidence remains unresolved before review, does not request identity, and cannot count as validated comparison",
+    "Backend protocol 6 adds binding instructions while preserving actual protocol 3/4/5 requests",
+    "Candidate/review schemas and all existing number/unit/conversion checks remain strict"
+  ],
+  "regression": {
+    "distinct_tests": 417,
+    "latest_outcomes_passed": 417,
+    "latest_failed_or_skipped": 0,
+    "batches": [
+      {
+        "path": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\value-binding-regression.xml",
+        "tests": 416,
+        "failures": 21,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\value-binding-compare-regression.xml",
+        "tests": 113,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "production_code_unchanged_between_batches": true,
+    "fixture_changes": [
+      "Retry/coverage positives use explicit SKU source statements",
+      "Historical weak-quote comparison fixtures explicitly freeze predecessor contract without new binding policy; current default remains strict",
+      "Two prior semantic rejection cases now stop earlier as unresolved numeric binding",
+      "New current-policy integration proves unbound output cannot become a validated final comparison"
+    ]
+  },
+  "controls": {
+    "scope": "nine source-grounded constructed review inputs; full same saved body; actual Qwen responses",
+    "model": "qwen3.8-flash",
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_writes": 0,
+    "fixture_model_responses": 0,
+    "controls": [
+      {
+        "name": "owned_series_on_variant",
+        "expectation": "accept",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\owned_series_on_variant",
+        "run_id": "run-8f05235f41e54ab49938883ce699daef",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "domain_id": "identity",
+          "target_table": "chips",
+          "field_name": "chip_series",
+          "entity_key": {
+            "vendor": "Google",
+            "chip_model": "TPU 8i"
+          },
+          "entity_hints": {
+            "full_sku": "TPU 8i",
+            "entity_type": "chip"
+          },
+          "raw_value": "TPU v8",
+          "normalized_value": "TPU v8",
+          "unit": null,
+          "conversion": {},
+          "scope": "chip",
+          "evidence_kind": "explicit",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程",
+            "start": 3938,
+            "end": 4022
+          },
+          "context_refs": [],
+          "explanation": "Controlled source-grounded field/entity boundary probe; assess only the supplied evidence.",
+          "source_type": "web_crawl",
+          "confidence": "medium",
+          "confidence_reason": "Third-party saved article, not an official announcement."
+        },
+        "program": {
+          "status": "program_valid",
+          "reason": "contract_and_exact_evidence_passed"
+        },
+        "model_calls": 1,
+        "status": "validated",
+        "reason": "The source explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', establishing a clear hierarchical relationship where TPU 8i is a variant of the TPU v8 series. The candidate entity_key (Google, TPU 8i) is a concrete SKU supported by the text. The field_name 'chip_series' with normalized_value 'TPU v8' correctly reflects this explicit linkage found in the evidence quote. Source type 'web_crawl' is appropriate for this third-party news article.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "accept",
+            "reason": "The source explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', establishing a clear hierarchical relationship where TPU 8i is a variant of the TPU v8 series. The candidate entity_key (Google, TPU 8i) is a concrete SKU supported by the text. The field_name 'chip_series' with normalized_value 'TPU v8' correctly reflects this explicit linkage found in the evidence quote. Source type 'web_crawl' is appropriate for this third-party news article.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 4.68,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "explicit_variant_name",
+        "expectation": "accept",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\explicit_variant_name",
+        "run_id": "run-ecd5277929d5400cb0a3e5aa8c35551e",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "domain_id": "identity",
+          "target_table": "chips",
+          "field_name": "chip_model",
+          "entity_key": {
+            "vendor": "Google",
+            "chip_model": "TPU 8t"
+          },
+          "entity_hints": {
+            "full_sku": "TPU 8t",
+            "entity_type": "chip"
+          },
+          "raw_value": "TPU 8t",
+          "normalized_value": "TPU 8t",
+          "unit": null,
+          "conversion": {},
+          "scope": "chip",
+          "evidence_kind": "explicit",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程",
+            "start": 3938,
+            "end": 4022
+          },
+          "context_refs": [],
+          "explanation": "Controlled source-grounded field/entity boundary probe; assess only the supplied evidence.",
+          "source_type": "web_crawl",
+          "confidence": "medium",
+          "confidence_reason": "Third-party saved article, not an official announcement."
+        },
+        "program": {
+          "status": "program_valid",
+          "reason": "contract_and_exact_evidence_passed"
+        },
+        "model_calls": 1,
+        "status": "validated",
+        "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t' (TPU v8 is split into training chip TPU 8t). The entity key 'TPU 8t' corresponds to a concrete SKU named in the text, distinct from the parent generation 'v8'. The field 'chip_model' is correctly populated with this specific model name. The evidence quote supports the value directly.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "accept",
+            "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t' (TPU v8 is split into training chip TPU 8t). The entity key 'TPU 8t' corresponds to a concrete SKU named in the text, distinct from the parent generation 'v8'. The field 'chip_model' is correctly populated with this specific model name. The evidence quote supports the value directly.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 5.07,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "generation_vendor_is_not_chip",
+        "expectation": "reject_or_unresolved",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\generation_vendor_is_not_chip",
+        "run_id": "run-08a1f134e97e4cb9ae1681954bea4acb",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "domain_id": "identity",
+          "target_table": "chips",
+          "field_name": "vendor",
+          "entity_key": {
+            "vendor": "Google",
+            "chip_model": "TPU v8"
+          },
+          "entity_hints": {
+            "full_sku": "TPU v8",
+            "entity_type": "chip"
+          },
+          "raw_value": "Google",
+          "normalized_value": "Google",
+          "unit": null,
+          "conversion": {},
+          "scope": "chip",
+          "evidence_kind": "explicit",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程",
+            "start": 3938,
+            "end": 4022
+          },
+          "context_refs": [],
+          "explanation": "Controlled source-grounded field/entity boundary probe; assess only the supplied evidence.",
+          "source_type": "web_crawl",
+          "confidence": "medium",
+          "confidence_reason": "Third-party saved article, not an official announcement."
+        },
+        "program": {
+          "status": "program_valid",
+          "reason": "contract_and_exact_evidence_passed"
+        },
+        "model_calls": 1,
+        "status": "semantic_rejected",
+        "reason": "The entity_key uses 'TPU v8', which is a generation/family name. The source text explicitly states that TPU v8 is split into two specific chips: 'TPU 8t' and 'TPU 8i'. According to the identity rules, when a generation is split into named variants, the parent generation cannot be treated as a concrete SKU for candidate extraction. Therefore, the vendor field cannot be accepted for the entity 'TPU v8'. Candidates should be created for 'TPU 8t' and 'TPU 8i' instead.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "reject",
+            "reason": "The entity_key uses 'TPU v8', which is a generation/family name. The source text explicitly states that TPU v8 is split into two specific chips: 'TPU 8t' and 'TPU 8i'. According to the identity rules, when a generation is split into named variants, the parent generation cannot be treated as a concrete SKU for candidate extraction. Therefore, the vendor field cannot be accepted for the entity 'TPU v8'. Candidates should be created for 'TPU 8t' and 'TPU 8i' instead.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 5.36,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "generation_is_not_third_sku",
+        "expectation": "reject_or_unresolved",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\generation_is_not_third_sku",
+        "run_id": "run-2a0eeac0ba364697801737315b59f67d",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "domain_id": "identity",
+          "target_table": "chips",
+          "field_name": "chip_model",
+          "entity_key": {
+            "vendor": "Google",
+            "chip_model": "TPU v8"
+          },
+          "entity_hints": {
+            "full_sku": "TPU v8",
+            "entity_type": "chip"
+          },
+          "raw_value": "TPU v8",
+          "normalized_value": "TPU v8",
+          "unit": null,
+          "conversion": {},
+          "scope": "chip",
+          "evidence_kind": "explicit",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程",
+            "start": 3938,
+            "end": 4022
+          },
+          "context_refs": [],
+          "explanation": "Controlled source-grounded field/entity boundary probe; assess only the supplied evidence.",
+          "source_type": "web_crawl",
+          "confidence": "medium",
+          "confidence_reason": "Third-party saved article, not an official announcement."
+        },
+        "program": {
+          "status": "program_valid",
+          "reason": "contract_and_exact_evidence_passed"
+        },
+        "model_calls": 1,
+        "status": "semantic_rejected",
+        "reason": "The candidate uses 'TPU v8' as the entity_key.chip_model. The source text explicitly states: \"TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)\" (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the identity rules, a generation/family that is explicitly split into named variants is not itself a concrete SKU. Therefore, 'TPU v8' cannot be used as a specific chip model for field extraction. The correct entities would be 'TPU 8t' or 'TPU 8i'. Since the entity key is invalid (parent generation instead of concrete SKU), the candidate must be rejected.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "reject",
+            "reason": "The candidate uses 'TPU v8' as the entity_key.chip_model. The source text explicitly states: \"TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)\" (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the identity rules, a generation/family that is explicitly split into named variants is not itself a concrete SKU. Therefore, 'TPU v8' cannot be used as a specific chip model for field extraction. The correct entities would be 'TPU 8t' or 'TPU 8i'. Since the entity key is invalid (parent generation instead of concrete SKU), the candidate must be rejected.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 6.1,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "no_inherited_generation_date",
+        "expectation": "reject_or_unresolved",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\no_inherited_generation_date",
+        "run_id": "run-c83cc2d17290428cb21f76a95eda5694",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "conditions": {},
+          "confidence": "medium",
+          "confidence_reason": "Specific date provided in a news report about the event. Not verified against official press release but consistent with event timeline mentioned.",
+          "conversion": {
+            "description": "Converted Chinese date format to ISO 8601 YYYY-MM-DD"
+          },
+          "domain_id": "identity",
+          "entity_hints": {},
+          "entity_key": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "evidence": {
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "end": 342,
+            "quote": "2026年4月22日,Google Cloud Next ’26大会上,第八代TPU的发布",
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "start": 297
+          },
+          "evidence_kind": "explicit",
+          "explanation": "The article states the release date of the eighth-generation TPU (which includes TPU 8t) at Google Cloud Next '26.",
+          "field_name": "release_date",
+          "normalized_value": "2026-04-22",
+          "raw_value": "2026年4月22日",
+          "scope": "chip",
+          "source_type": "web_crawl",
+          "target_table": "chips",
+          "unit": null
+        },
+        "program": {
+          "status": "program_valid",
+          "reason": "contract_and_exact_evidence_passed"
+        },
+        "model_calls": 1,
+        "status": "semantic_rejected",
+        "reason": "The candidate uses 'TPU 8t' as the entity_key, but the source text explicitly states that 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', identifying TPU 8t as a specific variant. The evidence quote provided ('2026年4月22日,Google Cloud Next ’26大会上,第八代TPU的发布') refers to the release of the eighth-generation TPU (TPU v8) family/generation, not specifically the TPU 8t variant. According to the identity rules, parent generation dates cannot be transferred to child variants without explicit support for the variant's own release date. Therefore, the field value is unsupported for the specific SKU entity.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "reject",
+            "reason": "The candidate uses 'TPU 8t' as the entity_key, but the source text explicitly states that 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', identifying TPU 8t as a specific variant. The evidence quote provided ('2026年4月22日,Google Cloud Next ’26大会上,第八代TPU的发布') refers to the release of the eighth-generation TPU (TPU v8) family/generation, not specifically the TPU 8t variant. According to the identity rules, parent generation dates cannot be transferred to child variants without explicit support for the variant's own release date. Therefore, the field value is unsupported for the specific SKU entity.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 6.11,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "no_inherited_generation_power",
+        "expectation": "reject_or_unresolved",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\no_inherited_generation_power",
+        "run_id": "run-f04cbeabb4854bf9b5566460178344ca",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "conditions": {},
+          "confidence": "medium",
+          "confidence_reason": "来源为第三方液冷设备商新闻页面，非Google官方技术文档或公告，但具体数值表述清晰且无歧义。",
+          "context_refs": [],
+          "conversion": {},
+          "domain_id": "specs",
+          "entity_key": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "evidence": {
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "end": 449,
+            "quote": "TPU v8单芯片功耗达1300W",
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "start": 432
+          },
+          "evidence_kind": "explicit",
+          "explanation": "文章明确陈述TPU v8单芯片功耗为1300W，符合芯片级TDP定义。",
+          "field_name": "tdp_w",
+          "normalized_value": 1300,
+          "raw_value": 1300,
+          "scope": "chip",
+          "source_type": "web_crawl",
+          "target_table": "chips",
+          "unit": "W",
+          "entity_hints": {
+            "full_sku": "TPU 8t",
+            "entity_type": "chip"
+          }
+        },
+        "program": {
+          "status": "unresolved",
+          "reason": "sku_value_binding_unresolved",
+          "missing_conditions": [
+            "sku_value_evidence_binding"
+          ]
+        },
+        "model_calls": 0,
+        "status": "unresolved",
+        "reason": "sku_value_binding_unresolved",
+        "reviews": [],
+        "seconds": 0.39,
+        "call_statuses": {},
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "explicit_shared_2nm_TPU8t",
+        "expectation": "accept",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\explicit_shared_2nm_TPU8t",
+        "run_id": "run-9951baf590514785bcb115eca07cd3c8",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "conditions": {},
+          "confidence": "medium",
+          "confidence_reason": "Explicitly mentioned in a third-party report detailing the chip design partners and manufacturing process.",
+          "context_refs": [],
+          "conversion": {},
+          "domain_id": "specs",
+          "entity_hints": {
+            "codename": "Sunfish"
+          },
+          "entity_key": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "evidence": {
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "end": 4023,
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程。",
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "start": 3938
+          },
+          "evidence_kind": "explicit",
+          "explanation": "The text identifies TPU 8t as the training chip variant of TPU v8 and states it uses TSMC's 2nm process node.",
+          "field_name": "process_node_nm",
+          "normalized_value": 2,
+          "raw_value": 2,
+          "scope": "chip",
+          "source_type": "web_crawl",
+          "target_table": "chips",
+          "unit": "nm"
+        },
+        "program": {
+          "status": "program_valid",
+          "reason": "contract_and_exact_evidence_passed",
+          "sku_value_binding": {
+            "mode": "explicit_shared_claim",
+            "target_sku": "TPU 8t",
+            "start": 3938,
+            "end": 4022,
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程"
+          }
+        },
+        "model_calls": 1,
+        "status": "validated",
+        "reason": "The candidate correctly identifies the source as web_crawl (third-party industry news site). The evidence quote explicitly states '两款芯片...均锁定台积电2nm制程' (both chips ... locked on TSMC 2nm process), which constitutes a valid shared claim binding the specific SKU 'TPU 8t' to the value 2 nm. The entity key is concrete, and the field ownership/unit are correct.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "accept",
+            "reason": "The candidate correctly identifies the source as web_crawl (third-party industry news site). The evidence quote explicitly states '两款芯片...均锁定台积电2nm制程' (both chips ... locked on TSMC 2nm process), which constitutes a valid shared claim binding the specific SKU 'TPU 8t' to the value 2 nm. The entity key is concrete, and the field ownership/unit are correct.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 5.1,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "explicit_shared_2nm_TPU8i",
+        "expectation": "accept",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\explicit_shared_2nm_TPU8i",
+        "run_id": "run-a0d3116b2b774174ba0f7ef3819be981",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "conditions": {},
+          "confidence": "medium",
+          "confidence_reason": "Explicitly mentioned in a third-party report detailing the chip design partners and manufacturing process.",
+          "context_refs": [],
+          "conversion": {},
+          "domain_id": "specs",
+          "entity_hints": {
+            "codename": "Zebrafish"
+          },
+          "entity_key": {
+            "chip_model": "TPU 8i",
+            "vendor": "Google"
+          },
+          "evidence": {
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "end": 4023,
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程。",
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "start": 3938
+          },
+          "evidence_kind": "explicit",
+          "explanation": "The text identifies TPU 8i as the inference chip variant of TPU v8 and states it uses TSMC's 2nm process node.",
+          "field_name": "process_node_nm",
+          "normalized_value": 2,
+          "raw_value": 2,
+          "scope": "chip",
+          "source_type": "web_crawl",
+          "target_table": "chips",
+          "unit": "nm"
+        },
+        "program": {
+          "status": "program_valid",
+          "reason": "contract_and_exact_evidence_passed",
+          "sku_value_binding": {
+            "mode": "explicit_shared_claim",
+            "target_sku": "TPU 8i",
+            "start": 3938,
+            "end": 4022,
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程"
+          }
+        },
+        "model_calls": 1,
+        "status": "validated",
+        "reason": "The source text explicitly states that the TPU v8 generation is split into two specific variants: 'TPU 8t (codename Sunfish)' and 'TPU 8i (codename Zebrafish)'. It further asserts that 'both chips... lock onto TSMC 2nm process' ('均锁定台积电2nm制程'). This constitutes a valid shared claim covering the specific SKU 'TPU 8i', satisfying the entity gate and evidence binding requirements. The field 'process_node_nm' is owned by the specs domain, and the value 2 nm is correctly extracted from the text.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "accept",
+            "reason": "The source text explicitly states that the TPU v8 generation is split into two specific variants: 'TPU 8t (codename Sunfish)' and 'TPU 8i (codename Zebrafish)'. It further asserts that 'both chips... lock onto TSMC 2nm process' ('均锁定台积电2nm制程'). This constitutes a valid shared claim covering the specific SKU 'TPU 8i', satisfying the entity gate and evidence binding requirements. The field 'process_node_nm' is owned by the specs domain, and the value 2 nm is correctly extracted from the text.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 5.52,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "wide_quote_cannot_borrow_sku",
+        "expectation": "reject_or_unresolved",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\wide_quote_cannot_borrow_sku",
+        "run_id": "run-755c0404bd2e447fa2629f22a6ecbaf4",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "conditions": {},
+          "confidence": "medium",
+          "confidence_reason": "来源为第三方液冷设备商新闻页面，非Google官方技术文档或公告，但具体数值表述清晰且无歧义。",
+          "context_refs": [],
+          "conversion": {},
+          "domain_id": "specs",
+          "entity_key": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "evidence": {
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "end": 5810,
+            "quote": "首页\nAI 数据中心液冷\n冷板\n数据中心集装箱\n液冷服务器机柜\n机柜式CDU\n机架式CDU\n液冷测试\n加密采矿液冷\n蚂蚁水冷系列\n神马水冷系列\n浸没式油冷系列\n解决方案\nAI数据中心解决方案\n加密矿场散热方案\n关于链力\n获取报价\n搜索历史 清除全部记录\n最多显示8条历史搜索记录噢~\n全部\n全部\n产品管理\n新闻资讯\n介绍内容\n企业网点\n常见问题\n企业视频\n企业图册\n搜索\n中文版\nEnglish\n新闻资讯\nNews\n公司新闻\n行业新闻\n首页\n谷歌TPU v8全面液冷如何重构全球AI供应链\n2026年04月30日\n1300W的功耗意味着什么?传统风冷已经失效,而一个全新的百亿级赛道正在诞生。\n2026年4月22日,Google Cloud Next ’26大会上,第八代TPU的发布并未刻意聚焦于散热方案,但那或许是当天最具行业影响的技术决策——TPU v8全面拥抱第四代液冷,在这一代超大规模部署中彻底告别纯风冷散热。\n芯片功耗已经攀升到了风冷无法应对的高度。TPU v8单芯片功耗达1300W,较上一代Ironwood的980W提升了近三分之一。当AI集群的机柜功率密度不断突破物理极限,液冷已从\"可选项\"蜕变为高性能算力基础设施的\"强制标配\"。据东方证券测算,单是2026年谷歌服务器液冷市场规模就将在180亿元量级,而全球液冷数据中心市场正以超过28%的年复合增速向前狂奔,到2033年将逼近384亿美元。\n液冷不仅是散热方案,它同时关乎能源利用效率。第四代液冷技术使TPU v8的每瓦性能较前代提升了整整一倍,同时让数据中心PUE(电源使用效率)逼近1.1。在全球对AI算力碳排放监管持续收紧的背景下,液冷节省了超过30%的散热功耗——这正是Google碳中和承诺中不可或缺的一环。\n随着Google在AI算力领域持续扩大投资——2026年全年资本支出指引已上修至1800-1900亿美元,且未来几年力度不会减弱——其TPU v8液冷供应链正在经历一场深刻的全球重构。谁能在这场万亿美元级的算力基建浪潮中站稳位置?\n当AI芯片功耗突破千瓦,风冷时代的终结\n理解液冷为何成为刚需,需要先看一组数字。\nTPU v8集群中,单超级节点已可扩展至9600颗芯片,共享高达2PB的高带宽内存,TPU 8t单个超级机架在FP4精度下的运算效能达到了121 ExaFlops。高性能的背后是极高的功率密度。\nAI芯片每平方厘米的热流密度正以惊人的速度攀升。传统风扇每机柜的有效散热能力极限大约在20-40kW,而TPU v8这类高密度AI集群机柜已远远超出这一区间。更重要的是,TPU芯片之间需要极近的物理间距来降低网络延迟,机柜内部空间极为局促,只有液冷管道才能在如此狭窄的空间中穿行。\nGoogle的液冷路径经历了长达七年的技术积累。早在2019年的第四代TPU上,Google就首次尝试引入液冷方案。到第七代Ironwood时期,液冷已成为Google超大规模数据中心的主流部署策略。而到了第八代,Google在系统的完整性上迈出了关键一步——不仅芯片和板级采用液冷,整个热管理系统被进一步升级为协同设计的完整方案。\n第四代液冷的创新密码\nTPU v8采用的第四代液冷技术与业界主流的冷板式液冷方案一脉相通,但在Google的系统级架构中实现了更精密的协同。核心逻辑是让冷却液通过冷板(Cold Plate)直接流经芯片等高发热部件,将热量以换热方式带走,散热效率可达到传统风冷的数倍,同时水泵的功耗仅相当于风扇功耗的极小比例。\n这套系统的关键组件包括冷板、CDU(冷量分配单元)、Manifold(流体分配管道)和快接头(UQD)。其中,CDU是系统的\"心脏\",负责控制冷却液的流量和温度;冷板直接贴附在芯片表面,决定了散热的根本效率。\n更令人关注的是,Google在这一代液冷架构中集成了金刚石基板散热技术。单晶金刚石的热导率约为硅的16倍,在裸片上的集成应用可将芯片层面的两相冷却效果提升10到100倍.\n供应链重构与直采模式的双刃剑\n一个重要变化在于,Google在本轮液冷零部件采购中转向了\"直采模式\"——剔除中间环节,让液冷系统及部件供应商以一级供应商身份直接对接Google数据中心基建团队。\n直采模式降低了供应链壁垒。与英伟达长期依赖\"指定独供\"的组合模式不同,Google此举更像是为自身的弹性需求进行策略性布局。另一方面,大量新增供应商直接进入关键认证体系——合作深度加深、利润空间更有保障,但反过来对品控、产能、售后体系提出了更严苛的长线考验。\n哪些公司将在这条赛道上占据核心位置?\n谷歌TPU v8 液冷供应链 10 家核心受益供应商\n公司名称 | 所属国家/地区 | 核心角色 / 产品描述\n维谛技术 (Vertiv) | 美国 | 全球液冷基础设施龙头,提供大型液冷 CDU(冷量分配单元)及数据中心热量管理\n双鸿科技 (Auras) | 中国台湾 | TPU v8 核心冷板 (Cold Plate) 供应商,在超薄冷板领域具垄断地位\n奇鋐科技 (AVC) | 中国台湾 | 关键散热模组及水冷板组装商,Google 长期紧密合作伙伴\n台达电子 (Delta) | 中国台湾 | 提供高功率密度液冷电源及定制化液冷循环系统\nCoolIT Systems | 加拿大 | 直接芯片液冷 (DLC) 专家,深度参与 Google 数据中心定制方案\n施耐德电气 (Schneider) | 法国 | 提供端到端数据中心液冷集成方案及预制化液冷机柜\n尼得科 (Nidec) | 日本 | 提供液冷系统中关键的 CDU 及高性能循环泵\nBoyd (宝德) | 美国 | 提供高性能热管、冷板以及复杂的流体分配系统\n英维克 (Envicool) | 中国 | 中国液冷龙头企业,受益于 Google 及全球 Hyperscaler 扩张的供应链外溢\n快而捷 (Quanta / QCT) | 中国台湾 | Google 最核心的服务器代工厂,直接受益于液冷机柜的组装集成\n液冷基础设施层\n维谛技术(Vertiv) 是美国数据中心基础设施巨头,在全球液冷CDU和数据中心热量管理领域占据领先地位。其2026年第一季度净销售额达26.5亿美元,同比增长30%,折射出全球液冷需求的高度景气。维谛技术提供从大型液冷CDU到机柜级热管理的一体化方案,是Google超大规模数据中心建设的核心基础设施供应商。\nCoolIT Systems 是加拿大直接芯片液冷(DLC)专家,在芯片级液冷技术上拥有深厚积累,长期深度参与Google数据中心定制方案的设计与实施。\n施耐德电气(Schneider Electric) 作为法国能源管理和自动化巨头,提供端到端的数据中心液冷集成方案及标准化、预制化的液冷机柜系统,是全球数据中心基础设施的关键供应商。\n核心组件层\n双鸿科技(Auras) 总部位于中国台湾,是TPU v8冷板的核心供应商。冷板是液冷系统中直接影响散热效率的关键部件。双鸿科技在超薄冷板领域拥有同行难以匹敌的制造经验和品控保障。据市场分析,双鸿对2026年营收的年增长预期超过50%。\n尼得科(Nidec) 是全球领先的精密电机制造商,总部位于日本,在液冷系统中提供高可靠性CDU及高效能循环泵,为Google数据中心液冷系统的循环动力和流量分配提供关键保障。\nBoyd(宝德) 总部位于美国,在高性能热管理领域拥有行业领先的经验,提供涵盖热管、冷板乃至复杂流体分配系统的全面散热方案。\n系统集成层\n奇鋐科技(AVC) 来自中国台湾,是TPU v8关键散热模组及水冷板的组装商,与Google保持长期紧密的合作关系。奇鋐科技是Google ASIC液冷方案的早期入选厂商之一。数据显示,截至2025年底,奇鋐已连续10个月营收创新高,并预计2026年业绩将进一步增长。\n台达电子(Delta) 总部位于中国台湾,提供高功率密度液冷电源,同时也提供定制化的液冷循环系统,其电力和温控双重集成能力在AI服务器硬件生态中发挥着不可替代的作用。\n服务器代工与集成\n快而捷(Quanta/QCT) 台系中最具规模的服务器代工厂之一,直接受益于TPU v8液冷机柜的组装集成。每一代Google TPU的核心服务器代工体系均由快而捷、广达等头部台厂承接,快而捷在液冷架构的整合成本、交付周期上持续优化,正获得更深度锁定。\n中国力量\n英维克(Envicool) 是中国液冷领域的领军企业。据路透社报道,2026年初Google已开始与英维克等中国液冷设备厂商洽谈采购数据中心冷却系统。作为Google供应链体系中的中国代表力量,英维克已通过英特尔冷板液解决方案集成商认证,并入选英伟达Blackwell平台核心基础设施伙伴名单。\n这意味着Google TPU的液冷生态版图中,中国供应商正在扮演越来越重要的角色。随着Google在全球范围的液冷基础设施扩容,中国液冷供应链正迎来更广阔外延的机遇。\n除了英维克之外, 链力液冷 在国际液冷行业的也扮演了重要的角色,专业团队深谙全球市场规则与本地化需求,已为全球 100 + 国家和地区提供定制化液冷解决方案与全流程落地支持,积累了广泛的国际市场基础,累计部署超 500 万套液冷设备,落地项目功率突破 10GW,规模效应显着,产品通过 RoHS、CE、UL 等国际权威认证,技术与服务品质广受信赖\n散热之外:一个百亿级市场的底层逻辑\n液冷并非孤立的零部件生意,它与整个AI产业链的四个维度深度交织。\n第一,芯片设计端 。TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程。当芯片功耗达到1300W时,封装散热成为核心设计约束之一。这推动了\"从芯片到数据中心\"的全栈协同设计思路——这将把液冷供应商更深地卷入早期研发验证环节。\n第二,光互联能源消耗。 在TPU v8架构中,3D Torus拓扑需要芯片间极其紧密的互联。有效的液冷不仅能降低裸片温度,还能让光互联信号的质量和传输效率得到更稳定的保障。\n第三,算力租赁与云业务增长,构成加速资本的根本支撑。 据Google一季度财报披露,Google Cloud单季收入首破200亿美元,年增63%,积压订单单季翻倍至超过4600亿美元。强劲的云业务增长为TPU的全球部署速度和液冷基建投资提供了基础支撑。\n第四,碳中和大周期下的必然选择。 在AI算力带来的巨大电力耗用压力下,Google数据中心2026年需将PUE控制在1.1以下。液冷方案不仅直接节能超过三成的散热功耗,也在无碳能源采购与电网升级压力中打开了绿色算力的新增长空间。\n从冷板到相变:下一场散热革命的伏笔\n在TPU v8全面采用液冷的同时,Google的边缘推理实验场景正悄悄探索更高效率的\"相变冷却\"技术。这项技术利用液体在蒸发时吸收大量热量的物理原理,可在单位接触面积上带走远超冷板的热通量——它可能会成为TPU v9时代应对更高功率密度芯片的候选方案。\n也有消息显示,英伟达正推动Rubin Ultra架构向微通道技术演进,进一步从液冷进入新的交叉散热竞争赛道。种种迹象标明,在千瓦级以上功耗的AI芯片时代,冷却技术本身越来越像一个没有终点的竞赛。\n对于那些在这场万亿美元的算力基建浪潮中占据有利位置的企业来说,来自谷歌TPU v8全面液冷的订单远不止一个商业合同,更是一次定义下一代AI基础设施标准的入场券。\n而从谷歌财报到供应链订单,从台积电先进封装到中国液冷龙头的认证清单——AI基础设施从\"算力中心\"走向\"冷却优先\"的底层范式转变,已经在大规模落地。\n这一代TPU v8全面液冷,首先是有形确定的技术架构标准,其后是今年落地项目与明年订单的新驱动力。但这背后,是AI算力新时代的基础设施图景:在芯片制程推进的挑战之外,如何让这些更密集、更强大的算力集群\"冷静\"运转,正定义着下一个十年AI基础设施的竞争格局。\n距离那场硅基与流体的协同进化,才刚开始。\n上一页\n比特币挖矿绿色革命:可再生能源与电网稳定性新常态\n2026年的比特币价格:能否避免再次崩盘?\n下一页\n上一页\n比特币挖矿绿色革命:可再生能源与电网稳定性新常态\n下一页\n2026年的比特币价格:能否避免再次崩盘?\n推荐新闻\n2026年AI数据中心为何加速采用液冷技术?\n深入解析2026年AI数据中心液冷的发展趋势,了解GPU功耗增长、风冷局限、冷板式液冷与浸没式液冷的区别,以及液冷在数据中心能效和高密度散热中的应用。\nAI算力加速,液冷进入数据中心基础设施新阶段|链力邀您相约新加坡 Tech Week 2026\n深圳链力将亮相2026新加坡Tech Week及Data Centre World Asia,聚焦AI高密度数据中心液冷、CDU及下一代散热基础设施,与亚太行业客户共同探索高效、可靠的AI数据中心液冷解决方案。\nShenzhen Lianli Liquid Cooling Equipment Technology Co., Ltd\n深圳市链力液冷设备技术有限公司\n手机/微信: 18002936305\n邮箱:sales@lianliai.com\n总部地址:广东省深圳市龙岗区宝龙街道高科大道18号超频三科技大楼12楼 工厂地址:龙岗区宝龙街道宝龙社区宝龙大道6号二砂深联15号101\n关于我们\n公司简介\n服务条款\n资质证书\n视频中心\n数据中心液冷系统\n集装箱数据中心\n液冷机柜\n机柜式CDU\n机架式CDU\n新闻资讯\n公司新闻\n行业新闻\n版权所有 © 2026 深圳市链力液冷设备技术有限公司\n营业执照\n中企跨境-全域组件\n制作前进入CSS配置样式\n链力液冷:\n联系电话:\nE-mail:\n导航下拉添加类名.active\n在线客服添加返回顶部\n右侧在线客服样式 1,2,3 1\n图片alt标题设置: 深圳市链力液冷设备技术有限公司\n表单验证提示文本: 内容不能为空!\n循环体没有内容时: 抱歉,未找到匹配的项目。\nCSS / JS 文件放置地",
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "start": 0
+          },
+          "evidence_kind": "explicit",
+          "explanation": "文章明确陈述TPU v8单芯片功耗为1300W，符合芯片级TDP定义。",
+          "field_name": "tdp_w",
+          "normalized_value": 1300,
+          "raw_value": 1300,
+          "scope": "chip",
+          "source_type": "web_crawl",
+          "target_table": "chips",
+          "unit": "W",
+          "entity_hints": {
+            "full_sku": "TPU 8t",
+            "entity_type": "chip"
+          }
+        },
+        "program": {
+          "status": "unresolved",
+          "reason": "sku_value_binding_unresolved",
+          "missing_conditions": [
+            "sku_value_evidence_binding"
+          ]
+        },
+        "model_calls": 0,
+        "status": "unresolved",
+        "reason": "sku_value_binding_unresolved",
+        "reviews": [],
+        "seconds": 0.33,
+        "call_statuses": {},
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      }
+    ],
+    "all_passed": true
+  },
+  "offline_verification": {
+    "legacy_requests": [
+      {
+        "source": "tpu-v8-skill-schema-replay",
+        "protocols": [
+          3
+        ],
+        "requests": 20,
+        "mismatches": 0
+      },
+      {
+        "source": "tpu-v8-review-identity-replay",
+        "protocols": [
+          4
+        ],
+        "requests": 52,
+        "mismatches": 0
+      },
+      {
+        "source": "tpu-v8-review-identity-fixed-replay",
+        "protocols": [
+          5
+        ],
+        "requests": 28,
+        "mismatches": 0
+      }
+    ],
+    "current_candidates_revalidated": 13,
+    "actual_full_body_model_calls_verified": 12,
+    "current_program_results_identical": true,
+    "saved_model_outputs_and_proofs_unchanged": true,
+    "exact_same_power_input": true,
+    "old_power_verdict": [
+      "accept"
+    ],
+    "new_power_program": {
+      "status": "unresolved",
+      "reason": "sku_value_binding_unresolved",
+      "missing_conditions": [
+        "sku_value_evidence_binding"
+      ]
+    },
+    "new_power_model_calls": 0,
+    "new_power_input_sha256": "0cf7a88edeeb04488df823ce3bcff54b81b210b8e2e4c7cea104d06fc191b1b1",
+    "model_calls": 0,
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_writes": 0
+  },
+  "full_body_replay": {
+    "model": "qwen3.8-flash",
+    "cases": [
+      {
+        "domain": "specs",
+        "run_id": "run-8a697807decc40bf97506a8d8a5c1190",
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-replay\\specs-b1254404-e0ad95",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "calls": [
+          {
+            "phase": "extract",
+            "domain": "specs",
+            "model": "qwen3.8-flash",
+            "response_model": "qwen3.8-flash",
+            "status": "completed",
+            "seconds": 12.043831700022565,
+            "range": {
+              "end": 5810,
+              "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+              "start": 0
+            },
+            "fact_count": 1,
+            "error": null
+          }
+        ],
+        "candidate_statuses": {
+          "program_rejected": 1
+        },
+        "candidates": [
+          {
+            "id": "fact-fd9cee721f1265ba967c697c036677338e9ba851bddcdb573cbf07ab0ffe015f",
+            "domain": "specs",
+            "status": "program_rejected",
+            "field": "process_node_nm",
+            "entity": {
+              "chip_model": "TPU v8",
+              "vendor": "Google"
+            },
+            "value": 2,
+            "reason": "numeric field requires a single numeric raw value",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "numeric field requires a single numeric raw value",
+                  "status": "rejected"
+                }
+              }
+            ],
+            "reviews": [],
+            "identity_followup": false
+          }
+        ],
+        "statistics": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 1,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0,
+          "new_entities": 0,
+          "main": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 1,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "linked": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 0,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "formal_business_writes": 0,
+          "formal_provenance_writes": 0,
+          "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+        },
+        "tasks": [
+          {
+            "domain": "specs",
+            "scope": "main",
+            "state": "completed",
+            "identity_dependency": false,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 5810
+                }
+              ],
+              "failed": [],
+              "body_length": 5810,
+              "complete": true
+            }
+          }
+        ],
+        "all_tasks_complete": true,
+        "main_body_complete": true,
+        "exceptions": [],
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true,
+        "empty_baseline_table_rows_after": {
+          "chips": 0,
+          "models": 0,
+          "chip_model_benchmarks": 0,
+          "chip_model_compatibility": 0,
+          "field_provenance": 0,
+          "link_library": 0,
+          "source_registry": 0,
+          "benchmark_workbook_rows": 0,
+          "source_discovery_edges": 0,
+          "deployment_guides": 0,
+          "update_runs": 0,
+          "update_run_events": 0,
+          "source_monitor_state": 0,
+          "source_checks": 0,
+          "source_diffs": 0,
+          "source_auto_applies": 0,
+          "data_agent_jobs": 0,
+          "parse_ledger": 0,
+          "extraction_candidates": 0,
+          "candidate_baselines": 0,
+          "skill_inbox": 0,
+          "entity_aliases": 0,
+          "candidate_publications": 0
+        },
+        "raw_facts": [
+          {
+            "domain": "specs",
+            "facts": [
+              {
+                "conditions": {},
+                "confidence": "medium",
+                "confidence_reason": "The source is a third-party news article from a cooling equipment vendor, not an official Google datasheet or announcement. However, it cites specific technical details regarding the supply chain and chip design partners which adds credibility to the specification claim.",
+                "context_refs": [],
+                "conversion": {},
+                "domain_id": "specs",
+                "entity_key": {
+                  "chip_model": "TPU v8",
+                  "vendor": "Google"
+                },
+                "evidence": {
+                  "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+                  "end": 3482,
+                  "quote": "两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程",
+                  "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+                  "start": 3456
+                },
+                "evidence_kind": "explicit",
+                "explanation": "The text explicitly states that both TPU v8 variants (8t and 8i) are locked to TSMC's 2nm process. The shared claim 'both...use' allows attributing the value to the parent generation SKU TPU v8 as supported by the rules for explicit shared claims.",
+                "field_name": "process_node_nm",
+                "normalized_value": 2,
+                "raw_value": "2nm",
+                "scope": "chip",
+                "source_type": "web_crawl",
+                "target_table": "chips",
+                "unit": "nm"
+              }
+            ]
+          }
+        ],
+        "call_statuses": {
+          "completed": 1
+        },
+        "protocols": [
+          6
+        ]
+      },
+      {
+        "domain": "identity",
+        "run_id": "run-7d4b25b91fbc417583fd4fda7531056b",
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-replay\\identity-b1254404-d53e3d",
+        "bundle_sha256": "27bd4fad702743ec38d134161044baa08453f5478d9d0943f672b54ee894f8ca",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "calls": [
+          {
+            "phase": "extract",
+            "domain": "identity",
+            "model": "qwen3.8-flash",
+            "response_model": "qwen3.8-flash",
+            "status": "completed",
+            "seconds": 18.474984200001927,
+            "range": {
+              "end": 5810,
+              "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+              "start": 0
+            },
+            "fact_count": 3,
+            "error": null
+          },
+          {
+            "phase": "review",
+            "domain": "identity",
+            "model": "qwen3.8-flash",
+            "response_model": "qwen3.8-flash",
+            "status": "completed",
+            "seconds": 7.390342200000305,
+            "range": {
+              "end": 5810,
+              "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+              "start": 0
+            },
+            "fact_count": null,
+            "error": null
+          },
+          {
+            "phase": "review",
+            "domain": "identity",
+            "model": "qwen3.8-flash",
+            "response_model": "qwen3.8-flash",
+            "status": "completed",
+            "seconds": 4.589908499998273,
+            "range": {
+              "end": 5810,
+              "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+              "start": 0
+            },
+            "fact_count": null,
+            "error": null
+          },
+          {
+            "phase": "review",
+            "domain": "identity",
+            "model": "qwen3.8-flash",
+            "response_model": "qwen3.8-flash",
+            "status": "completed",
+            "seconds": 4.101989100017818,
+            "range": {
+              "end": 5810,
+              "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+              "start": 0
+            },
+            "fact_count": null,
+            "error": null
+          }
+        ],
+        "candidate_statuses": {
+          "semantic_rejected": 1,
+          "validated": 2
+        },
+        "candidates": [
+          {
+            "id": "fact-53e489b77c502af5a03c9814f5e5655ea49bc64102865bf5834a336bc5790ee1",
+            "domain": "identity",
+            "status": "semantic_rejected",
+            "field": "vendor",
+            "entity": {
+              "chip_model": "TPU v8",
+              "vendor": "Google"
+            },
+            "value": "Google",
+            "reason": "The candidate uses 'TPU v8' as the entity_key chip_model. The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the frozen identity rules, a generation/series explicitly split into named variants is not itself a concrete SKU. Therefore, extracting vendor information for the parent generation 'TPU v8' as a specific chip entity is invalid. The entity key must be one of the specific variants (e.g., TPU 8t or TPU 8i), or if the intent was the series, it should not be treated as a distinct chip model with lifecycle attributes in this context without further disambiguation. Since the rule strictly forbids using the parent generation as a concrete chip when variants are explicit, this candidate is rejected.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The candidate uses 'TPU v8' as the entity_key chip_model. The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the frozen identity rules, a generation/series explicitly split into named variants is not itself a concrete SKU. Therefore, extracting vendor information for the parent generation 'TPU v8' as a specific chip entity is invalid. The entity key must be one of the specific variants (e.g., TPU 8t or TPU 8i), or if the intent was the series, it should not be treated as a distinct chip model with lifecycle attributes in this context without further disambiguation. Since the rule strictly forbids using the parent generation as a concrete chip when variants are explicit, this candidate is rejected.",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-60feb5cfe2e2f2ae7d13e29e64690fc0a9648c525daf29d85e48a8c7fa971892",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_series",
+            "entity": {
+              "chip_model": "TPU 8i",
+              "vendor": "Google"
+            },
+            "value": "TPU v8",
+            "reason": "正文明确指出“TPU v8分拆为...TPU 8i”，建立了具体型号 TPU 8i 与系列/代际 TPU v8 的层级关系。证据支持将 chip_series 设为 TPU v8，实体键为具体 SKU TPU 8i，符合领域规则中关于变体可携带明确关联系列的判定。来源虽为第三方媒体（web_crawl），但事实陈述清晰且直接关联该 SKU，无冲突证据。",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "正文明确指出“TPU v8分拆为...TPU 8i”，建立了具体型号 TPU 8i 与系列/代际 TPU v8 的层级关系。证据支持将 chip_series 设为 TPU v8，实体键为具体 SKU TPU 8i，符合领域规则中关于变体可携带明确关联系列的判定。来源虽为第三方媒体（web_crawl），但事实陈述清晰且直接关联该 SKU，无冲突证据。",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-6e8c6f86a96c2eb707eb62000c5a283e727610ba407952ed02c1e6c43953603f",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_series",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "TPU v8",
+            "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i...', establishing a clear hierarchical relationship where TPU 8t is a specific variant of the TPU v8 series. The entity_key correctly identifies the concrete SKU 'TPU 8t', and the field 'chip_series' with value 'TPU v8' is directly supported by this explicit linkage in the text, adhering to the identity rules for generation/series handling.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i...', establishing a clear hierarchical relationship where TPU 8t is a specific variant of the TPU v8 series. The entity_key correctly identifies the concrete SKU 'TPU 8t', and the field 'chip_series' with value 'TPU v8' is directly supported by this explicit linkage in the text, adhering to the identity rules for generation/series handling.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          }
+        ],
+        "statistics": {
+          "independent_fields": 2,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 2,
+          "rejected_candidates": 1,
+          "value_changes": 2,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 1,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0,
+          "new_entities": 2,
+          "main": {
+            "independent_fields": 2,
+            "source_candidates": 1,
+            "urls": 1,
+            "validated_candidates": 2,
+            "rejected_candidates": 1,
+            "value_changes": 2,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 1,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "linked": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 0,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "formal_business_writes": 0,
+          "formal_provenance_writes": 0,
+          "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+        },
+        "tasks": [
+          {
+            "domain": "identity",
+            "scope": "main",
+            "state": "completed",
+            "identity_dependency": false,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 5810
+                }
+              ],
+              "failed": [],
+              "body_length": 5810,
+              "complete": true
+            }
+          }
+        ],
+        "all_tasks_complete": true,
+        "main_body_complete": true,
+        "exceptions": [],
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true,
+        "empty_baseline_table_rows_after": {
+          "chips": 0,
+          "models": 0,
+          "chip_model_benchmarks": 0,
+          "chip_model_compatibility": 0,
+          "field_provenance": 0,
+          "link_library": 0,
+          "source_registry": 0,
+          "benchmark_workbook_rows": 0,
+          "source_discovery_edges": 0,
+          "deployment_guides": 0,
+          "update_runs": 0,
+          "update_run_events": 0,
+          "source_monitor_state": 0,
+          "source_checks": 0,
+          "source_diffs": 0,
+          "source_auto_applies": 0,
+          "data_agent_jobs": 0,
+          "parse_ledger": 0,
+          "extraction_candidates": 0,
+          "candidate_baselines": 0,
+          "skill_inbox": 0,
+          "entity_aliases": 0,
+          "candidate_publications": 0
+        },
+        "raw_facts": [
+          {
+            "domain": "identity",
+            "facts": [
+              {
+                "conditions": {},
+                "confidence": "high",
+                "confidence_reason": "标题直接包含厂商名称和产品系列，且正文多次重复确认。",
+                "conversion": {
+                  "description": "将来源中的厂商中文名“谷歌”规范化为对应英文名“Google”。"
+                },
+                "domain_id": "identity",
+                "entity_hints": {},
+                "entity_key": {
+                  "chip_model": "TPU v8",
+                  "vendor": "Google"
+                },
+                "evidence": {
+                  "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+                  "end": 185,
+                  "quote": "谷歌TPU v8全面液冷如何重构全球AI供应链",
+                  "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+                  "start": 166
+                },
+                "evidence_kind": "explicit",
+                "explanation": "标题明确提及“谷歌TPU v8”，结合正文多处指代，确认厂商为 Google（中文语境下称谷歌）。虽然页面主体讨论的是 TPU v8 系列及其分拆型号，但此处提取针对父代际实体键的厂商归属。",
+                "field_name": "vendor",
+                "normalized_value": "Google",
+                "raw_value": "谷歌",
+                "scope": "chip",
+                "source_type": "web_crawl",
+                "target_table": "chips",
+                "unit": null
+              },
+              {
+                "conditions": {},
+                "confidence": "high",
+                "confidence_reason": "文本直接陈述了分拆关系，证据清晰。",
+                "conversion": {},
+                "domain_id": "identity",
+                "entity_hints": {},
+                "entity_key": {
+                  "chip_model": "TPU 8t",
+                  "vendor": "Google"
+                },
+                "evidence": {
+                  "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+                  "end": 2583,
+                  "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)",
+                  "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+                  "start": 2536
+                },
+                "evidence_kind": "explicit",
+                "explanation": "正文明确指出“TPU v8分拆为...TPU 8t”，建立了具体型号 TPU 8t 与系列/代际 TPU v8 的层级关系。",
+                "field_name": "chip_series",
+                "normalized_value": "TPU v8",
+                "raw_value": "TPU v8",
+                "scope": "chip",
+                "source_type": "web_crawl",
+                "target_table": "chips",
+                "unit": null
+              },
+              {
+                "conditions": {},
+                "confidence": "high",
+                "confidence_reason": "文本直接陈述了分拆关系，证据清晰。",
+                "conversion": {},
+                "domain_id": "identity",
+                "entity_hints": {},
+                "entity_key": {
+                  "chip_model": "TPU 8i",
+                  "vendor": "Google"
+                },
+                "evidence": {
+                  "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+                  "end": 2583,
+                  "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)",
+                  "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+                  "start": 2536
+                },
+                "evidence_kind": "explicit",
+                "explanation": "正文明确指出“TPU v8分拆为...TPU 8i”，建立了具体型号 TPU 8i 与系列/代际 TPU v8 的层级关系。",
+                "field_name": "chip_series",
+                "normalized_value": "TPU v8",
+                "raw_value": "TPU v8",
+                "scope": "chip",
+                "source_type": "web_crawl",
+                "target_table": "chips",
+                "unit": null
+              }
+            ]
+          }
+        ],
+        "call_statuses": {
+          "completed": 4
+        },
+        "protocols": [
+          6
+        ]
+      }
+    ],
+    "calls": 5,
+    "result": "scope processed; extraction quality not accepted"
+  },
+  "remaining": [
+    "Normal specs extraction returned only one candidate, with raw_value=\"2nm\" and a parent-generation key. The numeric format was correctly program-rejected; no valid spec candidate was produced in this normal run.",
+    "Shared 2nm positives are preserved real source facts reviewed with the complete body; this does not prove the fresh extractor can stably rediscover them.",
+    "The deterministic gate establishes minimum local scope, not complete semantic entailment. Comparisons, negation and complex table columns still need review.",
+    "Omitted subjects, complex headings or layouts not meeting conservative rules can remain unresolved; no cross-paragraph inference is added.",
+    "Only numeric chips fields of specs use this gate; nonnumeric fields and other domains retain existing validation."
+  ],
+  "safety": {
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_business_writes": 0,
+    "formal_provenance_writes": 0,
+    "production_deployment": false,
+    "shared_env_modified": false,
+    "fixture_model_responses_in_live_replays": 0
+  },
+  "next_step": "Improve extraction output typing and source evidence selection on fixed samples; do not expand search or formal writes yet.",
+  "artifacts": {
+    "sha256": {
+      "chip_model/pipeline/domain_discovery/models.py": "a84dbd9f764d849194b0556cd6eb0fcbd478ef7a305896eba9c7ff97463aa689",
+      "chip_model/pipeline/domain_discovery/evidence_binding.py": "40b399a1a918b469effedfa05c61cf2b0812cdf535262501229119901a47be3e",
+      "chip_model/pipeline/domain_discovery/compare.py": "08025255ac6ffc06f20bb9a9d8a7c1262755d0a53f2a3dc7180381d90d44d027",
+      "chip_model/pipeline/domain_discovery/entities.py": "d52e1b78eb3f49e488173a001a9115d8e4c0996964b84b7bd37fb3fdf23a99bf",
+      ".hermes-skills/chip-specs/domain.json": "0bb86815b3c114bbea80fa8438da90d4c8b494026be7675e8ec1be71fb3756cd",
+      ".hermes-skills/chip-specs/references/specs-rules.md": "787b8c1adbcb756138dc51b3bfd4ba298c3ddaef8fe1450c93a25bd701311bc1",
+      "tests/test_domain_value_binding.py": "ba2b6ef528e2ab58080eb82e8ac04961966380b88160d4c5d5fdbb9a3bb33775",
+      "tests/test_domain_models.py": "d0c63c26884c64d8a78baceee4381d43604fd817c20344d2b70b5298c54cbd06",
+      "tests/test_domain_compare.py": "acc67e45fce4fcf25a349d1f125d7de209da0bb7f881e8dedaebba554ca71169",
+      ".tmp/review-tpu-v8-value-binding-controls-effective.py": "e478be7efa002c21a845481721941e5413b8c6084c6b8665fc58fc72719bdc32",
+      ".tmp/replay-tpu-v8-value-binding-effective.py": "9fcbcc2f6c7280e88f170b1b5bee1a6140c4ac6f1248c79365da0a76a7e82377",
+      ".tmp/qwen_replay_transport.py": "f69c3b072e2f6e7a556ca61c93f23b5c45b802284b17da07114e83b21de4095c"
+    },
+    "normal_summary": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-replay\\summary.json",
+    "controls_summary": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-value-binding-controls\\summary.json",
+    "offline_checks": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\value-binding-offline-verification.json"
+  }
+}

@@ -72,11 +72,11 @@
       "preserve_existing_format": true,
       "lossless_metadata": true,
       "metadata": [
-        "source_precision",
-        "source_unit",
-        "dense_or_sparse",
-        "calculation_basis",
-        "source_value"
+        "conversion.precision",
+        "conversion.source_unit",
+        "conversion.dense_or_sparse",
+        "conversion.calculation_basis",
+        "raw_value"
       ]
     },
     "theoretical_peak": {

@@ -306,7 +306,7 @@ python scripts/run_hermes_open_web_test.py --help
 
 实际目标为 lxc@81.70.231.92；Hermes CLI 预期路径 `/home/lxc/hermes-agent/venv/bin/hermes`，项目 `/home/lxc/chip-recommend`，实际路径/版本未验证。当前 SSH 因 Host key verification failed 未执行远程步骤；等待已信任连接信息，不修改信任配置或绕过 host key 检查。
 
-配置 HERMES_CLI_COMMAND、HERMES_PYTHON（真实 SDK Python）以及必要 HERMES_SDK_ROOT，从 allowlist 提供 HERMES_MODEL/HERMES_PROVIDER 与对应凭证；后端 extract/review 使用 DATA_AGENT_LLM_BASE_URL/MODEL/API_KEY/TEMPERATURE。两个模型通路的配置和可用性分别验证，不因 key 存在标记模型服务可用。`--check` 只读检查目录权限、control.sqlite3 schema/唯一键、安装规则和 Docker mounts；即使没有已知失败也只报告 preflight_required，SQLite journal/锁/磁盘/跨附加库原子提交能力仍需实际 runtime 预检。正式开启 Worker 前必须核对实际 installed SDK 版本/signature、完整 20 文件 resolver 路径/hash、唯一插件和三个 schema、实际 authenticated health、共享 volume 和运行目录写能力。
+配置 HERMES_CLI_COMMAND、HERMES_PYTHON（真实 SDK Python）以及必要 HERMES_SDK_ROOT，从 allowlist 提供 HERMES_MODEL/HERMES_PROVIDER 与对应凭证；后端 extract/review 使用 DATA_AGENT_LLM_BASE_URL/MODEL/API_KEY/TEMPERATURE。可选 `DATA_AGENT_REVIEW_MODEL` 仅覆盖后端复核模型名，沿用相同接口、凭据和温度；未设置时复核沿用提取模型。隔离配置可设 `DATA_AGENT_LLM_MODEL=kimi-k2.6`、`DATA_AGENT_REVIEW_MODEL=kimi-k3`，不改变 Hermes 发现通路模型。两个模型通路的配置和可用性分别验证，不因 key 存在标记模型服务可用。`--check` 只读检查目录权限、control.sqlite3 schema/唯一键、安装规则和 Docker mounts；即使没有已知失败也只报告 preflight_required，SQLite journal/锁/磁盘/跨附加库原子提交能力仍需实际 runtime 预检。正式开启 Worker 前必须核对实际 installed SDK 版本/signature、完整 20 文件 resolver 路径/hash、唯一插件和三个 schema、实际 authenticated health、共享 volume 和运行目录写能力。
 
 累计 ACTIVE 预算默认 30 分钟，技术请求至多三次，语义修订一次。恢复不能重置预算，旧 Worker generation 被 fencing 拒绝；不会自动重领未知外部执行或重开已失效租约，需要显式 resume。Worker `--once` 是已有队列处理能力，本轮未启动周期服务；不要把 `--check` 的成功权限检查当成运行 READY。
 
@@ -363,3 +363,54 @@ SSH 已确认能建立 TCP 连接，但当前主机密钥不在本机信任记�
 
 保留本地适配：`DATA_AGENT_LLM_TEMPERATURE` 可设置 0–2 的有限数值，默认 0.6，沿用远程关闭 thinking 的请求参数。本地现有配置为 1。
 `DATA_AGENT_LLM_BASE_URL` 填接口根地址，不含 `/v1/chat/completions`。进程启动前需加载环境变量，密钥不得写入版本库。
+
+
+### 2026-10-21：隔离复核模型与身份等待
+
+本次固定样本使用提取 `kimi-k2.6`、复核 `kimi-k3`，仅在隔离重放进程配置 `DATA_AGENT_REVIEW_MODEL=kimi-k3`，未修改共享 `.env` 或远程镜像。切换模型应新建隔离运行；模型名绑定请求凭据，旧模型缓存不能算作新模型复核结果。
+
+后端复核可返回 `verdict=unresolved, needs_identity=true`。只有程序检查已通过的此类候选进入 `awaiting_identity` 并调度同快照身份依赖；语义拒绝和缺少实测条件不因此重试。身份任务按完整实体线索隔离缓存，线索本身始终未验证。
+
+只有保存的身份候选通过程序及独立复核、并登记为明确的芯片或板卡后，才允许新增一次带真实身份凭据的后续复核版本。原调用、原上下文和候选值保持可追溯；身份确认不消耗也不恢复语义修订额度。仍要求身份或身份失败时不计有效字段。技术重试、一次语义修订和单次身份后续复核分别受限。
+
+固定正文重放仅验证指定范围：不得把范围完成当整页覆盖完成。初始等待若由测试夹具注入，必须在记录中说明，不能宣称真实模型主动请求了身份确认。
+
+### 2026-10-21：中文数量与省略字段
+
+数字证据检查可识别“功耗达1300W”等中文紧邻、带明确原单位的连续数量；新增识别不读取目标 SKU 内的数字，不将负号或型号连字符后的数字拆成正数，也不把 GB/s 当成 GB。引文、偏移和值仍保持原样，字段归属和实体适用性仍需独立复核。
+
+比较模块按 FactCandidate 的默认约定处理省略的 entity_hints、conditions；显式 null、列表和字符串仍拒绝。关联比较与通用部署依赖沿用同一空对象默认值，不补造条件、不改原候选和模型凭据。重新比较历史输出应使用隔离副本；新模型重放使用新运行，分别记录程序效果与模型输出波动。
+
+### 2026-10-21：Skill 与候选 Schema 对齐
+
+六域共享参考明确候选 conversion 只能省略或为对象，数值与单位分开；算力合同元数据使用 conversion.precision、conversion.source_unit、raw_value 等实际路径。候选格式只以本次 candidate_schema 为准，业务字段/单位/条件仍由 domain.json 和程序校验约束。只更新项目权威源、生成副本及清单，历史冻结包保持不变；无需改变后端协议版本，新规则由 bundle_sha256 区分。
+
+同一 TPU v8 完整正文的两组 Qwen 隔离重放中，19 条身份原始输出均通过结构校验，未再出现 conversion:null；英文发布状态和代际/SKU、复核依据问题仍存在，不能据此宣称身份验收通过。配置、范围和结果见[简要记录](acceptance/2026-10-21-skill-schema-tpu-v8-replay.md)。未重新搜索、未抓取页面、未正式写入或部署。
+
+### 2026-10-21：逐字段复核与代际身份
+
+后续请求协议 5 从冻结合同生成字段归属提示，先核验实体键，再按字段审核来源。父代际在正文明确分成多个具体 SKU 时不能单独计为芯片；具体 SKU 的 chip_series 可以保留该代际，但日期、功耗等不能自动继承。字段值正确不豁免错误实体键；证据归属不足不能用 needs_identity=true 或换实体键解除。
+
+身份策略 3 对同一规范化完整型号的真实 chip_model 拒绝/未解析复核保留登记冲突，其他身份字段通过不能覆盖。不计新实体，也不解除规格等待；其他型号或非型号字段拒绝不自动造成该冲突。该策略目前保守处理同键复核分歧，多来源冲突解除仍需后续设计。有旧策略 2 登记实体的运行应保留历史并新建隔离运行，不能静默迁移。协议 3/4 历史请求仍按原指令重建，旧冻结包不更新。
+
+最终固定正文重放与正反例结果见[记录](acceptance/2026-10-21-review-identity-fix-replay.md)。仍有跨变体功耗反例被模型误放行，任务范围处理完不代表语义质量验收通过。只在本地隔离验证，未部署服务器、扩搜或正式写入。
+
+### 2026-10-21：SKU 与数值证据绑定
+
+新冻结 specs 合同启用 `sku_value_binding.mode=local_claim_or_exclusive_header`，对 chips 数值字段先检查局部陈述中的 SKU、数值和单位范围。明确共同陈述或已声明的单一 SKU 标题/表头可提供最低范围依据；整页别处的型号、混合标题和被省略的后续 SKU 表头不能补足绑定。该检查不是语义事实批准，复杂表格、比较或否定仍需独立复核。
+
+绑定不足保存 `unresolved / sku_value_binding_unresolved` 与缺失项 `sku_value_evidence_binding`，在复核前终结该次证据处理，不调用模型接受、不以身份等待补值、不计最终有效字段。原值、原始引文和位置保持不变。新请求协议为 6；无该策略的历史冻结合同继续按原有行为验证，不能将历史接受当作新规则通过，也不追改历史模型结论。
+
+固定的 8t=1300W 输入已从先前模型误接受变为程序未解析；9 个正反例符合预期，明确“两款均采用 2nm”的正例仍通过复核。正常完整正文提取此次仍产生 `raw_value="2nm"` 的格式错误并被拒绝，因此整体验收尚未通过。范围、分批回归和剩余问题见[记录](acceptance/2026-10-21-sku-value-binding-replay.md)。未重新搜索、抓取页面、正式写入或部署。
+
+### 2026-10-21：提取数字类型与变体证据
+
+协议 7 将冻结合同的数值字段类型投影到提取 required_schema，并要求共享规格分别保留具体 SKU、连续引文中的主体与共同断言。通用候选/复核 Schema 不变，历史协议指令保持可重建；类型提示不能替代程序校验，不自动修正模型输出。
+
+同一完整正文三次提取均为 8t、8i 生成数字制程候选，正常链路两条通过复核及隔离比较，固定 9 个正反例符合预期，427 项回归通过。父代际多余候选及独立身份域召回问题仍存在，整体质量尚未验收。详见[记录](acceptance/2026-10-21-extraction-types-replay.md)。未重新搜索、抓取页面、正式写入或部署。
+
+### 2026-10-22：两个新场景真实搜索（2026-10-26 汇总）
+
+规格、兼容两个开放域均不指定芯片，通过真实 Hermes/Tavily 执行搜索与筛选，随后提取和独立复核。20 条搜索成功，8 个主要候选中 7 个抓取成功；规格运行因身份依赖上下文与缓存复核绑定冲突失败，兼容运行部分完成。后者按系统统计有 3 条主域软件栈候选，但临时新实体包含“Ascend 910B/昇腾910B”别名误计，不能据此宣布新芯片发现或全链路验收通过。
+
+本次仅在诊断进程豁免整轮时限，保留单请求超时及原有额度与严格校验，两组合计约 63 分钟。正式库、现网和发布/心跳状态未变。完整终态、已发现问题及验证边界见[记录](acceptance/2026-10-22-small-open-web-e2e.md)。

@@ -1,0 +1,756 @@
+{
+  "date": "2026-10-21",
+  "status": "partial_blocked_by_provider_credit_and_manual_false_accept_found",
+  "scope": "three original complete saved bodies; normal 8000-character chunks and scheduler; no discovery/search replay",
+  "models": {
+    "extract": "kimi-k2.6",
+    "review": "kimi-k3"
+  },
+  "api_timeout_seconds": 120,
+  "safety": {
+    "search_requests": 0,
+    "source_page_fetch_requests": 0,
+    "formal_business_writes": 0,
+    "formal_provenance_writes": 0,
+    "fixture_responses": 0,
+    "production_image_changed": false,
+    "shared_env_changed": false
+  },
+  "summary": {
+    "planned_bodies": 3,
+    "main_bodies_completed": 1,
+    "body_tasks_completed": 4,
+    "all_main_bodies_complete": false,
+    "completed_inference_calls": 26,
+    "failed_inference_calls": 15,
+    "additional_minimal_probe_requests": 1,
+    "successful_extract_chunks": 4,
+    "empty_successful_extract_chunks": 0,
+    "identity_dependency_tasks": 3,
+    "typed_needs_identity_requests": 0,
+    "identity_followup_versions": 0,
+    "program_rejected_candidates": 3,
+    "semantic_rejected_candidates": 5,
+    "system_validated_candidates": 17,
+    "manual_false_accepts_identified": 1,
+    "main_compute_candidates_validated": 3
+  },
+  "manual_audit": {
+    "all_17_system_accepted_quotes_inspected": true,
+    "finding": {
+      "id": "fact-14d2253c2f5650e5f33ccf1687a1df3e1d30388898fc89d9ba55eea5ed1536cc",
+      "entity": "S60",
+      "field": "chip_type",
+      "system_value": "ASIC",
+      "status": "unsupported_type_inference_accepted_by_both_models",
+      "candidate": {
+        "conditions": {},
+        "confidence": "medium",
+        "confidence_reason": "Third-party media source, but explicit product description with technical details clearly indicates ASIC-type AI accelerator card.",
+        "context_refs": [],
+        "conversion": {
+          "aggregation": "unknown",
+          "basis": "unknown",
+          "calculation_basis": null,
+          "dense_or_sparse": "unknown",
+          "description": "人工智能加速卡 categorized as ASIC (dedicated AI accelerator)",
+          "direction": "unknown",
+          "factor": 1,
+          "precision": null,
+          "source_unit": null
+        },
+        "domain_id": "identity",
+        "entity_hints": {},
+        "entity_key": {
+          "chip_model": "S60",
+          "vendor": "燧原科技"
+        },
+        "evidence": {
+          "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+          "end": 2710,
+          "quote": "燧原 S60 是基于 GCU320 芯片打造的第三代人工智能加速卡,支持 FP32、FP16、BF16、INT8 多种数据精度,可广泛应用于图像及文本生成、搜索与推荐、文本图像及语音识别等推理场景。",
+          "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+          "start": 2611
+        },
+        "evidence_kind": "explicit",
+        "explanation": "Page describes S60 as '人工智能加速卡' (AI acceleration card), which is an ASIC-type accelerator board for AI inference. The underlying GCU320 chip and supported precision types confirm this is a dedicated AI accelerator, not a general-purpose GPU.",
+        "field_name": "chip_type",
+        "normalized_value": "ASIC",
+        "raw_value": "人工智能加速卡",
+        "scope": "board_sku",
+        "source_type": "web_crawl",
+        "target_table": "chips",
+        "unit": null
+      },
+      "model_reviews": [
+        {
+          "candidate": null,
+          "needs_identity": false,
+          "reason": "The evidence quote explicitly describes 燧原 S60 as '基于 GCU320 芯片打造的第三代人工智能加速卡' — a dedicated AI accelerator card with defined precision support (FP32/FP16/BF16/INT8) for inference workloads. This is not a general-purpose GPU; Enflame's GCU-based cards are dedicated ASIC-type AI accelerators, so normalizing '人工智能加速卡' to chip_type=ASIC is consistent with the contract's chip_type examples and preserve_actual_type rule. Entity key (vendor=燧原科技, chip_model=S60) matches the evidence verbatim, scope=board_sku is correct for an accelerator card SKU, and the source is third-party media (IT之家 repost with disclaimer), correctly classified as web_crawl rather than official. Field ownership (identity/chips/chip_type), evidence location, and medium confidence with stated reasoning are all consistent with the frozen contract.",
+          "verdict": "accept",
+          "version": 0
+        }
+      ],
+      "reason": "The quote identifies an AI accelerator card built on GCU320, but does not state ASIC or an equivalent architecture category. General AI accelerator wording cannot distinguish GPU/NPU/DCU/ASIC; do not count this as manually verified."
+    },
+    "rejections": [
+      {
+        "domain": "identity",
+        "entity": {
+          "chip_model": "智铠 100",
+          "vendor": "天数智芯"
+        },
+        "field": "production_status",
+        "value": "released",
+        "stage": "program_rejected",
+        "reason": "chips.production_status 须使用项目既有中文状态，而非英文枚举。"
+      },
+      {
+        "domain": "identity",
+        "entity": {
+          "chip_model": "S60",
+          "vendor": "燧原科技"
+        },
+        "field": "target_market",
+        "value": "cloud",
+        "stage": "semantic_rejected",
+        "reason": "The evidence quote describes 燧原科技 the company ('专注人工智能领域云端算力平台'), not the S60 SKU itself. The candidate's explanation admits the value is inferred from S60 being 'part of this product portfolio' — a company-level description cannot establish target_market for a specific board SKU. The same page's explicit S60 sentence ('燧原 S60 是基于 GCU320 芯片打造的第三代人工智能加速卡...可广泛应用于图像及文本生成、搜索与推荐、文本图像及语音识别等推理场景') lists inference application scenarios but never states a cloud/datacenter target market for the S60 card. Additionally, the source is a third-party media repost (IT之家, with a commercial republication disclaimer), so web_crawl classification is acceptable, but the entity-level evidence does not support the field value."
+      },
+      {
+        "domain": "identity",
+        "entity": {
+          "chip_model": "思元 370",
+          "vendor": "寒武纪"
+        },
+        "field": "chip_type",
+        "value": "NPU",
+        "stage": "semantic_rejected",
+        "reason": "The page describes 思元 370 only as a '云端 AI 芯片' (cloud AI chip) and never states 'NPU' or any equivalent architecture category. The candidate's normalized value 'NPU' is inferred from external knowledge about 寒武纪's MLU product line, not from the supplied source, which violates the rule against filling values from common knowledge. The evidence does not explicitly support chip_type=NPU."
+      },
+      {
+        "domain": "identity",
+        "entity": {
+          "chip_model": "S60",
+          "vendor": "燧原科技"
+        },
+        "field": "is_released",
+        "value": "1",
+        "stage": "semantic_rejected",
+        "reason": "The evidence quote describes the S60 as an existing third-generation AI accelerator card in the vendor's portfolio, but it contains no explicit release statement, launch date, or '已发布/上市/量产' wording for this SKU. Per identity rules, release status requires explicit evidence; present-tense product description in a third-party reposted article (with a commercial-repost disclaimer) is inference, not explicit evidence. The value is_released=1 was inferred ('产品存在描述推断为已发布'), which the contract forbids. Additionally the article is a third-party media repost, so web_crawl classification is acceptable, but the field value itself is unsupported by the cited text."
+      },
+      {
+        "domain": "identity",
+        "entity": {
+          "chip_model": "S60",
+          "vendor": "燧原科技"
+        },
+        "field": "tier",
+        "value": "3",
+        "stage": "semantic_rejected",
+        "reason": "The source is a third-party media repost (IT之家) with an explicit commercial-information disclaimer, so web_crawl classification is acceptable, but the fact itself is not supported as a chips.tier value: the quote '第三代人工智能加速卡' only states that the S60 board is a third-generation AI accelerator card, i.e. a product generation descriptor, not a defined 'tier' field value under the identity contract. Normalizing '第三代' to numeric tier=3 invents a field semantic the source does not establish; the contract provides no mapping from generational wording to tier. Additionally the candidate supplies no context_refs tying the quote to the S60 entity (the quote alone omits the SKU), though the surrounding paragraph does mention 燧原 S60. Since the field semantic is unsupported, this cannot be accepted and a revision cannot manufacture a tier value from evidence that does not encode one."
+      },
+      {
+        "domain": "identity",
+        "entity": {
+          "chip_model": "思元 370",
+          "vendor": "寒武纪"
+        },
+        "field": "release_date",
+        "value": "released",
+        "stage": "semantic_rejected",
+        "reason": "The evidence quote '是国内第一款公开发布支持 LPDDR5 内存的云端 AI 芯片' describes the chip as the first publicly released cloud AI chip supporting LPDDR5, but it provides no explicit release date. The contract requires release_date to have explicit evidence with preserved source date precision, and disallows inference from article dates or vague terms. The candidate's normalized_value 'released' is a categorical status, not a date, and does not satisfy the field's requirement for an actual release date. The correct field for this evidence would be production_status or is_released, not release_date. Additionally, the source is a third-party media repost (disclaimer states it is a commercial repost), correctly classified as community, but the value cannot be accepted for release_date."
+      },
+      {
+        "domain": "compute",
+        "entity": {
+          "chip_model": "Polaris-H",
+          "vendor": "曲速科技"
+        },
+        "field": "precision_perf",
+        "value": "片内带宽超 30TB/s",
+        "stage": "program_rejected",
+        "reason": "unsupported frozen domain unit"
+      },
+      {
+        "domain": "identity",
+        "entity": {
+          "chip_model": "智铠 100",
+          "vendor": "天数智芯"
+        },
+        "field": "is_released",
+        "value": "1",
+        "stage": "program_rejected",
+        "reason": "raw numeric value is not continuously present in evidence"
+      }
+    ],
+    "scope_note": "No claim of 17/17 factual accuracy. Source-supported means consistency with the saved third-party page, not independent truth of the original media claims."
+  },
+  "cases": [
+    {
+      "domain": "compute",
+      "url": "https://www.ithome.com/1/010/867.htm",
+      "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+      "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+      "body_length": 4605,
+      "run_id": "run-020200ef293d4c8d964af8bea056a3c0",
+      "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay\\compute-ace30ddf-e8e9a4",
+      "state": "completed",
+      "seconds": 526.67,
+      "main_body_complete": true,
+      "all_tasks_complete": true,
+      "candidate_statuses": {
+        "validated": 17,
+        "program_rejected": 3,
+        "semantic_rejected": 5
+      },
+      "statistics": {
+        "independent_fields": 17,
+        "source_candidates": 1,
+        "urls": 1,
+        "validated_candidates": 17,
+        "rejected_candidates": 8,
+        "value_changes": 17,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 0,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0,
+        "new_entities": 3,
+        "main": {
+          "independent_fields": 3,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 3,
+          "rejected_candidates": 1,
+          "value_changes": 3,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "linked": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 0,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "formal_business_writes": 0,
+        "formal_provenance_writes": 0,
+        "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+      },
+      "tasks": [
+        {
+          "domain": "compute",
+          "scope": "main",
+          "state": "completed",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 4605
+              }
+            ],
+            "failed": [],
+            "body_length": 4605,
+            "complete": true
+          }
+        },
+        {
+          "domain": "identity",
+          "scope": "identity:2cde28fb6ef69258adcb9304ecc0f8ed4bc2ecd66ae2fee7a0d95dc766a55da3",
+          "state": "completed",
+          "identity_dependency": true,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 4605
+              }
+            ],
+            "failed": [],
+            "body_length": 4605,
+            "complete": true
+          }
+        },
+        {
+          "domain": "identity",
+          "scope": "identity:5fb279b9bf04c06bd3ba05b93d61820b1a89977058a1ec8ce06ae6bb1ae7143b",
+          "state": "completed",
+          "identity_dependency": true,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 4605
+              }
+            ],
+            "failed": [],
+            "body_length": 4605,
+            "complete": true
+          }
+        },
+        {
+          "domain": "identity",
+          "scope": "identity:13ffc3c181363fb69d87c6ccdf578a3be881b488d1769823500d41f040294a8a",
+          "state": "completed",
+          "identity_dependency": true,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 4605
+              }
+            ],
+            "failed": [],
+            "body_length": 4605,
+            "complete": true
+          }
+        }
+      ],
+      "source_db_hash_unchanged": true,
+      "frozen_baseline_hash_unchanged": true,
+      "empty_baseline_table_rows_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0,
+        "link_library": 0,
+        "source_registry": 0,
+        "benchmark_workbook_rows": 0,
+        "source_discovery_edges": 0,
+        "deployment_guides": 0,
+        "update_runs": 0,
+        "update_run_events": 0,
+        "source_monitor_state": 0,
+        "source_checks": 0,
+        "source_diffs": 0,
+        "source_auto_applies": 0,
+        "data_agent_jobs": 0,
+        "parse_ledger": 0,
+        "extraction_candidates": 0,
+        "candidate_baselines": 0,
+        "skill_inbox": 0,
+        "entity_aliases": 0,
+        "candidate_publications": 0
+      },
+      "exceptions": [],
+      "call_counts": [
+        {
+          "phase": "extract",
+          "model": "kimi-k2.6",
+          "status": "completed",
+          "count": 4
+        },
+        {
+          "phase": "review",
+          "model": "kimi-k3",
+          "status": "completed",
+          "count": 22
+        }
+      ],
+      "extract_ranges": [
+        {
+          "start": 0,
+          "end": 4605,
+          "status": "completed",
+          "fact_count": 4
+        },
+        {
+          "start": 0,
+          "end": 4605,
+          "status": "completed",
+          "fact_count": 8
+        },
+        {
+          "start": 0,
+          "end": 4605,
+          "status": "completed",
+          "fact_count": 6
+        },
+        {
+          "start": 0,
+          "end": 4605,
+          "status": "completed",
+          "fact_count": 7
+        }
+      ]
+    },
+    {
+      "domain": "identity",
+      "url": "https://wallstreetcn.com/articles/3760377",
+      "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+      "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+      "body_length": 26977,
+      "run_id": "run-c7551f963538401d85f7a67b3a7735dd",
+      "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay\\identity-d335a681-a7a58e",
+      "state": "partial",
+      "seconds": 20.3,
+      "main_body_complete": false,
+      "all_tasks_complete": false,
+      "candidate_statuses": {},
+      "statistics": {
+        "independent_fields": 0,
+        "source_candidates": 0,
+        "urls": 0,
+        "validated_candidates": 0,
+        "rejected_candidates": 0,
+        "value_changes": 0,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 0,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0,
+        "new_entities": 0,
+        "main": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 0,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "linked": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 0,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "formal_business_writes": 0,
+        "formal_provenance_writes": 0,
+        "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+      },
+      "tasks": [
+        {
+          "domain": "identity",
+          "scope": "main",
+          "state": "running",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [],
+            "failed": [
+              {
+                "start": 0,
+                "end": 26977
+              }
+            ],
+            "body_length": 26977,
+            "complete": false
+          }
+        }
+      ],
+      "source_db_hash_unchanged": true,
+      "frozen_baseline_hash_unchanged": true,
+      "empty_baseline_table_rows_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0,
+        "link_library": 0,
+        "source_registry": 0,
+        "benchmark_workbook_rows": 0,
+        "source_discovery_edges": 0,
+        "deployment_guides": 0,
+        "update_runs": 0,
+        "update_run_events": 0,
+        "source_monitor_state": 0,
+        "source_checks": 0,
+        "source_diffs": 0,
+        "source_auto_applies": 0,
+        "data_agent_jobs": 0,
+        "parse_ledger": 0,
+        "extraction_candidates": 0,
+        "candidate_baselines": 0,
+        "skill_inbox": 0,
+        "entity_aliases": 0,
+        "candidate_publications": 0
+      },
+      "exceptions": [],
+      "call_counts": [
+        {
+          "phase": "extract",
+          "model": "kimi-k2.6",
+          "status": "transport_failed",
+          "count": 12
+        }
+      ],
+      "extract_ranges": [
+        {
+          "start": 0,
+          "end": 8000,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 0,
+          "end": 8000,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 0,
+          "end": 8000,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 8000,
+          "end": 15972,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 8000,
+          "end": 15972,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 8000,
+          "end": 15972,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 15972,
+          "end": 23886,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 15972,
+          "end": 23886,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 15972,
+          "end": 23886,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 23886,
+          "end": 26977,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 23886,
+          "end": 26977,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 23886,
+          "end": 26977,
+          "status": "transport_failed",
+          "fact_count": 0
+        }
+      ]
+    },
+    {
+      "domain": "specs",
+      "url": "https://cn.lianliwork.com/news/tpu-v8-liquid-cooling-google-supply-chain",
+      "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+      "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+      "body_length": 5810,
+      "run_id": "run-89d3f92f88234553b61fa87191444410",
+      "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay\\specs-b1254404-486e0e",
+      "state": "partial",
+      "seconds": 4.96,
+      "main_body_complete": false,
+      "all_tasks_complete": false,
+      "candidate_statuses": {},
+      "statistics": {
+        "independent_fields": 0,
+        "source_candidates": 0,
+        "urls": 0,
+        "validated_candidates": 0,
+        "rejected_candidates": 0,
+        "value_changes": 0,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 0,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0,
+        "new_entities": 0,
+        "main": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 0,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "linked": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 0,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "formal_business_writes": 0,
+        "formal_provenance_writes": 0,
+        "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+      },
+      "tasks": [
+        {
+          "domain": "specs",
+          "scope": "main",
+          "state": "running",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [],
+            "failed": [
+              {
+                "start": 0,
+                "end": 5810
+              }
+            ],
+            "body_length": 5810,
+            "complete": false
+          }
+        }
+      ],
+      "source_db_hash_unchanged": true,
+      "frozen_baseline_hash_unchanged": true,
+      "empty_baseline_table_rows_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0,
+        "link_library": 0,
+        "source_registry": 0,
+        "benchmark_workbook_rows": 0,
+        "source_discovery_edges": 0,
+        "deployment_guides": 0,
+        "update_runs": 0,
+        "update_run_events": 0,
+        "source_monitor_state": 0,
+        "source_checks": 0,
+        "source_diffs": 0,
+        "source_auto_applies": 0,
+        "data_agent_jobs": 0,
+        "parse_ledger": 0,
+        "extraction_candidates": 0,
+        "candidate_baselines": 0,
+        "skill_inbox": 0,
+        "entity_aliases": 0,
+        "candidate_publications": 0
+      },
+      "exceptions": [],
+      "call_counts": [
+        {
+          "phase": "extract",
+          "model": "kimi-k2.6",
+          "status": "transport_failed",
+          "count": 3
+        }
+      ],
+      "extract_ranges": [
+        {
+          "start": 0,
+          "end": 5810,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 0,
+          "end": 5810,
+          "status": "transport_failed",
+          "fact_count": 0
+        },
+        {
+          "start": 0,
+          "end": 5810,
+          "status": "transport_failed",
+          "fact_count": 0
+        }
+      ]
+    }
+  ],
+  "provider_block": {
+    "http_status": 429,
+    "error_type": "exceeded_current_quota_error",
+    "message_redacted": "Your credit balance is running low, please recharge immediately to avoid service disruption",
+    "minimal_request_also_failed": true,
+    "retry_after_header": null,
+    "interpretation": "Account credit/quota failure, not empty model facts, page connectivity, or evidence rejection. No further paid calls attempted after confirmation."
+  },
+  "findings": [
+    "Complete 4605-character compute source plus three actual identity tasks processed successfully without injected responses.",
+    "Three main compute facts bind to three verified test entities: Siyuan 370 chip, ZhiKai 100 chip and S60 board SKU. Empty baseline means these are not claims of new discovery in the real database.",
+    "Program guards rejected bandwidth as compute, an English production-status code and a fabricated numeric raw released value.",
+    "K3 rejected unsupported NPU type, status used as a release date, company market copied to SKU, generation copied to tier, and inferred released status.",
+    "K3 still accepted unsupported S60 ASIC classification. Review model change alone is insufficient for dependable chip-type evidence.",
+    "Remaining four identity chunks and one specs chunk could not run due account quota; their zero candidates are execution failures, not healthy empty facts.",
+    "No natural needs_identity verdict occurred in the completed body. This replay confirms common identity dependency binding, but provides no new live test of typed waiting recovery.",
+    "Identity dependency extraction still produces full identity field sets and reviews each candidate; first body required 26 inference calls and 526.67 seconds.",
+    "Frozen identity Skill still requires datacenter use for consumer GPUs, conflicting with the user-approved allowance for consumer cards usable for training. Rule was not changed in this controlled replay."
+  ],
+  "next_steps": [
+    "Restore Moonshot credit or authorized credentials, then append new isolated attempts for the two incomplete bodies using --retry-blocked; preserve all failed artifacts and do not rerun completed compute body.",
+    "Use S60 ASIC as a fixed negative regression before changing extraction/review rules; require type-specific source evidence and distinguish card form from underlying chip architecture.",
+    "After full body coverage is available, classify truly empty chunks and check evidence/field-format rejections before assessing overall effectiveness.",
+    "Evaluate explicit program checks for date-like identity fields and lighter common identity dependency fields; do not relax source evidence or model quotas merely to increase acceptance."
+  ],
+  "limitations": [
+    "Not six-domain internet end-to-end acceptance. Two of three bodies remain unexecuted.",
+    "Completed case used an empty isolated baseline, not the business database. All baseline row counts remained zero and source/frozen file hashes unchanged.",
+    "New false-accept finding is recorded without editing historical model output or business implementation."
+  ],
+  "artifacts": {
+    "local_summary": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay\\summary.json",
+    "driver": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\replay-complete-saved-bodies.py",
+    "driver_sha256": "b3b7e3c03b0b2127d43bd8d4c3b73ec4b037b869774b699f655afbfac186edf3",
+    "saved_archive_sha256": "91faea72e3b0501d16ec1a521deb23488a2e8b9445764a78286706ffedadb08e"
+  },
+  "verification": {
+    "all_original_snapshot_bytes_hash_verified": true,
+    "source_and_frozen_baseline_unchanged_all_three_cases": true,
+    "empty_baseline_tables_still_empty_all_three_cases": true,
+    "report_json_parse": "passed",
+    "application_source_edits_this_round": false
+  }
+}

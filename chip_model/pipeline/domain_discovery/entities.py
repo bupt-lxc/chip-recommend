@@ -81,7 +81,7 @@ def candidate_entity_hint(candidate: dict) -> dict:
 
 class EntityResolver:
     KEY = 'domain_entities.v1'
-    POLICY_VERSION = 2
+    POLICY_VERSION = 3
 
     def __init__(self, store, run_id, generation, *, verified_vendor_aliases=None):
         self.store, self.run_id, self.generation = store, run_id, generation
@@ -283,6 +283,7 @@ class EntityResolver:
 
     def resolve_entity(self, hint):
         """Only registered identity-domain model proof can release this dependency."""
+        self._refresh_model_review_conflicts()
         preliminary = self._match(hint)
         key = preliminary['canonical_key']
         if key is None:
@@ -350,6 +351,64 @@ class EntityResolver:
                     record.update(status='ambiguous',reason='baseline_entity_kind_ambiguous',
                                   baseline_row_id=row_id,possible_matches=[row_id])
 
+    def _model_review_conflicts(self, hint):
+        """A negative SKU-name review cannot be bypassed by an accepted vendor.
+
+        Only completed, program-valid identity reviews for the exact same
+        canonical variant count. Missing dates or another SKU do not veto it.
+        """
+        _, key = self._hint(hint)
+        state = self.store.metadata(self.run_id, ModelService.KEY) or {}
+        conflicts = []
+        for identifier, row in state.get('candidates', {}).items():
+            if row.get('domain_id') != 'identity' or row.get('status') not in {'semantic_rejected', 'unresolved'}:
+                continue
+            version = row['versions'][-1]
+            candidate = version['candidate']
+            if (candidate.get('target_table') != 'chips' or candidate.get('field_name') != 'chip_model'
+                    or version.get('program', {}).get('status') != 'program_valid'):
+                continue
+            try:
+                _, other_key = self._hint(candidate_entity_hint(candidate))
+            except (ValueError, KeyError, TypeError):
+                continue
+            if key != other_key:
+                continue
+            review = next((r for r in row['reviews'] if r['version'] == version['version']
+                           and r['verdict'] in {'reject', 'unresolved'}), None)
+            if review is None:
+                continue
+            logical = 'review-' + _hash(_json([identifier, version['version']]))
+            call = next((c for c in state.get('calls', []) if c['logical_id'] == logical
+                         and c['phase'] == 'review' and c['status'] == 'completed'
+                         and c.get('response', {}).get('verdict') == review['verdict']), None)
+            if call is not None:
+                conflicts.append({'logical_candidate_id': identifier, 'version': version['version'],
+                                  'verdict': review['verdict'], 'execution_id': call['execution_id']})
+        return conflicts
+
+    def _refresh_model_review_conflicts(self):
+        saved = self.snapshot()['entities']
+        conflicts = {identifier: self._model_review_conflicts(record['hint'])
+                     for identifier, record in saved.items() if record['status'] in {'new', 'existing'}}
+        conflicts = {identifier: proof for identifier, proof in conflicts.items() if proof}
+        if not conflicts:
+            return
+        def save(state):
+            changes = []
+            for identifier, proof in conflicts.items():
+                record = state['entities'][identifier]
+                record.update(status='ambiguous', reason='identity_model_review_conflict', identity_conflicts=proof)
+                record['decision_version'] = record.get('decision_version', 0) + 1
+                decision = {name: record[name] for name in ('entity_id', 'canonical_key', 'entity_kind',
+                            'status', 'reason', 'identity_proofs', 'decision_version', 'identity_conflicts')}
+                changes.append(decision)
+            state['entity_decisions'].extend(changes)
+            state['new_entity_count'] = sum(r['status'] == 'new' for r in state['entities'].values())
+            return state, None, {'kind': 'identity_resolution', 'stage': 'comparing', 'domain_id': 'identity',
+                                  'entity_decisions': changes}
+        self._update(save)
+
     def register_identity(self, candidate_id):
         row, candidate, proof = self._proof(candidate_id)
         if candidate['domain_id'] != 'identity' or candidate['target_table'] != 'chips':
@@ -364,6 +423,9 @@ class EntityResolver:
         if candidate['scope'] in {'server','cluster'}:
             kind = candidate['scope']
         entity = self._match(hint, verified=True, entity_type=kind)
+        conflicts = self._model_review_conflicts(hint)
+        if conflicts and entity['status'] in {'new', 'existing'}:
+            entity.update(status='ambiguous', reason='identity_model_review_conflict', identity_conflicts=conflicts)
         if hint.get('entity_kind_scope_conflict'):
             entity['entity_id'] = 'ambiguous-kind-' + _hash(candidate_id)[:24]
         entity['identity_proofs'] = [proof]
@@ -419,7 +481,7 @@ class EntityResolver:
         rows = self._rows(table)
         dimensions = dict(key)
         if table in {'chip_model_benchmarks','chip_model_compatibility'}:
-            dimensions.update({name:value for name,value in candidate['conditions'].items()
+            dimensions.update({name:value for name,value in candidate.get('conditions',{}).items()
                                if name not in {'metric_class','verification_kind'}})
         # Semantic comparison dimensions are restricted by the frozen field
         # ownership, not every metadata/metric column in a historical record.
@@ -498,7 +560,7 @@ class EntityResolver:
         missing = []
         key = candidate['entity_key']
         generic_chip = (candidate['domain_id'] == 'deployment' and key.get('chip_model') in {'generic','not_applicable'}
-                        and candidate['conditions'].get('chip_applicability') == key['chip_model'])
+                        and candidate.get('conditions',{}).get('chip_applicability') == key['chip_model'])
         if generic_chip:
             entity = {'status':'not_applicable', 'entity_id':None, 'canonical_key':None,
                       'reason':'explicit_generic_guide_applicability'}

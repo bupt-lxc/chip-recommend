@@ -4,7 +4,7 @@
 
 峰值必须同一 SKU、同一精度/计算单元、同一 Dense/Sparse 与 TFLOPS/TOPS 口径。逐字保留表头/行/脚注；不跨表列拼接精度和值，不把整数 TOPS 改写浮点 TFLOPS。稀疏/稠密、计算单元类型及算法基准无法无损存入现有格式时，完整保留在候选元数据并标明，不能合并覆盖。
 
-现有 precision_perf 可兼容字符串如 BF16=1980TF,FP8=3960TF,INT8=3960TOPS；这只是格式例子，不是证据或默认值。每项单独保留 source_precision、source_unit、source_value、dense_or_sparse、calculation_basis。计算单元数量保留类型，SM、Tensor Core、RT Core 与普通着色单元不可互换。
+现有 precision_perf 可兼容字符串如 BF16=1980TF,FP8=3960TF,INT8=3960TOPS；这只是格式例子，不是证据或默认值。每项原始精度、原始单位、原始数值、稀疏口径、计算依据分别使用候选 Schema 的 conversion.precision、conversion.source_unit、raw_value、conversion.dense_or_sparse、conversion.calculation_basis；不要创建 source_precision/source_value 属性。precision_perf 的 normalized_value 可按业务格式保存字符串，但 raw_value 保留来源明示的 JSON 数字，单位单独保存，并用 conversion.description 说明转换。计算单元数量保留类型，SM、Tensor Core、RT Core 与普通着色单元不可互换。
 
 正例：X1 单卡表明确“FP16 Dense 100 TFLOPS; FP16 Sparse 200 TFLOPS”可形成两个不同口径候选并保留表头，不能把 200 直接覆盖 Dense；“INT8 300 TOPS”只支持明示 INT8 项。以上为假设例子。
 

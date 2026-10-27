@@ -1,0 +1,838 @@
+{
+  "test_date": "2026-10-22",
+  "reported_date": "2026-10-26",
+  "conclusion": "search_and_fetch_work_end_to_end_acceptance_not_passed",
+  "configuration": {
+    "domains": [
+      "specs",
+      "compatibility"
+    ],
+    "chip_hint": null,
+    "search_provider": "tavily",
+    "model": "qwen3.8-flash",
+    "rule_bundle_sha256": "f7bede8fa8c068750bfd433424926822a39393198dc72670f4a558c718ded2cd",
+    "total_deadline_seconds": null,
+    "test_only_deadline_override": true,
+    "backend_model_request_timeout_seconds": 120,
+    "page_request_timeout_seconds": 20,
+    "results_per_query": 1,
+    "main_candidate_limit_per_domain": 4,
+    "page_max_attempts": 1,
+    "production_code_changed_for_test": false,
+    "image": "chip-recommend:hermes-acceptance-final7",
+    "latest_source_loaded_via_readonly_bind": true
+  },
+  "cases": [
+    {
+      "domain": "specs",
+      "run_id": "run-e108e9fdd9db44eb85e04b86abde1b2a",
+      "seconds": 3061.24,
+      "status": "failed",
+      "error": "model input conflict: review/execution_binding",
+      "query_count": 10,
+      "query_success_count": 10,
+      "visited": 4,
+      "fetched_successfully": 4,
+      "selected": 4,
+      "queries": [
+        {
+          "language": "en",
+          "page_type": "datasheet",
+          "query_id": "s01",
+          "reason": "官方数据手册是单卡显存容量/带宽/板卡功耗的首选SKU口径来源",
+          "text": "NVIDIA H100 SXM5 datasheet memory bandwidth TDP"
+        },
+        {
+          "language": "en",
+          "page_type": "spec_table",
+          "query_id": "s02",
+          "reason": "官方规格表提供MI300X的HBM容量与带宽等硬件互联字段",
+          "text": "AMD Instinct MI300X specifications HBM3 capacity"
+        },
+        {
+          "language": "zh",
+          "page_type": "spec_table",
+          "query_id": "s03",
+          "reason": "中文厂商规格页可覆盖昇腾910B显存与带宽的单芯片口径",
+          "text": "昇腾910B 加速卡 显存 带宽 规格"
+        },
+        {
+          "language": "zh",
+          "page_type": "spec_table",
+          "query_id": "s04",
+          "reason": "寒武纪加速卡参数表含显存类型、带宽与板卡功耗",
+          "text": "寒武纪 思元590 加速卡 参数 规格表"
+        },
+        {
+          "language": "en",
+          "page_type": "product_page",
+          "query_id": "s05",
+          "reason": "产品页规格区提供Gaudi 3的HBM与功耗信息",
+          "text": "Intel Gaudi 3 ML accelerator memory bandwidth power"
+        },
+        {
+          "language": "en",
+          "page_type": "arch_doc",
+          "query_id": "s06",
+          "reason": "架构文档给出TPU代际芯片的内存容量与互联规格",
+          "text": "Google TPU v5p chip memory capacity architecture"
+        },
+        {
+          "language": "zh",
+          "page_type": "spec_table",
+          "query_id": "s07",
+          "reason": "天垓系列规格页含显存容量/带宽/功耗等硬件字段",
+          "text": "天数智芯 天垓 GPU 显存 功耗 规格"
+        },
+        {
+          "language": "en",
+          "page_type": "arch_doc",
+          "query_id": "s08",
+          "reason": "架构资料可覆盖Trainium芯粒制程与片上SRAM",
+          "text": "AWS Trainium2 chiplet process node SRAM"
+        },
+        {
+          "language": "en",
+          "page_type": "product_page",
+          "query_id": "s09",
+          "reason": "厂商产品页宣称的功耗与存储规格属本域字段",
+          "text": "Qualcomm Cloud AI 100 Ultra power TDP specifications"
+        },
+        {
+          "language": "zh",
+          "page_type": "spec_table",
+          "query_id": "s10",
+          "reason": "国产DCU参数页覆盖显存带宽与卡功耗口径",
+          "text": "海光 DCU Z100 显存 带宽 功耗 参数"
+        }
+      ],
+      "pages": [
+        {
+          "url": "https://www.cnblogs.com/fengjian2016/p/18767859",
+          "final_url": "https://www.cnblogs.com/fengjian2016/p/18767859",
+          "status": "success",
+          "diagnostic": null,
+          "body_length": 4702,
+          "snapshot_id": "0b009a15d1096352ce1a3aa960d3ae9e486002f9313027a5c92a45bd45dd328b"
+        },
+        {
+          "url": "https://www.denovocn.com/content/%E5%AF%92%E6%AD%A6%E7%BA%AA%E7%9A%84%E5%BE%81%E7%A8%8B%EF%BC%9A%E5%AE%83%E7%9A%84%E2%80%9C%E9%87%8D%E5%89%91%E2%80%9D%E8%83%BD%E5%90%A6%E5%8A%88%E5%BC%80ai%E8%8A%AF%E7%89%87%E7%9A%84%E5%B7%A8%E5%A4%B4%E5%9B%B4%E5%9F%8E%EF%BC%9F",
+          "final_url": "https://www.denovocn.com/content/%E5%AF%92%E6%AD%A6%E7%BA%AA%E7%9A%84%E5%BE%81%E7%A8%8B%EF%BC%9A%E5%AE%83%E7%9A%84%E2%80%9C%E9%87%8D%E5%89%91%E2%80%9D%E8%83%BD%E5%90%A6%E5%8A%88%E5%BC%80ai%E8%8A%AF%E7%89%87%E7%9A%84%E5%B7%A8%E5%A4%B4%E5%9B%B4%E5%9F%8E%EF%BC%9F",
+          "status": "success",
+          "diagnostic": null,
+          "body_length": 10151,
+          "snapshot_id": "543a0d0bae6421f0c92fe3832bd574c1766c2cf70f4052238887f00fbad5d89d"
+        },
+        {
+          "url": "https://www.spheron.network/blog/nvidia-h100-specs",
+          "final_url": "https://www.spheron.network/blog/nvidia-h100-specs/",
+          "status": "success",
+          "diagnostic": null,
+          "body_length": 20316,
+          "snapshot_id": "41eb83d59423063ea34a0e3043eb48c471dc7e1710235f55177fd239653cbd46"
+        },
+        {
+          "url": "https://www.amd.com/en/newsroom/press-releases/2023-12-6-amd-delivers-leadership-portfolio-of-data-center-a.html",
+          "final_url": "https://www.amd.com/en/newsroom/press-releases/2023-12-6-amd-delivers-leadership-portfolio-of-data-center-a.html",
+          "status": "success",
+          "diagnostic": null,
+          "body_length": 19586,
+          "snapshot_id": "e00f813fddc57247d7654abf5089b20642427218dafa67ef9527acefb9458215"
+        }
+      ],
+      "backend_call_count": 92,
+      "backend_call_statuses": {
+        "completed": 80,
+        "transport_failed": 9,
+        "parser_rejected": 3
+      },
+      "hermes_api_calls": 9,
+      "raw_fact_count": 138,
+      "intermediate_candidate_statuses": {
+        "unresolved": 34,
+        "program_rejected": 31,
+        "validated": 30,
+        "semantic_rejected": 7
+      },
+      "final_statistics": null,
+      "unfinished_task_ids": [
+        "97ddf086aa46",
+        "26ee7ee7545d",
+        "e21c621aba3946c7a1dbf4d6cf0ed321",
+        "625acf22f8fb4fc8b68889f7a9da72be",
+        "2f0ff137bf5449a493636200dc10b990",
+        "6c76d1f1f8f14a1198c8780ef5545274",
+        "1daf445a21ef4db2a5368b0da33e3982",
+        "59a84e872165418b8aabb8f298037c31"
+      ],
+      "reason_counts": {
+        "sku_value_binding_unresolved": 14,
+        "memory decimal/binary basis must be preserved": 6,
+        "raw numeric value is not continuously present in evidence": 8,
+        "duplicate_semantic_inputs_changed": 11,
+        "evidence must be an exact continuous snapshot quote": 10,
+        "conflicting_extraction_values": 4,
+        "duplicate_without_review_proof": 4,
+        "unsupported or incorrect unit conversion": 1,
+        "numeric normalized value required": 2,
+        "source unit is not present in evidence/context": 2,
+        "revision_changes_entity_scope": 1,
+        "evidence snapshot/hash mismatch": 1,
+        "normalized unit does not match domain contract": 1
+      },
+      "main_accepted_candidates_before_final_identity_and_comparison": [
+        {
+          "entity": {
+            "chip_model": "GH100",
+            "vendor": "NVIDIA"
+          },
+          "table": "chips",
+          "field": "transistors_b",
+          "value": 80
+        },
+        {
+          "entity": {
+            "chip_model": "Instinct MI300A",
+            "vendor": "AMD"
+          },
+          "table": "chips",
+          "field": "architecture",
+          "value": "CDNA 3"
+        },
+        {
+          "entity": {
+            "chip_model": "H100 PCIe",
+            "vendor": "NVIDIA"
+          },
+          "table": "chips",
+          "field": "bus_interface",
+          "value": "PCIe x16"
+        },
+        {
+          "entity": {
+            "chip_model": "H100 SXM5",
+            "vendor": "NVIDIA"
+          },
+          "table": "chips",
+          "field": "interconnect_tech",
+          "value": "NVLink 4"
+        },
+        {
+          "entity": {
+            "chip_model": "Instinct MI300X",
+            "vendor": "AMD"
+          },
+          "table": "chips",
+          "field": "vram_type",
+          "value": "HBM3"
+        },
+        {
+          "entity": {
+            "chip_model": "H100",
+            "vendor": "NVIDIA"
+          },
+          "table": "chips",
+          "field": "architecture",
+          "value": "Hopper GH100"
+        },
+        {
+          "entity": {
+            "chip_model": "Instinct MI300A",
+            "vendor": "AMD"
+          },
+          "table": "chips",
+          "field": "vram_type",
+          "value": "HBM3"
+        },
+        {
+          "entity": {
+            "chip_model": "H100 PCIe",
+            "vendor": "NVIDIA"
+          },
+          "table": "chips",
+          "field": "vram_type",
+          "value": "HBM2e"
+        },
+        {
+          "entity": {
+            "chip_model": "H100 SXM5",
+            "vendor": "NVIDIA"
+          },
+          "table": "chips",
+          "field": "form_factor",
+          "value": "SXM5 board"
+        },
+        {
+          "entity": {
+            "chip_model": "Instinct MI300X",
+            "vendor": "AMD"
+          },
+          "table": "chips",
+          "field": "architecture",
+          "value": "CDNA 3"
+        }
+      ]
+    },
+    {
+      "domain": "compatibility",
+      "run_id": "run-fc16d800ea8c408b8e95ac2a8fa40241",
+      "seconds": 706.19,
+      "status": "partial",
+      "error": null,
+      "query_count": 10,
+      "query_success_count": 10,
+      "visited": 4,
+      "fetched_successfully": 3,
+      "selected": 3,
+      "queries": [
+        {
+          "language": "en",
+          "page_type": "support_matrix",
+          "query_id": "q01",
+          "reason": "开放发现芯片软件栈支持矩阵类官方页面，覆盖 compatible_frameworks 与 framework 版本证据",
+          "text": "AI accelerator PyTorch support matrix"
+        },
+        {
+          "language": "zh",
+          "page_type": "vendor_software_doc",
+          "query_id": "q02",
+          "reason": "中文厂商软件生态与模型适配文档，寻找明确SKU+框架+版本的兼容声明",
+          "text": "华为昇腾 大模型 适配 框架 版本"
+        },
+        {
+          "language": "en",
+          "page_type": "compatibility_doc",
+          "query_id": "q03",
+          "reason": "寻找芯片×具体模型的已验证关系页面（训练框架）",
+          "text": "Gaudi TensorFlow 2 supported models"
+        },
+        {
+          "language": "zh",
+          "page_type": "vendor_software_doc",
+          "query_id": "q04",
+          "reason": "中文AI芯片软件栈文档，覆盖 software_stack 声明",
+          "text": "寒武纪 思元 软件栈 框架支持"
+        },
+        {
+          "language": "en",
+          "page_type": "framework_doc",
+          "query_id": "q05",
+          "reason": "推理引擎与芯片对大模型的支持关系，framework字段证据",
+          "text": "Llama model inference chip ONNX Runtime"
+        },
+        {
+          "language": "zh",
+          "page_type": "vendor_software_doc",
+          "query_id": "q06",
+          "reason": "国产GPU软件栈与主流框架兼容性声明页面",
+          "text": "摩尔线程 MUSA PyTorch 兼容"
+        },
+        {
+          "language": "en",
+          "page_type": "datasheet",
+          "query_id": "q07",
+          "reason": "寻找明确精度（BF16/INT8）支持的芯片文档，覆盖 precision",
+          "text": "Cloud AI 100 precision BF16 supported"
+        },
+        {
+          "language": "zh",
+          "page_type": "model_zoo",
+          "query_id": "q08",
+          "reason": "中文训练芯片模型支持列表，寻找芯片×模型关系",
+          "text": "燧原科技 训练卡 模型 支持"
+        },
+        {
+          "language": "en",
+          "page_type": "compatibility_report",
+          "query_id": "q09",
+          "reason": "新兴芯片厂商的开源模型兼容性验证页面",
+          "text": "Tenstorrent Galaxy llama compatibility"
+        },
+        {
+          "language": "zh",
+          "page_type": "community_report",
+          "query_id": "q10",
+          "reason": "社区/第三方实测兼容性报告，区分vendor_claimed与verified证据",
+          "text": "AI芯片 兼容性 实测 模型 报告"
+        }
+      ],
+      "pages": [
+        {
+          "url": "https://www.eet-china.com/mp/a37293.html",
+          "final_url": null,
+          "status": "failed",
+          "diagnostic": {
+            "attempt": 0,
+            "error": "HTTPSConnectionPool(host='www.eet-china.com', port=443): Read timed out. (read timeout=20.0)",
+            "error_category": "network_error",
+            "final_url": null,
+            "http_status": null,
+            "recoverable": true,
+            "requested_url": "https://www.eet-china.com/mp/a37293.html",
+            "stage": "previewing"
+          },
+          "body_length": null,
+          "snapshot_id": null
+        },
+        {
+          "url": "https://github.com/pytorch/pytorch/blob/main/RELEASE.md",
+          "final_url": "https://github.com/pytorch/pytorch/blob/main/RELEASE.md",
+          "status": "success",
+          "diagnostic": null,
+          "body_length": 29268,
+          "snapshot_id": "20816908e4cf86d806dca5c84edc3916d951b5508619332d28fef127a29626b5"
+        },
+        {
+          "url": "https://ai.gitee.com/docs/compute/clusters_gpu/ascend_gpu",
+          "final_url": "https://ai.gitee.com/docs/compute/clusters_gpu/ascend_gpu",
+          "status": "success",
+          "diagnostic": null,
+          "body_length": 5631,
+          "snapshot_id": "476a161da3de78a06327959b4485f663b29ff89ab5a6cd6ad982beea53546c32"
+        },
+        {
+          "url": "https://docs.habana.ai/en/latest/Release_Notes/Release%20Notes%20v1.14.0.html",
+          "final_url": "https://docs.habana.ai/en/latest/Release_Notes/Release%20Notes%20v1.14.0.html",
+          "status": "success",
+          "diagnostic": null,
+          "body_length": 6489,
+          "snapshot_id": "bc58644bdc98dd2c935a747707491657508d0b69d8bd58d7d2fb52b311386292"
+        }
+      ],
+      "backend_call_count": 33,
+      "backend_call_statuses": {
+        "completed": 29,
+        "parser_rejected": 4
+      },
+      "hermes_api_calls": 7,
+      "raw_fact_count": 23,
+      "intermediate_candidate_statuses": {
+        "validated": 12,
+        "semantic_rejected": 3,
+        "unresolved": 4,
+        "program_rejected": 1
+      },
+      "final_statistics": {
+        "independent_fields": 9,
+        "source_candidates": 2,
+        "urls": 2,
+        "validated_candidates": 9,
+        "rejected_candidates": 6,
+        "value_changes": 9,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 1,
+        "dependency_unresolved_candidates": 6,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0,
+        "new_entities": 2,
+        "main": {
+          "independent_fields": 3,
+          "source_candidates": 2,
+          "urls": 2,
+          "validated_candidates": 3,
+          "rejected_candidates": 4,
+          "value_changes": 3,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 4,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "linked": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 1,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 1,
+          "dependency_unresolved_candidates": 2,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "formal_business_writes": 0,
+        "formal_provenance_writes": 0,
+        "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+      },
+      "unfinished_task_ids": [],
+      "reason_counts": {
+        "incomplete_evidence": 1,
+        "revision_limit": 1,
+        "conflicting_extraction_values": 2,
+        "evidence must be an exact continuous snapshot quote": 1
+      },
+      "main_accepted_candidates_before_final_identity_and_comparison": [
+        {
+          "entity": {
+            "chip_model": "Ascend 910B",
+            "model_id": "DeepSeek-V3"
+          },
+          "table": "chip_model_compatibility",
+          "field": "compat_status",
+          "value": "vendor_claimed"
+        },
+        {
+          "entity": {
+            "chip_model": "Gaudi 2",
+            "vendor": "Intel"
+          },
+          "table": "chips",
+          "field": "software_stack",
+          "value": "1.14.0-493"
+        },
+        {
+          "entity": {
+            "chip_model": "Ascend 910B",
+            "model_id": "Llama 3.1"
+          },
+          "table": "chip_model_compatibility",
+          "field": "compat_status",
+          "value": "vendor_claimed"
+        },
+        {
+          "entity": {
+            "chip_model": "Ascend 910B",
+            "vendor": "Huawei"
+          },
+          "table": "chips",
+          "field": "software_stack",
+          "value": "CANN"
+        },
+        {
+          "entity": {
+            "chip_model": "Gaudi 2",
+            "vendor": "Intel"
+          },
+          "table": "chips",
+          "field": "sw_stack",
+          "value": "Ubuntu 22.04 and TencentOS support"
+        }
+      ]
+    }
+  ],
+  "binding_conflicts": [
+    {
+      "code": "model_input_conflict",
+      "domain_id": "identity",
+      "expected_sha256": "cda06e879ed4eb4db97e95dcd693a10915bbd62b9702e368ca3f14483e7ef29d",
+      "input_kind": "execution_binding",
+      "logical_id": "fact-107ba7ce623868e3044dcfb6086d5494ca224e8788aa1eeb14312d9591a5064c",
+      "phase": "review",
+      "requested_sha256": "ab4fddb8271066a05037ec14a6653d8c9469dca159e5bb96dd25570e51972e11",
+      "candidate_entity": {
+        "chip_model": "H100",
+        "vendor": "NVIDIA"
+      },
+      "candidate_field": "vendor",
+      "binding_diff": {
+        "identity_context": {
+          "before": {},
+          "after": {
+            "dependency_entity_hint": {
+              "full_sku": "H100",
+              "vendor": "NVIDIA"
+            },
+            "hints_verified": false
+          }
+        }
+      }
+    }
+  ],
+  "entity_count_audit": {
+    "reported_temporary_new_entities_compatibility": 2,
+    "unverified_as_real_new_discoveries": true,
+    "duplicate_alias": {
+      "model_entity": {
+        "vendor": "Huawei",
+        "chip_model": "Ascend 910B"
+      },
+      "existing_baseline_rows": [
+        [
+          79,
+          "Huawei",
+          "昇腾910B"
+        ]
+      ],
+      "finding": "Existing Chinese SKU was not matched to the English alias; this temporary entity is not a new chip"
+    },
+    "gaudi2_baseline_lookup": {
+      "model_entity": {
+        "vendor": "Intel",
+        "chip_model": "Gaudi 2"
+      },
+      "baseline_gaudi_rows": [
+        [
+          4,
+          "Intel",
+          "Gaudi 3 128GB"
+        ],
+        [
+          55,
+          "Intel",
+          "Gaudi 4"
+        ]
+      ],
+      "exact_gaudi2_match_found": false
+    }
+  },
+  "sdk_log_sample": [
+    {
+      "home": "aishperf-hermes-ui8at4kn",
+      "calls": [
+        {
+          "api_call": 1,
+          "input_tokens": 53853,
+          "output_tokens": 3895,
+          "total_tokens": 57748,
+          "latency_seconds": 93.2
+        },
+        {
+          "api_call": 2,
+          "input_tokens": 59898,
+          "output_tokens": 773,
+          "total_tokens": 60671,
+          "latency_seconds": 16.0
+        },
+        {
+          "api_call": 3,
+          "input_tokens": 63585,
+          "output_tokens": 462,
+          "total_tokens": 64047,
+          "latency_seconds": 12.3
+        },
+        {
+          "api_call": 4,
+          "input_tokens": 67478,
+          "output_tokens": 392,
+          "total_tokens": 67870,
+          "latency_seconds": 13.0
+        },
+        {
+          "api_call": 5,
+          "input_tokens": 69440,
+          "output_tokens": 1102,
+          "total_tokens": 70542,
+          "latency_seconds": 23.3
+        },
+        {
+          "api_call": 6,
+          "input_tokens": 73349,
+          "output_tokens": 3528,
+          "total_tokens": 76877,
+          "latency_seconds": 72.2
+        },
+        {
+          "api_call": 7,
+          "input_tokens": 74781,
+          "output_tokens": 1349,
+          "total_tokens": 76130,
+          "latency_seconds": 27.8
+        },
+        {
+          "api_call": 8,
+          "input_tokens": 76204,
+          "output_tokens": 332,
+          "total_tokens": 76536,
+          "latency_seconds": 7.8
+        },
+        {
+          "api_call": 9,
+          "input_tokens": 76720,
+          "output_tokens": 2723,
+          "total_tokens": 79443,
+          "latency_seconds": 54.5
+        }
+      ],
+      "max_input_tokens": 76720
+    }
+  ],
+  "offline_verification": {
+    "verified_at_date": "2026-10-26",
+    "model_calls": 0,
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "backend_requests_verified": 125,
+    "snapshot_hashes_verified": 7,
+    "request_reconstruction_mismatches": 0,
+    "cases": [
+      {
+        "domain": "specs",
+        "run_id": "run-e108e9fdd9db44eb85e04b86abde1b2a",
+        "backend_requests_verified": 92,
+        "model_call_statuses": {
+          "completed": 80,
+          "transport_failed": 9,
+          "parser_rejected": 3
+        },
+        "frozen_bundle_sha256": "f7bede8fa8c068750bfd433424926822a39393198dc72670f4a558c718ded2cd",
+        "snapshot_hashes_verified": 4,
+        "candidate_statuses": {
+          "unresolved": 34,
+          "program_rejected": 31,
+          "validated": 30,
+          "semantic_rejected": 7
+        },
+        "comparison_metadata_exists": false,
+        "new_entity_candidates": [
+          {
+            "entity_id": "tmp-chip-f326b745a350e474f32cba23",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "h100",
+              "vendor": "nvidia"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-ff8770222f9d40db72a1a7d0",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "mi300x",
+              "vendor": "amd"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-20756e6a4987ae2da9e2e4e2",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "instinct mi300x",
+              "vendor": "amd"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-35cc58c379b2d6a21588084b",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "instinct mi300a",
+              "vendor": "amd"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-d5fdff3a00c8b609eb0c7be2",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "ascend 910b",
+              "vendor": "huawei"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-de68053872a2afb8d922aeaf",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "h100 sxm5",
+              "vendor": "nvidia"
+            },
+            "status": "new"
+          }
+        ]
+      },
+      {
+        "domain": "compatibility",
+        "run_id": "run-fc16d800ea8c408b8e95ac2a8fa40241",
+        "backend_requests_verified": 33,
+        "model_call_statuses": {
+          "completed": 29,
+          "parser_rejected": 4
+        },
+        "frozen_bundle_sha256": "f7bede8fa8c068750bfd433424926822a39393198dc72670f4a558c718ded2cd",
+        "snapshot_hashes_verified": 3,
+        "candidate_statuses": {
+          "validated": 12,
+          "semantic_rejected": 3,
+          "unresolved": 4,
+          "program_rejected": 1
+        },
+        "comparison_metadata_exists": true,
+        "new_entity_candidates": [
+          {
+            "entity_id": "tmp-chip-d5fdff3a00c8b609eb0c7be2",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "ascend 910b",
+              "vendor": "huawei"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-c1439bee69f386aa9d328202",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "gaudi 2",
+              "vendor": "intel"
+            },
+            "status": "new"
+          }
+        ]
+      }
+    ],
+    "source_matches_current_worktree": {
+      "chip_model/pipeline/domain_discovery/models.py": true,
+      "chip_model/pipeline/domain_discovery/runtime.py": true,
+      "chip_model/pipeline/domain_discovery/pages.py": true,
+      "chip_model/pipeline/domain_discovery/evidence_binding.py": true
+    },
+    "archive_sha256": "940ab0bcdf311a314f477b7270c83acb460836eab73fb903053dd7dc46648ec4"
+  },
+  "initial_setup_failures": {
+    "cases": 2,
+    "reason": "test package omitted generated .agents/skills tool contract; stopped before any search/model calls",
+    "retained": true,
+    "corrected_by": "adding generated copies to the diagnostic package and using new run request IDs"
+  },
+  "safety": {
+    "formal_business_writes": 0,
+    "formal_provenance_writes": 0,
+    "formal_database_hash_unchanged": true,
+    "production_image_and_start_time_unchanged": true,
+    "isolated_source_db_hash_unchanged": true,
+    "baseline_rows_before": {
+      "chips": 1093,
+      "models": 1370,
+      "chip_model_benchmarks": 3520,
+      "chip_model_compatibility": 1541,
+      "deployment_guides": 46,
+      "field_provenance": 12524
+    },
+    "baseline_rows_after": {
+      "chips": 1093,
+      "models": 1370,
+      "chip_model_benchmarks": 3520,
+      "chip_model_compatibility": 1541,
+      "deployment_guides": 46,
+      "field_provenance": 12524
+    },
+    "publish_or_heartbeat_enabled": false
+  },
+  "priority_followups": [
+    "Coordinate identity dependency contexts and cached review proofs without weakening input binding checks",
+    "Match controlled vendor/model aliases and preserve variant dimensions before counting new entities",
+    "Reduce duplicate Skill phase context; separately evaluate body chunk/output size and model request latency",
+    "Align revision response contracts, source units and snapshot metadata using retained new-page samples"
+  ],
+  "limits": [
+    "20/20 means successful search API responses, not a search relevance/recency accuracy score",
+    "Small queue keeps the earliest four unique results per domain; later hits excluded by the explicit sample budget",
+    "Specification comparison did not run after fatal conflict; its 30 intermediate accepted candidates cannot be counted as final valid updates",
+    "Compatibility has three final main-domain software-stack fields, no final model-specific relation; six additional valid fields belong to identity",
+    "Compatibility temporary-new count includes a demonstrated duplicate; final candidate counts need business-level identity re-audit",
+    "No UI/deployment/publishing acceptance was performed"
+  ],
+  "artifacts": {
+    "remote_root": "/home/ubuntu/utils/open-web-small-20261022",
+    "local_audit": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\live-small-final-audit.json",
+    "local_archive": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\live-small-results-20261022.zip",
+    "archive_sha256": "940ab0bcdf311a314f477b7270c83acb460836eab73fb903053dd7dc46648ec4",
+    "source_sha256": {
+      "chip_model/pipeline/domain_discovery/models.py": "889674b69c04bb745c6b6d68ef5e7f14e1f6a635f82a488488c10e5cd7f3df93",
+      "chip_model/pipeline/domain_discovery/runtime.py": "cdc911bf938014a40c1fe6cdee1e2714b270c2dcc54bfb710f94c2a0b9ea8337",
+      "chip_model/pipeline/domain_discovery/pages.py": "49e1b5e2277f54664a206159b6dbe31cd954b9ae44506c186139e7472c4895b8",
+      "chip_model/pipeline/domain_discovery/evidence_binding.py": "40b399a1a918b469effedfa05c61cf2b0812cdf535262501229119901a47be3e",
+      ".tmp/live-small-worker.py": "ea7ba991a1c7153f7155396e6d7a7ba513aebf8aa6a0bd96cac93ab1469ec6dc"
+    }
+  }
+}

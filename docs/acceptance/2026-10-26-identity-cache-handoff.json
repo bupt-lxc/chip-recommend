@@ -1,0 +1,397 @@
+{
+  "date": "2026-10-26",
+  "scope": "identity task handoff and strictly bound review cache",
+  "change": {
+    "routing_target_only_affects": "extraction and target filtering",
+    "routing_target_must_match": "identity domain and canonical identity task scope",
+    "review_binding_unchanged_except_protocol_version": true,
+    "backend_protocol_version": 8,
+    "old_protocol_requests_reconstructed_without_policy_changes": true,
+    "no_cache_clear_or_revision_quota_reset": true
+  },
+  "tests": [
+    {
+      "label": "model/entity/comparison/identity/linked/rules/contracts regression",
+      "passed": 446,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "artifact": ".tmp/identity-cache-regression.xml",
+      "artifact_sha256": "27bdd75c5ab65694c2c5fa5acd4a1cf75218ae550cbced145c7a2cea2523be2a"
+    },
+    {
+      "label": "runtime identity and recovery regression",
+      "passed": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "artifact": ".tmp/identity-cache-runtime.xml",
+      "artifact_sha256": "6922bd01916578b7a8d19f441ef178ea58681b72931304c56a50a6777ae17df5"
+    },
+    {
+      "label": "direct review context remains strictly bound",
+      "passed": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "artifact": ".tmp/identity-cache-strict-guard.xml",
+      "artifact_sha256": "df4d862d59d656bd58fd790431b631452fe3110136e347f5ac0d352d97737c5a"
+    }
+  ],
+  "unique_automated_tests_passed": 453,
+  "live_model_replay": {
+    "test_date": "2026-10-26",
+    "purpose": "ordinary and dependency identity tasks on the same original complete H100 body",
+    "source_run_id": "run-e108e9fdd9db44eb85e04b86abde1b2a",
+    "snapshot_id": "41eb83d59423063ea34a0e3043eb48c471dc7e1710235f55177fd239653cbd46",
+    "body_hash": "0ffefa687d45d53a65baf507e62fbc2d049dabef7e3c1c3e4852c37b275f9a4c",
+    "body_length": 20316,
+    "run_id": "run-c1bdf0e1d6234c5ebc9570f269b152e7",
+    "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\identity-cache-h100-live",
+    "bundle_sha256": "f7bede8fa8c068750bfd433424926822a39393198dc72670f4a558c718ded2cd",
+    "model": "qwen3.8-flash",
+    "api_timeout_seconds": 120,
+    "total_deadline_seconds": null,
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_writes": 0,
+    "fixture_model_responses": 0,
+    "tasks": [
+      {
+        "task_id": "14b624b2256342ffb7a4acf31a516c26",
+        "scope": "linked",
+        "complete": true,
+        "coverage": {
+          "pending": [],
+          "processed": [
+            {
+              "start": 0,
+              "end": 20316
+            }
+          ],
+          "failed": [],
+          "body_length": 20316,
+          "complete": true
+        },
+        "outstanding": [],
+        "statuses": {
+          "validated": 12,
+          "unresolved": 3,
+          "semantic_rejected": 1
+        },
+        "model_calls_so_far": 19
+      },
+      {
+        "task_id": "a81e864cc729406da795bdd8dd4dbabf",
+        "scope": "identity:3f40bb1feda631ac4eb1874945e0d8f3ff8b4e15472bdb91fd432c5da581afae",
+        "complete": true,
+        "coverage": {
+          "pending": [],
+          "processed": [
+            {
+              "start": 0,
+              "end": 20316
+            }
+          ],
+          "failed": [],
+          "body_length": 20316,
+          "complete": true
+        },
+        "outstanding": [],
+        "statuses": {
+          "unresolved": 3
+        },
+        "model_calls_so_far": 22,
+        "cross_task_reuse": [
+          {
+            "id": "fact-107ba7ce623868e3044dcfb6086d5494ca224e8788aa1eeb14312d9591a5064c",
+            "entity": {
+              "chip_model": "H100",
+              "vendor": "NVIDIA"
+            },
+            "field": "vendor",
+            "old_status": "unresolved",
+            "new_status": "unresolved",
+            "binding_unchanged": true,
+            "reviews_unchanged": true,
+            "versions_unchanged": true
+          },
+          {
+            "id": "fact-e362ff66664e326b97e6f659c66de6b4f2297aa8675618e6cdd654f5d2b895c8",
+            "entity": {
+              "chip_model": "H100",
+              "vendor": "NVIDIA"
+            },
+            "field": "chip_model",
+            "old_status": "unresolved",
+            "new_status": "unresolved",
+            "binding_unchanged": true,
+            "reviews_unchanged": true,
+            "versions_unchanged": true
+          },
+          {
+            "id": "fact-c784295c05b6ea9f52e9e94eb4a7edcb8ad226d9e4a0c30490d2143cbd0b0313",
+            "entity": {
+              "chip_model": "H100",
+              "vendor": "NVIDIA"
+            },
+            "field": "chip_type",
+            "old_status": "unresolved",
+            "new_status": "unresolved",
+            "binding_unchanged": true,
+            "reviews_unchanged": true,
+            "versions_unchanged": true
+          }
+        ]
+      }
+    ],
+    "finished": true,
+    "statistics": {
+      "independent_fields": 12,
+      "source_candidates": 1,
+      "urls": 1,
+      "validated_candidates": 12,
+      "rejected_candidates": 1,
+      "value_changes": 12,
+      "unverifiable_evidence_candidates": 0,
+      "condition_unresolved_candidates": 0,
+      "dependency_unresolved_candidates": 4,
+      "comparison_unresolved_candidates": 0,
+      "ambiguous_entity_candidates": 0,
+      "new_entities": 3,
+      "main": {
+        "independent_fields": 0,
+        "source_candidates": 0,
+        "urls": 0,
+        "validated_candidates": 0,
+        "rejected_candidates": 0,
+        "value_changes": 0,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 0,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0
+      },
+      "linked": {
+        "independent_fields": 12,
+        "source_candidates": 1,
+        "urls": 1,
+        "validated_candidates": 12,
+        "rejected_candidates": 1,
+        "value_changes": 12,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 4,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0
+      },
+      "formal_business_writes": 0,
+      "formal_provenance_writes": 0,
+      "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+    },
+    "seconds": 337.57,
+    "model_call_count": 22,
+    "model_call_statuses": {
+      "completed": 22
+    },
+    "candidate_statuses": {
+      "semantic_rejected": 1,
+      "unresolved": 3,
+      "validated": 12
+    },
+    "input_conflicts": 0,
+    "source_db_hash_unchanged": true,
+    "frozen_baseline_hash_unchanged": true,
+    "original_baseline_hash_unchanged": true,
+    "all_body_tasks_complete": true
+  },
+  "offline_live_replay_audit": {
+    "verified_at": "2026-10-26",
+    "model_requests_during_audit": 0,
+    "source_snapshot_hash_verified": true,
+    "requests_reconstructed": 22,
+    "request_mismatches": 0,
+    "protocol_version": 8,
+    "phase_counts": {
+      "extract": 6,
+      "review": 16
+    },
+    "dependency_full_body_ranges": [
+      [
+        0,
+        7629
+      ],
+      [
+        7629,
+        15311
+      ],
+      [
+        15311,
+        20316
+      ]
+    ],
+    "cross_task_cache_reuse_verified": 3,
+    "old_failure_logical_candidate_reused": true,
+    "negative_results_not_promoted": true,
+    "unresolved_reasons": {
+      "duplicate_semantic_inputs_changed": 3
+    },
+    "all_baseline_hashes_unchanged": true
+  },
+  "historical_request_verification": {
+    "verified_at_date": "2026-10-26",
+    "model_calls": 0,
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "backend_requests_verified": 125,
+    "snapshot_hashes_verified": 7,
+    "request_reconstruction_mismatches": 0,
+    "cases": [
+      {
+        "domain": "specs",
+        "run_id": "run-e108e9fdd9db44eb85e04b86abde1b2a",
+        "backend_requests_verified": 92,
+        "model_call_statuses": {
+          "completed": 80,
+          "transport_failed": 9,
+          "parser_rejected": 3
+        },
+        "frozen_bundle_sha256": "f7bede8fa8c068750bfd433424926822a39393198dc72670f4a558c718ded2cd",
+        "snapshot_hashes_verified": 4,
+        "candidate_statuses": {
+          "unresolved": 34,
+          "program_rejected": 31,
+          "validated": 30,
+          "semantic_rejected": 7
+        },
+        "comparison_metadata_exists": false,
+        "new_entity_candidates": [
+          {
+            "entity_id": "tmp-chip-f326b745a350e474f32cba23",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "h100",
+              "vendor": "nvidia"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-ff8770222f9d40db72a1a7d0",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "mi300x",
+              "vendor": "amd"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-20756e6a4987ae2da9e2e4e2",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "instinct mi300x",
+              "vendor": "amd"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-35cc58c379b2d6a21588084b",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "instinct mi300a",
+              "vendor": "amd"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-d5fdff3a00c8b609eb0c7be2",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "ascend 910b",
+              "vendor": "huawei"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-de68053872a2afb8d922aeaf",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "h100 sxm5",
+              "vendor": "nvidia"
+            },
+            "status": "new"
+          }
+        ]
+      },
+      {
+        "domain": "compatibility",
+        "run_id": "run-fc16d800ea8c408b8e95ac2a8fa40241",
+        "backend_requests_verified": 33,
+        "model_call_statuses": {
+          "completed": 29,
+          "parser_rejected": 4
+        },
+        "frozen_bundle_sha256": "f7bede8fa8c068750bfd433424926822a39393198dc72670f4a558c718ded2cd",
+        "snapshot_hashes_verified": 3,
+        "candidate_statuses": {
+          "validated": 12,
+          "semantic_rejected": 3,
+          "unresolved": 4,
+          "program_rejected": 1
+        },
+        "comparison_metadata_exists": true,
+        "new_entity_candidates": [
+          {
+            "entity_id": "tmp-chip-d5fdff3a00c8b609eb0c7be2",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "ascend 910b",
+              "vendor": "huawei"
+            },
+            "status": "new"
+          },
+          {
+            "entity_id": "tmp-chip-c1439bee69f386aa9d328202",
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "gaudi 2",
+              "vendor": "intel"
+            },
+            "status": "new"
+          }
+        ]
+      }
+    ],
+    "source_matches_current_worktree": {
+      "chip_model/pipeline/domain_discovery/models.py": false,
+      "chip_model/pipeline/domain_discovery/runtime.py": false,
+      "chip_model/pipeline/domain_discovery/pages.py": true,
+      "chip_model/pipeline/domain_discovery/evidence_binding.py": true
+    },
+    "archive_sha256": "940ab0bcdf311a314f477b7270c83acb460836eab73fb903053dd7dc46648ec4"
+  },
+  "remaining_limitations": [
+    "Three H100 identity candidates remain unresolved because duplicate extraction changes confidence reasons and/or confidence; strict semantic signature still applies.",
+    "Complete identity body processing does not demonstrate successful resumption of every H100 specification candidate.",
+    "This is not a new search run or full search-pipeline acceptance. No deployment was performed.",
+    "Alias matching, unit/metadata outputs and other earlier findings were not changed."
+  ],
+  "source_files_sha256": {
+    "chip_model/pipeline/domain_discovery/models.py": "be6c8b5c69b4b463e2289b5d7c55317f6c70d335c1fbf772c3fcf8ea1fa1146c",
+    "chip_model/pipeline/domain_discovery/runtime.py": "eb0295a6e5f4e8aced0c6f2082ac4fd0c6cae332dbafba5410c0bf4271fb80ad",
+    "tests/test_domain_identity_wait.py": "e867757c195309ebb83df6dcf34304950324aa920a7f56e86734bf5ca268780c",
+    "tests/test_domain_models.py": "546e57398f9cf3c92e0598af77f118feb4c7795abd6d8f699981a987fe16cce2"
+  },
+  "artifacts": {
+    "real_replay_driver": ".tmp/replay-identity-cache-h100.py",
+    "real_replay_driver_sha256": "a3a43f868f252744827dcd7a7e9b7ea9b2d2131517d77a1ac62de937b98416f2",
+    "real_replay_directory": ".tmp/identity-cache-h100-live",
+    "saved_source_archive": ".tmp/live-small-results-20261022.zip",
+    "saved_source_archive_sha256": "940ab0bcdf311a314f477b7270c83acb460836eab73fb903053dd7dc46648ec4"
+  },
+  "search_requests": 0,
+  "source_fetch_requests": 0,
+  "formal_business_writes": 0,
+  "formal_provenance_writes": 0,
+  "deployed": false,
+  "search_end_to_end_accepted": false
+}

@@ -1,0 +1,996 @@
+{
+  "date": "2026-10-21",
+  "status": "two_program_defects_fixed_and_replayed_remaining_model_identity_issues",
+  "scope": "Chinese-adjacent explicit-unit numeric evidence and schema-optional object handling only; independent model output-format and factual review failures remain.",
+  "changes": [
+    {
+      "file": "chip_model/pipeline/domain_discovery/models.py",
+      "behavior": "Recognize Han-adjacent continuous numbers only when followed by the explicit source unit; exclude literal target-SKU spans and unit prefixes. Do not split signed values or hyphenated SKU numbers into positive evidence. Preserve evidence, offsets and values."
+    },
+    {
+      "file": "chip_model/pipeline/domain_discovery/compare.py",
+      "behavior": "Absent entity_hints/conditions use their FactCandidate empty-object default. Required entity_key/evidence stay required; explicit null or wrong optional types remain rejected. Do not rewrite original candidates or proof hashes."
+    },
+    {
+      "file": "chip_model/pipeline/domain_discovery/entities.py",
+      "behavior": "Relation comparison and generic-guide applicability use the same absent conditions default. Missing actual applicability/minimum conditions remain unresolved."
+    }
+  ],
+  "tests": {
+    "initial_red_command": "python -m pytest tests/test_domain_models.py tests/test_domain_compare.py -q -k 'chinese_adjacent or chinese_numeric_relaxation or schema_optional_objects or explicit_invalid_optional or missing_optional_conditions' --tb=short",
+    "initial_red": {
+      "failed": 9,
+      "passed": 13
+    },
+    "focused_green": {
+      "passed": 22,
+      "failed": 0,
+      "seconds": 11.85
+    },
+    "expanded_command": "python -m pytest tests/test_domain_models.py tests/test_domain_compare.py tests/test_domain_entities.py tests/test_domain_identity_wait.py -q --tb=short --junitxml=.tmp/numeric-optional-regression.xml",
+    "expanded": {
+      "passed": 284,
+      "failed": 0,
+      "seconds": 281.46
+    },
+    "guards": [
+      "Exact original quote and immutable candidate/proof preservation",
+      "Han-adjacent W and GB quantities",
+      "Known SKU digits, hyphenated identifiers, wrong sign and spliced values rejected",
+      "GB/s not read as GB by the Han quantity path",
+      "Explicit null/list/string optional objects rejected",
+      "Generic guide with missing actual applicability stays unresolved"
+    ]
+  },
+  "saved_output_control": {
+    "mode": "copied archived actual Qwen outputs and producer proofs; no new inference",
+    "model_calls": 0,
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_writes": 0,
+    "cases": [
+      {
+        "domain": "identity",
+        "copied_run": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\fixed-saved-output-control-890fc04b\\identity\\runs\\run-66a8fdd1d06249a1b47230c4e12ddcdd",
+        "original_final_validated": 3,
+        "fixed_final_validated": 12,
+        "statistics": {
+          "independent_fields": 12,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 12,
+          "rejected_candidates": 6,
+          "value_changes": 12,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 1,
+          "dependency_unresolved_candidates": 2,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0,
+          "new_entities": 5,
+          "main": {
+            "independent_fields": 9,
+            "source_candidates": 1,
+            "urls": 1,
+            "validated_candidates": 9,
+            "rejected_candidates": 2,
+            "value_changes": 9,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 1,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "linked": {
+            "independent_fields": 3,
+            "source_candidates": 1,
+            "urls": 1,
+            "validated_candidates": 3,
+            "rejected_candidates": 4,
+            "value_changes": 3,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 1,
+            "dependency_unresolved_candidates": 1,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "formal_business_writes": 0,
+          "formal_provenance_writes": 0,
+          "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+        },
+        "model_outputs_and_proofs_unchanged": true,
+        "original_model_metadata_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "domain": "specs",
+        "copied_run": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\fixed-saved-output-control-890fc04b\\specs\\runs\\run-ba77f43040444baea411f768ef0b2a0b",
+        "original_final_validated": 0,
+        "fixed_final_validated": 0,
+        "statistics": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 3,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0,
+          "new_entities": 0,
+          "main": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 3,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "linked": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 0,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "formal_business_writes": 0,
+          "formal_provenance_writes": 0,
+          "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+        },
+        "numeric_control": {
+          "original_saved_candidate_status": "program_rejected",
+          "current_program_validation": {
+            "status": "program_valid",
+            "reason": "contract_and_exact_evidence_passed"
+          },
+          "candidate_unchanged": true,
+          "semantic_review": "not_executed; old rejected row remains rejected in history"
+        },
+        "model_outputs_and_proofs_unchanged": true,
+        "original_model_metadata_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      }
+    ]
+  },
+  "live_replay": {
+    "models": {
+      "extract": "qwen3.8-flash",
+      "review": "qwen3.8-flash"
+    },
+    "all_three_original_complete_bodies_submitted": true,
+    "driver_finished": true,
+    "all_main_ranges_completed": false,
+    "all_tasks_completed": false,
+    "call_attempts": 57,
+    "call_statuses": {
+      "completed": 54,
+      "parser_rejected": 3
+    },
+    "extraction_calls": 27,
+    "review_calls": 30,
+    "response_model_verified_all_attempts": true,
+    "fixture_responses": 0,
+    "optional_binding_shape_skips": 0,
+    "cases": [
+      {
+        "domain": "compute",
+        "url": "https://www.ithome.com/1/010/867.htm",
+        "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+        "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+        "body_length": 4605,
+        "run_id": "run-f1536a6c7c2a44e49694345935aaac23",
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay-fixed\\compute-ace30ddf-dd084f",
+        "state": "completed",
+        "seconds": 8.47,
+        "main_body_complete": true,
+        "all_tasks_complete": true,
+        "candidate_statuses": {
+          "program_rejected": 1
+        },
+        "statistics": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 1,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0,
+          "new_entities": 0,
+          "main": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 1,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "linked": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 0,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "formal_business_writes": 0,
+          "formal_provenance_writes": 0,
+          "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+        },
+        "tasks": [
+          {
+            "domain": "compute",
+            "scope": "main",
+            "state": "completed",
+            "identity_dependency": false,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 4605
+                }
+              ],
+              "failed": [],
+              "body_length": 4605,
+              "complete": true
+            }
+          }
+        ],
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true,
+        "empty_baseline_table_rows_after": {
+          "chips": 0,
+          "models": 0,
+          "chip_model_benchmarks": 0,
+          "chip_model_compatibility": 0,
+          "field_provenance": 0,
+          "link_library": 0,
+          "source_registry": 0,
+          "benchmark_workbook_rows": 0,
+          "source_discovery_edges": 0,
+          "deployment_guides": 0,
+          "update_runs": 0,
+          "update_run_events": 0,
+          "source_monitor_state": 0,
+          "source_checks": 0,
+          "source_diffs": 0,
+          "source_auto_applies": 0,
+          "data_agent_jobs": 0,
+          "parse_ledger": 0,
+          "extraction_candidates": 0,
+          "candidate_baselines": 0,
+          "skill_inbox": 0,
+          "entity_aliases": 0,
+          "candidate_publications": 0
+        },
+        "call_counts": [
+          {
+            "phase": "extract",
+            "status": "completed",
+            "count": 1
+          }
+        ],
+        "extract_chunks": [
+          {
+            "domain": "compute",
+            "range": [
+              0,
+              4605
+            ],
+            "facts": 1
+          }
+        ],
+        "comparison_skip_reasons": {
+          "saved_program_rejected": 1
+        }
+      },
+      {
+        "domain": "identity",
+        "url": "https://wallstreetcn.com/articles/3760377",
+        "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+        "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+        "body_length": 26977,
+        "run_id": "run-b5e3565ce3b9494fa0a5c909293d2cbb",
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay-fixed\\identity-d335a681-18cf87",
+        "state": "completed",
+        "seconds": 590.05,
+        "main_body_complete": true,
+        "all_tasks_complete": true,
+        "candidate_statuses": {
+          "program_rejected": 8,
+          "validated": 12,
+          "semantic_rejected": 6,
+          "unresolved": 8
+        },
+        "statistics": {
+          "independent_fields": 12,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 12,
+          "rejected_candidates": 14,
+          "value_changes": 12,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 3,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0,
+          "new_entities": 5,
+          "main": {
+            "independent_fields": 8,
+            "source_candidates": 1,
+            "urls": 1,
+            "validated_candidates": 8,
+            "rejected_candidates": 6,
+            "value_changes": 8,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "linked": {
+            "independent_fields": 4,
+            "source_candidates": 1,
+            "urls": 1,
+            "validated_candidates": 4,
+            "rejected_candidates": 8,
+            "value_changes": 4,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 3,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "formal_business_writes": 0,
+          "formal_provenance_writes": 0,
+          "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+        },
+        "tasks": [
+          {
+            "domain": "identity",
+            "scope": "main",
+            "state": "completed",
+            "identity_dependency": false,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 26977
+                }
+              ],
+              "failed": [],
+              "body_length": 26977,
+              "complete": true
+            }
+          },
+          {
+            "domain": "specs",
+            "scope": "linked",
+            "state": "completed",
+            "identity_dependency": false,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 26977
+                }
+              ],
+              "failed": [],
+              "body_length": 26977,
+              "complete": true
+            }
+          },
+          {
+            "domain": "compute",
+            "scope": "linked",
+            "state": "completed",
+            "identity_dependency": false,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 26977
+                }
+              ],
+              "failed": [],
+              "body_length": 26977,
+              "complete": true
+            }
+          },
+          {
+            "domain": "compatibility",
+            "scope": "linked",
+            "state": "completed",
+            "identity_dependency": false,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 26977
+                }
+              ],
+              "failed": [],
+              "body_length": 26977,
+              "complete": true
+            }
+          },
+          {
+            "domain": "identity",
+            "scope": "identity:efdd8179036ea43e9666a23f0340c2894d7db279cdd5b37ae2a162896d9b643b",
+            "state": "completed",
+            "identity_dependency": true,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 26977
+                }
+              ],
+              "failed": [],
+              "body_length": 26977,
+              "complete": true
+            }
+          },
+          {
+            "domain": "identity",
+            "scope": "identity:98731de231cb6c8af0775a8573f25c097e507589bf698921a99cc5999151ec0b",
+            "state": "completed",
+            "identity_dependency": true,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 26977
+                }
+              ],
+              "failed": [],
+              "body_length": 26977,
+              "complete": true
+            }
+          }
+        ],
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true,
+        "empty_baseline_table_rows_after": {
+          "chips": 0,
+          "models": 0,
+          "chip_model_benchmarks": 0,
+          "chip_model_compatibility": 0,
+          "field_provenance": 0,
+          "link_library": 0,
+          "source_registry": 0,
+          "benchmark_workbook_rows": 0,
+          "source_discovery_edges": 0,
+          "deployment_guides": 0,
+          "update_runs": 0,
+          "update_run_events": 0,
+          "source_monitor_state": 0,
+          "source_checks": 0,
+          "source_diffs": 0,
+          "source_auto_applies": 0,
+          "data_agent_jobs": 0,
+          "parse_ledger": 0,
+          "extraction_candidates": 0,
+          "candidate_baselines": 0,
+          "skill_inbox": 0,
+          "entity_aliases": 0,
+          "candidate_publications": 0
+        },
+        "call_counts": [
+          {
+            "phase": "extract",
+            "status": "completed",
+            "count": 24
+          },
+          {
+            "phase": "review",
+            "status": "completed",
+            "count": 26
+          },
+          {
+            "phase": "review",
+            "status": "parser_rejected",
+            "count": 3
+          }
+        ],
+        "extract_chunks": [
+          {
+            "domain": "identity",
+            "range": [
+              0,
+              8000
+            ],
+            "facts": 6
+          },
+          {
+            "domain": "identity",
+            "range": [
+              8000,
+              15972
+            ],
+            "facts": 3
+          },
+          {
+            "domain": "identity",
+            "range": [
+              15972,
+              23886
+            ],
+            "facts": 3
+          },
+          {
+            "domain": "identity",
+            "range": [
+              23886,
+              26977
+            ],
+            "facts": 2
+          },
+          {
+            "domain": "specs",
+            "range": [
+              0,
+              8000
+            ],
+            "facts": 0
+          },
+          {
+            "domain": "specs",
+            "range": [
+              8000,
+              15972
+            ],
+            "facts": 4
+          },
+          {
+            "domain": "specs",
+            "range": [
+              15972,
+              23886
+            ],
+            "facts": 2
+          },
+          {
+            "domain": "specs",
+            "range": [
+              23886,
+              26977
+            ],
+            "facts": 1
+          },
+          {
+            "domain": "compute",
+            "range": [
+              0,
+              8000
+            ],
+            "facts": 0
+          },
+          {
+            "domain": "compute",
+            "range": [
+              8000,
+              15972
+            ],
+            "facts": 2
+          },
+          {
+            "domain": "compute",
+            "range": [
+              15972,
+              23886
+            ],
+            "facts": 0
+          },
+          {
+            "domain": "compute",
+            "range": [
+              23886,
+              26977
+            ],
+            "facts": 1
+          },
+          {
+            "domain": "compatibility",
+            "range": [
+              0,
+              8000
+            ],
+            "facts": 4
+          },
+          {
+            "domain": "compatibility",
+            "range": [
+              8000,
+              15972
+            ],
+            "facts": 2
+          },
+          {
+            "domain": "compatibility",
+            "range": [
+              15972,
+              23886
+            ],
+            "facts": 3
+          },
+          {
+            "domain": "compatibility",
+            "range": [
+              23886,
+              26977
+            ],
+            "facts": 2
+          },
+          {
+            "domain": "identity",
+            "range": [
+              0,
+              8000
+            ],
+            "facts": 4
+          },
+          {
+            "domain": "identity",
+            "range": [
+              8000,
+              15972
+            ],
+            "facts": 1
+          },
+          {
+            "domain": "identity",
+            "range": [
+              15972,
+              23886
+            ],
+            "facts": 0
+          },
+          {
+            "domain": "identity",
+            "range": [
+              23886,
+              26977
+            ],
+            "facts": 3
+          },
+          {
+            "domain": "identity",
+            "range": [
+              0,
+              8000
+            ],
+            "facts": 0
+          },
+          {
+            "domain": "identity",
+            "range": [
+              8000,
+              15972
+            ],
+            "facts": 1
+          },
+          {
+            "domain": "identity",
+            "range": [
+              15972,
+              23886
+            ],
+            "facts": 3
+          },
+          {
+            "domain": "identity",
+            "range": [
+              23886,
+              26977
+            ],
+            "facts": 3
+          }
+        ],
+        "comparison_skip_reasons": {
+          "saved_program_rejected": 10
+        }
+      },
+      {
+        "domain": "specs",
+        "url": "https://cn.lianliwork.com/news/tpu-v8-liquid-cooling-google-supply-chain",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "run_id": "run-ae6847ec102a4078b265985c566fabb8",
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay-fixed\\specs-b1254404-ef2c8c",
+        "state": "partial",
+        "seconds": 33.18,
+        "main_body_complete": false,
+        "all_tasks_complete": false,
+        "candidate_statuses": {
+          "program_rejected": 5,
+          "awaiting_identity": 1
+        },
+        "statistics": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 5,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 1,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0,
+          "new_entities": 0,
+          "main": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 2,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 1,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "linked": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 0,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "formal_business_writes": 0,
+          "formal_provenance_writes": 0,
+          "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+        },
+        "tasks": [
+          {
+            "domain": "specs",
+            "scope": "main",
+            "state": "running",
+            "identity_dependency": false,
+            "coverage": {
+              "pending": [
+                {
+                  "start": 0,
+                  "end": 5810
+                }
+              ],
+              "processed": [],
+              "failed": [],
+              "body_length": 5810,
+              "complete": false
+            }
+          },
+          {
+            "domain": "identity",
+            "scope": "identity:333033ad4b45b4b1219f25858020aa88a2ceb2b3c046a5b875fe06a56f3e86de",
+            "state": "completed",
+            "identity_dependency": true,
+            "coverage": {
+              "pending": [],
+              "processed": [
+                {
+                  "start": 0,
+                  "end": 5810
+                }
+              ],
+              "failed": [],
+              "body_length": 5810,
+              "complete": true
+            }
+          }
+        ],
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true,
+        "empty_baseline_table_rows_after": {
+          "chips": 0,
+          "models": 0,
+          "chip_model_benchmarks": 0,
+          "chip_model_compatibility": 0,
+          "field_provenance": 0,
+          "link_library": 0,
+          "source_registry": 0,
+          "benchmark_workbook_rows": 0,
+          "source_discovery_edges": 0,
+          "deployment_guides": 0,
+          "update_runs": 0,
+          "update_run_events": 0,
+          "source_monitor_state": 0,
+          "source_checks": 0,
+          "source_diffs": 0,
+          "source_auto_applies": 0,
+          "data_agent_jobs": 0,
+          "parse_ledger": 0,
+          "extraction_candidates": 0,
+          "candidate_baselines": 0,
+          "skill_inbox": 0,
+          "entity_aliases": 0,
+          "candidate_publications": 0
+        },
+        "call_counts": [
+          {
+            "phase": "extract",
+            "status": "completed",
+            "count": 2
+          },
+          {
+            "phase": "review",
+            "status": "completed",
+            "count": 1
+          }
+        ],
+        "extract_chunks": [
+          {
+            "domain": "specs",
+            "range": [
+              0,
+              5810
+            ],
+            "facts": 3
+          },
+          {
+            "domain": "identity",
+            "range": [
+              0,
+              5810
+            ],
+            "facts": 3
+          }
+        ],
+        "comparison_skip_reasons": {
+          "saved_program_rejected": 5
+        }
+      }
+    ],
+    "numeric_fix_live_effect": {
+      "candidate_id": "fact-ee0b56ae0efc2ff4b8fc83bdf8198369a8add60b55444cfbdc470015d1455f69",
+      "raw_value": 1300,
+      "unit": "W",
+      "quote": "TPU v8单芯片功耗达1300W",
+      "program_status": "program_valid",
+      "review_verdict": "unresolved",
+      "needs_identity": true,
+      "final_status": "awaiting_identity",
+      "identity_dependency_tasks": 1,
+      "identity_candidates_rejected_for_conversion_null": 3,
+      "interpretation": "The numeric false rejection is gone. Actual review now runs, but no identity proof exists; the candidate remains unvalidated and the range/task remains pending."
+    },
+    "optional_fix_live_effect": {
+      "long_body_model_accepted": 12,
+      "long_body_final_comparison_validated": 12,
+      "raw_fact_missing_binding_shape_skips": 0,
+      "interpretation": "Same saved-output control isolates the fix at 3 -> 12; fresh live outputs vary and must not be treated as a paired model accuracy benchmark."
+    }
+  },
+  "remaining": [
+    {
+      "kind": "extraction_schema_errors",
+      "example": {
+        "id": "fact-5a80244460d436d4d8d6c41c1571de6d9312c401728c59172d649f185af9945a",
+        "domain": "compute",
+        "status": "program_rejected",
+        "field": "precision_perf",
+        "entity": {
+          "chip_model": "思元 370",
+          "vendor": "寒武纪"
+        },
+        "value": "INT8=256TOPS",
+        "reason": "1 validation error for FactCandidate\nconversion.source_precision\n  Extra inputs are not permitted [type=extra_forbidden, input_value='INT8', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden",
+        "versions": [
+          {
+            "version": 0,
+            "kind": null,
+            "program": {
+              "reason": "1 validation error for FactCandidate\nconversion.source_precision\n  Extra inputs are not permitted [type=extra_forbidden, input_value='INT8', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden",
+              "status": "rejected"
+            }
+          }
+        ],
+        "reviews": [],
+        "identity_followup": false
+      },
+      "analysis": "Fresh full compute extraction used forbidden conversion.source_precision. Numeric/optional fixes do not authorize unknown schema properties. The page therefore has no validated compute candidate in this new run."
+    },
+    {
+      "kind": "identity_format_blocks_progress",
+      "example": {
+        "vendor": "Google",
+        "chip_model": "TPU v8",
+        "bad_field": "conversion",
+        "bad_value": null
+      },
+      "analysis": "Three actual identity candidates returned conversion:null, which is invalid. The natural typed wait correctly schedules identity work but cannot be released without accepted identity proof."
+    },
+    {
+      "kind": "factual_false_accept_still_present",
+      "candidate_id": "fact-c3e31766faa9c61c558e0e52be388babe431f5e3e870abf903ee89fe66fa843b",
+      "field": "vram_type",
+      "value": "HBM3E",
+      "quote": "容量与 8-Hi HBM3E 相同",
+      "analysis": "Equal capacity to an HBM3E comparison target does not establish memory type. This accepted candidate remains a manual false-accept finding, even though the structural comparison now admits it. No acceptance count here is a manually confirmed accuracy count."
+    },
+    {
+      "kind": "identity_aliases",
+      "analysis": "TPUv7 Ironwood, TPU v7 Ironwood and TPUv7 still fragment source identity. New entities in the empty test baseline are not actual production discoveries."
+    },
+    {
+      "kind": "model_variation",
+      "analysis": "The new live extraction and linked-domain hints differ from the previous run. Copied genuine model outputs, unchanged raw facts and unchanged producer proofs were used separately to isolate the deterministic program fixes."
+    }
+  ],
+  "safety": {
+    "search_requests": 0,
+    "new_page_fetch_requests": 0,
+    "formal_business_writes": 0,
+    "formal_provenance_writes": 0,
+    "production_image_changed": false,
+    "heartbeat_enabled": false,
+    "shared_env_edited": false,
+    "original_model_outputs_and_proofs_unchanged_in_saved_output_control": true,
+    "all_test_source_and_frozen_baseline_hashes_unchanged": true,
+    "all_test_business_tables_remained_empty": true
+  },
+  "limits": [
+    "Two requested program fixes are verified; this is not overall data-quality or six-domain discovery acceptance.",
+    "All three complete bodies were offered to model stages, but TPU v8 main coverage remains pending because identity confirmation failed. Do not mark the whole replay successful.",
+    "No new search, no image OCR, and no formal or provenance publication."
+  ],
+  "next_steps": [
+    "Align Skill/output-schema field mapping and stop producing conversion:null without loosening typed validation.",
+    "Repair factual review for type/quantity comparisons and identity alias handling, then rerun the same bodies and fixed negative controls."
+  ],
+  "artifacts": {
+    "live_summary": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay-fixed\\summary.json",
+    "control_summary": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\fixed-saved-output-control.json",
+    "junit": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\numeric-optional-regression.xml",
+    "code_sha256": {
+      "chip_model/pipeline/domain_discovery/models.py": "c163d745aa159958b7ef0a3c6d094773b14094b27cf7bc3c351b9262df1b5704",
+      "chip_model/pipeline/domain_discovery/compare.py": "08025255ac6ffc06f20bb9a9d8a7c1262755d0a53f2a3dc7180381d90d44d027",
+      "chip_model/pipeline/domain_discovery/entities.py": "5387b0e1f01d0346e404d1810d47d71972d15f9ae5e99f5e079d911ece83bc1e",
+      "tests/test_domain_models.py": "a32f73103ad99deb25c6f849dfc7d72185723707e5299d8aca89528a45a4a5e6",
+      "tests/test_domain_compare.py": "3216ab0ec5172785ee1f3d896c6819c996d5cc16c1d7c42a67b60aa1e31881e0",
+      ".tmp/replay-complete-saved-bodies-fixed.py": "4849cbcbc60ee31f9580f2acdd1a7cbb7cb57f5bef943fcc559fea60b1006445",
+      ".tmp/recompare-fixed-saved-output.py": "bc7021e00e7d8e465bf7a3ae7eef4a12bc37eda5c5f547d2fe38ce9d8f612e49"
+    }
+  }
+}

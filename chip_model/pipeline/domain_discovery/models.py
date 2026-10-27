@@ -7,6 +7,7 @@ The runtime owns the active heartbeat while a blocking provider call is pending.
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 import os
@@ -25,6 +26,7 @@ from ..candidate_validation import validate_fact_value
 from ..open_web_test import OpenAICompatibleExtractor
 from .contracts import DOMAINS, DomainContract, _reject_duplicate_keys, benchmark_metric_kind
 from .rules import load_phase
+from .evidence_binding import numeric_sku_binding
 from .search import canonical_url, redact
 from .store import _file_hash, _hash, _json
 
@@ -76,7 +78,11 @@ class FactCandidate(StrictModel):
     context_refs: list[ContextQuote] = Field(default_factory=list)
     explanation: str = Field(min_length=1)
     source_type: Literal['official_datasheet', 'official_news', 'paper', 'community',
-                         'vendor_claim', 'benchmark_suite', 'web_crawl']
+                         'vendor_claim', 'benchmark_suite', 'web_crawl'] = Field(
+        description='Classify the actual page publisher and evidence: official_news is a first-party '
+                    'manufacturer/owner announcement; official_datasheet is its direct technical documentation. '
+                    'Independent third-party media reports, commentary and reposts are community or web_crawl, '
+                    'even when they discuss a manufacturer or quote its announcement.')
     confidence: Literal['high', 'medium', 'low']
     confidence_reason: str = Field(min_length=1)
 
@@ -89,12 +95,24 @@ class ExtractResponse(StrictModel):
 
 
 class ReviewResponse(StrictModel):
+    model_config = ConfigDict(json_schema_extra={'allOf': [{
+        'if': {'properties': {'verdict': {'const': 'revise'}}, 'required': ['verdict']},
+        'then': {'required': ['candidate'], 'properties': {'candidate': {'type': 'object'}}},
+        'else': {'properties': {'candidate': {'type': 'null'}}},
+    }, {
+        'if': {'properties': {'needs_identity': {'const': True}}, 'required': ['needs_identity']},
+        'then': {'properties': {'verdict': {'const': 'unresolved'}}},
+    }]})
+
     verdict: Literal['accept', 'reject', 'revise', 'unresolved']
     reason: str = Field(min_length=1)
+    needs_identity: bool = False
     candidate: dict[str, JsonValue] | None = None
 
     @model_validator(mode='after')
     def revision_only(self):
+        if self.needs_identity and self.verdict != 'unresolved':
+            raise ValueError('needs_identity requires unresolved verdict')
         if not self.reason.strip():
             raise ValueError('review reason must be nonblank')
         if (self.verdict == 'revise') != (self.candidate is not None):
@@ -209,6 +227,103 @@ def phase_messages(phase, skill_text, references, contract, payload):
     for name, content in references.items():
         system += '\n\nFROZEN REFERENCE ' + name + '\n' + content
     system += '\n\nFROZEN DOMAIN CONTRACT\n' + _json(contract)
+    system += '\n\nBACKEND PHASE TASK: ' + phase + '\n'
+    system += ('Execute only this backend phase on the supplied page and context_refs. '
+               'Do not execute other Skill stages or any tools; no search or publication is available. '
+               'Return only the object specified by required_schema. All fact objects use candidate_schema. '
+               'Classify source_type by the actual page publisher and document evidence, not the mentioned vendor. '
+               'official_news requires a first-party manufacturer/owner announcement; third-party media reports '
+               'and reposts are community or web_crawl, even if they cite official information. '
+               'A review must reject or revise an incorrect source classification, never accept it as official.')
+    if phase == 'extract':
+        system += (
+            'Extract supported facts owned by the current domain from this submitted text. '
+            'An empty baseline or identity_context means no prior match, not missing source evidence. '
+            'A concrete compute-chip/card SKU and explicit vendor can support identity fields by themselves; '
+            'do not require a date, capacity, or every domain field to be known. '
+            'Use only contract.entity_keys[target_table] in entity_key; variant hints belong in entity_hints. '
+            'Omit unknown optional hints, especially capacity and form_factor; never fill these hints with null/unknown. '
+            'Do not invent suffixes, form factors, aliases, precision performance or units. '
+            'For a numeric field use a numeric raw_value and normalized_value with the unit stored separately '
+            '(for example 1300 and W, not a raw_value of 1300W); preserve conversion basis as the contract requires. '
+            'Memory bandwidth is not precision performance. '
+            'Emit no extra properties absent from candidate_schema (including no confidence_reason_detail). '
+            'raw_value and normalized_value cannot contain null, booleans, blank strings or empty containers, '
+            'including inside structured values; omit unsupported facts instead. '
+            'When non-numeric raw_value and normalized_value differ, provide conversion.description '
+            'for that explicit normalization, including string-to-list or string-to-object transformations. '
+            'For categorical status codes, raw_value retains the source words and normalized_value uses '
+            'the contract code with conversion.description; do not invent a numeric raw_value from a label. '
+            'Copy evidence.quote as one exact continuous substring from page.text or a submitted context_ref; '
+            'never paraphrase, join fragments, or insert ellipses. Offsets are absolute Unicode positions '
+            'in the full snapshot: page.start plus the local index, with end exclusive. '
+            'Only list context_refs that exactly match supplied references. '
+            'Return empty facts only if this submitted text has no supported fact for the current domain. '
+            'Do not force a fact when evidence is absent; linked_domains may be empty. '
+            'For an identity dependency, dependency_entity_hint is an unverified task target; '
+            'only return identity facts for that full target and preserve its chip/card variant dimensions.')
+    else:
+        system += ('Independently review the supplied candidate against its exact source, SKU, conditions, '
+                   'units and frozen contract. A program check is not factual approval. '
+                   'Use accept/reject/revise/unresolved as required_schema specifies; '
+                   'For accept/reject/unresolved, candidate must be null or omitted. Only revise '
+                   'returns a complete replacement candidate, which remains subject to validation. '
+                   'If the fact is otherwise supported but chip/card identity cannot be confirmed, '
+                   'return unresolved with needs_identity=true. Do not use this for wrong evidence, '
+                   'cross-entity values or missing measurement conditions. Do not request identity again '
+                   'when confirmed_identity supplies verified matching proof. '
+                   'Base reasons on the supplied source and contract; do not invent external facts about an SKU.')
+        # Keep earlier archived requests byte-for-byte reconstructable. Focus is
+        # derived from the frozen contract, never a model-supplied whitelist.
+        if type(payload.get('backend_protocol_version')) is int and payload['backend_protocol_version'] >= 4:
+            candidate = payload.get('candidate')
+            if isinstance(candidate, dict):
+                table, field = candidate.get('target_table'), candidate.get('field_name')
+                fields = contract.get('fields', {}).get(table, []) if isinstance(table, str) else []
+                focus = {'domain_id': contract.get('domain_id'), 'target_table': table,
+                         'field_name': field, 'field_owned': field in fields, 'owned_fields': fields}
+                system += '\nFIELD OWNERSHIP FROM FROZEN CONTRACT\n' + _json(focus) + '\n'
+            system += ('Review only this candidate field. field_owned is computed from the frozen contract, '
+                       'not from a shortened list recalled by the model. Ownership permits review but does not '
+                       'prove the value. Require exact source support for the same entity and field; do not '
+                       'require unrelated lifecycle fields or a matching pre-existing database row. '
+                       'Do not override supplied evidence with pretrained knowledge of latest products. '
+                       'A family/generation explicitly split into named variants is not itself a concrete SKU. '
+                       'Do not transfer family-level dates or specifications to a variant, or revise the '
+                       'entity key to another variant. A supported variant may carry the explicitly linked '
+                       'family in chip_series. Source quality and SKU ambiguity are separate judgments; '
+                       'do not invent an official-only gate absent from the frozen field contract.')
+        if type(payload.get('backend_protocol_version')) is int and payload['backend_protocol_version'] >= 5:
+            system += ('ENTITY GATE BEFORE FIELD VALUE: First validate entity_key as a concrete source-supported SKU. '
+                       'A correct vendor, type, date or family value NEVER exempts a wrong family-level entity key. '
+                       'When the page explicitly splits a generation into variants, reject candidates using the '
+                       'parent as a concrete chip, even when its vendor value is correct. Do not revise to a child. '
+                       'needs_identity=true is only for an otherwise supported, concrete SKU lacking confirmation; '
+                       'it is false for a known parent generation, inherited family specs or unsupported attribution. '
+                       'For a concrete child with an unproven date or wattage, reject/unresolved with needs_identity=false; '
+                       'confirming identity cannot supply missing field evidence. Only after this gate review the field value.')
+    if type(payload.get('backend_protocol_version')) is int and payload['backend_protocol_version'] >= 6:
+        system += ('SKU/VALUE EVIDENCE BINDING: For numeric chip specifications, quote the local source claim '
+                   'that ties the number to this exact SKU. Another mention elsewhere in the page is insufficient. '
+                   'An explicit shared claim such as both variants using 2nm may qualify, but a parent generation '
+                   'power claim never supplies a child SKU value. Preserve exact source wording, do not insert '
+                   'the target SKU into a quote. A declared exclusive heading/table header may supply the subject; '
+                   'a mixed-SKU header or another paragraph may not. Passing program scope checks still requires '
+                   'independent review of actual subject, predicate, units and variant applicability.')
+    if (phase == 'extract' and type(payload.get('backend_protocol_version')) is int
+            and payload['backend_protocol_version'] >= 7):
+        system += ('EXTRACTION FIELD TYPES AND SUBJECTS: The numeric-field conditions in required_schema '
+                   'are derived from this frozen domain contract. For these fields raw_value and '
+                   'normalized_value are JSON numbers, never strings such as "3nm" or "3"; '
+                   'store the unit separately. Other source-format and categorical fields retain '
+                   'their contract types. Do not collapse separately named chip/card variants into '
+                   'a parent generation entity. An explicit shared specification supports a separate '
+                   'fact for each concrete named SKU, not a fabricated additional parent SKU. For '
+                   'such a claim include the named subjects and shared predicate in one continuous '
+                   'evidence.quote, rather than quoting only "both use ..." without its subjects. '
+                   'A shared process claim never makes an adjacent family-level power claim apply '
+                   'to those variants. If the source cannot establish that attribution, omit the '
+                   'unsupported field; do not fix the source wording or infer a value.')
     return [{'role': 'system', 'content': system}, {'role': 'user', 'content': _json(payload)}]
 
 
@@ -221,6 +336,47 @@ def validate_quote(text, evidence):
             or not quote.strip() or not 0 <= start < end <= len(text) or text[start:end] != quote):
         raise ValueError('evidence must be an exact continuous snapshot quote')
     return True
+
+
+def locate_candidate_quotes(candidate, snapshot, chunk):
+    """Locate a unique verbatim primary quote; never change text or business facts.
+
+    Existing valid positions win. Ambiguous, altered, foreign-snapshot or
+    out-of-input evidence is left untouched for the strict validator to reject.
+    The caller retains the raw model output and the explicit location audit.
+    """
+    if not isinstance(candidate, dict) or not isinstance(candidate.get('evidence'), dict):
+        return candidate, []
+    evidence = candidate['evidence']
+    if (evidence.get('snapshot_id') != snapshot['snapshot_id']
+            or evidence.get('body_hash') != snapshot['body_hash']):
+        return candidate, []
+    quote = evidence.get('quote')
+    if not isinstance(quote, str) or not quote.strip():
+        return candidate, []
+    ranges = [(chunk['start'], chunk['end'])] + [(r['start'], r['end']) for r in chunk['context_refs']]
+    start, end = evidence.get('start'), evidence.get('end')
+    if type(start) is not int or type(end) is not int:
+        return candidate, []
+    if (any(a <= start < end <= b for a, b in ranges)
+            and snapshot['text'][start:end] == quote):
+        return candidate, []
+    positions = set()
+    for a, b in ranges:
+        position = snapshot['text'].find(quote, a, b)
+        while position >= 0:
+            positions.add(position)
+            if len(positions) > 1:
+                return candidate, []
+            position = snapshot['text'].find(quote, position + 1, b)
+    if len(positions) != 1:
+        return candidate, []
+    position = positions.pop()
+    located = copy.deepcopy(candidate)
+    located['evidence'].update(start=position, end=position + len(quote))
+    return located, [{'method': 'unique_exact_substring', 'original_start': start, 'original_end': end,
+                      'start': position, 'end': position + len(quote),
+                      'snapshot_id': snapshot['snapshot_id'], 'body_hash': snapshot['body_hash']}]
 
 
 def _capacity_identity(value):
@@ -321,6 +477,29 @@ def _numeric_leaves(value):
         number = _number(value)
         if number is not None:
             yield number
+
+
+def _evidence_numeric_tokens(fact):
+    """Keep literal numbers; admit Han-adjacent quantities only with their unit.
+
+    Do not split a signed value or hyphenated SKU into a positive number.
+    The additional Han path excludes literal target-SKU spans and unit prefixes
+    such as GB in GB/s. No evidence text, offsets or candidate values change.
+    """
+    quote = fact.evidence.quote
+    tokens = re.findall(r'(?<![\w.+-])[+-]?\d+(?:\.\d+)?', quote)
+    unit = fact.conversion.source_unit or fact.unit
+    if not unit:
+        return tokens
+    skus = (fact.entity_key.get('chip_model'), fact.entity_hints.get('full_sku'))
+    sku_ranges = [(m.start(), m.end()) for sku in skus if isinstance(sku, str) and sku
+                  for m in re.finditer(re.escape(sku), quote, re.I)]
+    quantity = (r'(?<=[\u3400-\u4dbf\u4e00-\u9fff])(?P<number>[+-]?\d+(?:\.\d+)?)'
+                r'(?=\s*' + re.escape(unit) + r'(?![A-Za-z0-9_%]|/[A-Za-z0-9]))')
+    for match in re.finditer(quantity, quote):
+        if not any(start <= match.start() < end for start, end in sku_ranges):
+            tokens.append(match['number'])
+    return tokens
 
 
 def _known_text(value):
@@ -463,7 +642,7 @@ def validate_candidate(candidate, contract, snapshot, chunk):
         if source_unit not in evidence_text:
             raise ValueError('source unit is not present in evidence/context')
     raw_number, normalized_number = _number(fact.raw_value), _number(fact.normalized_value)
-    tokens = re.findall(r'(?<![\w.])[+-]?\d+(?:\.\d+)?', fact.evidence.quote)
+    tokens = _evidence_numeric_tokens(fact)
     for number in _numeric_leaves(fact.raw_value):
         if not any(float(token) == number for token in tokens):
             raise ValueError('raw numeric value is not continuously present in evidence')
@@ -526,7 +705,26 @@ def validate_candidate(candidate, contract, snapshot, chunk):
                            if not _known_text(fact.conditions.get(key)))
         if missing:
             return {'status': 'unresolved', 'reason': 'incomplete_evidence', 'missing_conditions': missing}
-    return {'status': 'program_valid', 'reason': 'contract_and_exact_evidence_passed'}
+    result = {'status': 'program_valid', 'reason': 'contract_and_exact_evidence_passed'}
+    if (domain.domain_id == 'specs' and fact.target_table == 'chips' and raw_number is not None
+            and domain.conditions.get('sku_value_binding', {}).get('mode') == 'local_claim_or_exclusive_header'):
+        def has_value(fragment):
+            scoped = fact.model_copy(update={'evidence': fact.evidence.model_copy(update={'quote': fragment})})
+            if not any(float(token) == raw_number for token in _evidence_numeric_tokens(scoped)):
+                return False
+            if not source_unit or source_unit in {'count', 'source_native_count', 'slots'}:
+                return True
+            unit_pattern = re.escape(source_unit) + r'(?![A-Za-z0-9_%]|/[A-Za-z0-9])'
+            return (re.search(unit_pattern, fragment) is not None
+                    or any(ref.kind == 'table_header' and re.search(unit_pattern, ref.quote)
+                           for ref in fact.context_refs))
+        binding = numeric_sku_binding(fact.entity_key['chip_model'], fact.entity_key['vendor'],
+                                      fact.evidence, fact.context_refs, has_value, chunk['context_refs'])
+        if binding is None:
+            return {'status': 'unresolved', 'reason': 'sku_value_binding_unresolved',
+                    'missing_conditions': ['sku_value_evidence_binding']}
+        result['sku_value_binding'] = binding
+    return result
 
 
 class _TechnicalFailure(Exception):
@@ -552,7 +750,7 @@ class ModelService:
     KEY = 'domain_models.v1'
 
     def __init__(self, store, run_id, generation, budget, pages, bundle_root, *,
-                 client=None, domain_id=None, task_scope='main', monotonic=None, backoff=None, model_seconds=60):
+                 client=None, review_client=None, domain_id=None, task_scope='main', monotonic=None, backoff=None, model_seconds=60):
         if (budget.store is not store or budget.run_id != run_id or budget.generation != generation
                 or pages.store is not store or pages.run_id != run_id or pages.generation != generation
                 or pages.budget is not budget):
@@ -567,10 +765,14 @@ class ModelService:
         self.task_scope = task_scope
         self.scope = 'chip' if run['payload'].get('chip') else 'discovery'
         self.client = client if client is not None else OpenAIModelTransport()
-        secrets = getattr(self.client, 'audit_secrets', ())
-        if not isinstance(secrets, (list, tuple)) or any(not isinstance(secret, str) for secret in secrets):
-            raise ValueError('audit_secrets must be an explicit sequence of known credential strings')
-        self._audit_secrets = tuple(secret for secret in secrets if secret)
+        self.review_client = review_client if review_client is not None else self.client
+        secret_values = []
+        for active_client in (self.client, self.review_client):
+            secrets = getattr(active_client, 'audit_secrets', ())
+            if not isinstance(secrets, (list, tuple)) or any(not isinstance(secret, str) for secret in secrets):
+                raise ValueError('audit_secrets must be an explicit sequence of known credential strings')
+            secret_values.extend(secret for secret in secrets if secret)
+        self._audit_secrets = tuple(dict.fromkeys(secret_values))
         self.monotonic = monotonic or budget.monotonic
         self.backoff, self.model_seconds = backoff or time.sleep, model_seconds
         self._phase('extract')
@@ -673,12 +875,34 @@ class ModelService:
                                   'quote': snapshot['text'][ref['start']:ref['end']]} for ref in chunk['context_refs']]}
 
     def _payload(self, frozen, snapshot, chunk, identity_context, candidate=None):
-        return {'domain_id': self.domain_id, 'phase': frozen['phase'], 'scope_type': self.scope,
+        required_schema = (ReviewResponse if candidate is not None else ExtractResponse).model_json_schema()
+        if candidate is None:
+            # Describe each fact to the model without changing per-fact rejection semantics.
+            fact_schema = FactCandidate.model_json_schema()
+            required_schema.setdefault('$defs', {}).update(fact_schema.pop('$defs', {}))
+            # Project only the validator's numeric rule into the extraction
+            # request. Generic wire schemas/reviewer proofs remain unchanged.
+            for table, fields in frozen['contract']['fields'].items():
+                numeric_fields = []
+                for field in fields:
+                    rule = frozen['contract'].get('units', {}).get(field)
+                    unit = rule if isinstance(rule, str) else rule.get('unit') if isinstance(rule, dict) else None
+                    if unit and unit not in {'source_native_count', 'source_date', 'explicit_source_format'}:
+                        numeric_fields.append(field)
+                if numeric_fields:
+                    fact_schema.setdefault('allOf', []).append({
+                        'if': {'properties': {'target_table': {'const': table},
+                                              'field_name': {'enum': numeric_fields}},
+                               'required': ['target_table', 'field_name']},
+                        'then': {'properties': {'raw_value': {'type': 'number'},
+                                                 'normalized_value': {'type': 'number'}}}})
+            required_schema['properties']['facts']['items'] = fact_schema
+        return {'backend_protocol_version': 8, 'model_name': str((self.review_client if candidate is not None else self.client).model_name), 'domain_id': self.domain_id, 'phase': frozen['phase'], 'scope_type': self.scope,
                 'bundle_sha256': frozen['bundle_sha256'], 'contract_sha256': frozen['contract_sha256'],
                 'reference_hashes': frozen['reference_hashes'], 'page': self._page_payload(snapshot, chunk),
                 'identity_context': identity_context, 'baseline': self._baseline(candidate),
                 **({'candidate': candidate} if candidate is not None else {}),
-                'required_schema': (ReviewResponse if candidate is not None else ExtractResponse).model_json_schema(),
+                'required_schema': required_schema,
                 'candidate_schema': FactCandidate.model_json_schema()}
 
     @staticmethod
@@ -701,7 +925,7 @@ class ModelService:
     def _review_binding(self, frozen, snapshot, chunk, identity_context):
         # The entire frozen file digest binds the selected old facts too; a
         # matched authorized candidate version fixes their deterministic query.
-        return {'phase': 'review', 'scope_type': self.scope, 'bundle_sha256': frozen['bundle_sha256'],
+        return {'backend_protocol_version': 8, 'model_name': str(self.review_client.model_name), 'phase': 'review', 'scope_type': self.scope, 'bundle_sha256': frozen['bundle_sha256'],
                 'contract_sha256': frozen['contract_sha256'], 'reference_hashes': frozen['reference_hashes'],
                 'page': self._page_payload(snapshot, chunk), 'identity_context': identity_context,
                 'baseline': self._baseline(), 'required_schema': ReviewResponse.model_json_schema(),
@@ -725,6 +949,7 @@ class ModelService:
         raise ModelInputConflict(record)
 
     def _invoke(self, frozen, logical, payload):
+        active_client = self.review_client if frozen['phase'] == 'review' else self.client
         messages = phase_messages(frozen['phase'], frozen['skill_text'], frozen['references'], frozen['contract'], payload)
         operation_payload = {'stage': 'extracting' if frozen['phase'] == 'extract' else 'reviewing',
                              'logical_id': logical, 'messages_sha256': _hash(_json(messages))}
@@ -767,7 +992,7 @@ class ModelService:
                                   'phase': frozen['phase'], 'domain_id': self.domain_id, 'scope': self.scope,
                                   'skill_name': frozen['skill_name'], 'rule_version': frozen['rule_version'],
                                   'bundle_sha256': frozen['bundle_sha256'], 'contract_sha256': frozen['contract_sha256'],
-                                  'reference_hashes': frozen['reference_hashes'], 'model': self._audit(self.client.model_name),
+                                  'reference_hashes': frozen['reference_hashes'], 'model': self._audit(active_client.model_name),
                                   'started_at': self.store.clock(), 'input_range': {'snapshot_id': payload['page']['snapshot_id'],
                                   'start': payload['page']['start'], 'end': payload['page']['end']},
                                   'raw_request': self._audit(messages), 'request_ref': self.KEY + '/calls/' + execution_id + '/raw_request'}
@@ -776,7 +1001,7 @@ class ModelService:
                                     'domain_id': self.domain_id, 'phase': frozen['phase'], 'execution_id': execution_id, **input_proof}))
                         error, response, status = None, None, 'completed'
                         try:
-                            response = self.client.call_model(messages=messages, timeout=timeout)
+                            response = active_client.call_model(messages=messages, timeout=timeout)
                         except requests.RequestException as exc:
                             error, status = self._audit(str(exc)), 'transport_failed'
                         except (ValueError, TypeError) as exc:
@@ -893,6 +1118,11 @@ class ModelService:
             row = prior
             row.update(status='unresolved', reason='duplicate_without_review_proof')
         else:
+            followup = prior.get('identity_followup')
+            if followup and (identity_context or {}) == followup['prior']['identity_context']:
+                # Internal extraction replay keeps its original context; only
+                # the separately authorized followup owns this review proof.
+                identity_context = followup['context']
             binding = self._review_binding(self._phase('review'), snapshot, prior['review_chunk'], identity_context or {})
             digest = _hash(_json(binding))
             if digest != prior['review_binding_sha256']:
@@ -966,11 +1196,16 @@ class ModelService:
             verdict = ReviewResponse.model_validate({k: v for k, v in response.items() if not k.startswith('_')}).model_dump()
             if not any(r['version'] == version['version'] for r in row['reviews']):
                 row['reviews'].append({'version': version['version'], **verdict})
+            if verdict['verdict'] == 'unresolved' and verdict['needs_identity'] and self.domain_id != 'identity':
+                row.update(status='unresolved' if row.get('identity_followup') else 'awaiting_identity',
+                           reason='identity_followup_limit' if row.get('identity_followup') else verdict['reason'],
+                           final_verdict='unresolved', identity_wait_context=identity_context or {})
+                return self._save_candidate(row)
             if verdict['verdict'] != 'revise':
                 row.update(status={'accept': 'validated', 'reject': 'semantic_rejected', 'unresolved': 'unresolved'}[verdict['verdict']],
                            reason=verdict['reason'], final_verdict=verdict['verdict'])
                 return self._save_candidate(row)
-            if version['version'] >= 1:
+            if len(row['revision_chain']) >= 1:
                 row.update(status='unresolved', reason='revision_limit', final_verdict='unresolved')
                 return self._save_candidate(row)
             revised = verdict['candidate']
@@ -981,15 +1216,77 @@ class ModelService:
                 row.update(status='unresolved', reason='revision_changes_entity_scope', final_verdict='unresolved')
                 return self._save_candidate(row)
             self.budget.reserve_revision('candidate-revision-' + logical, logical)
-            row['revision_chain'].append({'from_version': 0, 'to_version': 1, 'reason': verdict['reason']})
-            row['versions'].append({'version': 1, 'candidate': revised})
+            next_version = version['version'] + 1
+            row['revision_chain'].append({'from_version': version['version'], 'to_version': next_version, 'reason': verdict['reason']})
+            row['versions'].append({'version': next_version, 'candidate': revised})
             self._save_candidate(row)
 
-    def extract_page(self, snapshot_id, *, identity_context=None, max_chars=8000):
+    def resume_identity_review(self, identifier):
+        """One new, bound review input after actual registered identity proof.
+
+        This does not mutate/replay the original request or spend a semantic
+        revision. The new version keeps the exact same candidate and quota ID.
+        """
+        from .entities import EntityResolver, candidate_entity_hint
+        row = self.snapshot()['candidates'][identifier]
+        if row.get('identity_followup') and row['status'] in {'program_valid','review_failed','pending'}:
+            return self.review_candidate(row['versions'][-1]['candidate'],
+                identity_context=row['identity_followup']['context'], chunk=row['review_chunk'])
+        if row['status'] != 'awaiting_identity':
+            return row
+        resolver = EntityResolver(self.store, self.run_id, self.generation)
+        candidate = row['versions'][-1]['candidate']
+        entity = resolver.resolve_entity(candidate_entity_hint(candidate))
+        if entity['status'] not in {'new', 'existing'}:
+            return row
+        confirmed = []
+        for proof in entity.get('identity_proofs', []):
+            _, identity_candidate, actual = resolver._proof(proof['logical_candidate_id'], require_accepted=True)
+            if actual != proof:
+                raise ValueError('registered identity proof changed')
+            if identity_candidate['evidence']['snapshot_id'] == candidate['evidence']['snapshot_id']:
+                confirmed.append({'model_proof': actual, 'candidate': identity_candidate})
+        if not confirmed:
+            return row
+        context = {**row.get('identity_wait_context', {}), 'confirmed_identity': {
+            'status': entity['status'], 'entity_kind': entity['entity_kind'],
+            'canonical_key': entity['canonical_key'], 'hint': entity['hint'], 'identity_proofs': confirmed}}
+        snapshot = self.pages.read_snapshot(candidate['evidence']['snapshot_id'])
+        frozen = self._phase('review')
+        prior = {'version': row['versions'][-1]['version'],
+                 'review_binding_sha256': row['review_binding_sha256'], 'identity_context': row.get('identity_wait_context', {})}
+        row['identity_followup'] = {'prior': prior, 'context': context, 'max_followups': 1}
+        row['versions'].append({'version': prior['version'] + 1, 'candidate': copy.deepcopy(candidate),
+                                'kind': 'identity_confirmation'})
+        row.update(status='program_valid', review_binding_sha256=_hash(_json(
+            self._review_binding(frozen, snapshot, row['review_chunk'], context))))
+        self._save_candidate(row)
+        return self.review_candidate(candidate, identity_context=context, chunk=row['review_chunk'])
+
+    def extract_page(self, snapshot_id, *, identity_context=None, identity_target=None, max_chars=8000):
+        # A dependency's unverified target routes/filter extracts; it supplies
+        # no factual identity evidence to a review shared with ordinary jobs.
+        # Never strip keys from review context or relax cached input binding.
+        extraction_context = identity_context or {}
+        if identity_target is not None:
+            from .entities import EntityResolver
+            if self.domain_id != 'identity':
+                raise ValueError('identity target requires the identity domain')
+            try:
+                target, _ = EntityResolver(self.store, self.run_id, self.generation)._hint(identity_target)
+            except (ValueError, KeyError, TypeError, AttributeError) as exc:
+                raise ValueError('invalid identity target') from exc
+            if self.task_scope != 'identity:' + _hash(_json(target)):
+                raise ValueError('identity target does not match the bound task scope')
+            if {'dependency_entity_hint', 'hints_verified'} & extraction_context.keys():
+                raise ValueError('identity target must be separate from review context')
+            extraction_context = {**copy.deepcopy(extraction_context),
+                                  'dependency_entity_hint': copy.deepcopy(identity_target), 'hints_verified': False}
         frozen = self._phase('extract')
         snapshot = self.pages.read_snapshot(snapshot_id)
         chunks = self.pages.chunks(snapshot_id, max_chars=max_chars, domain_id=self.domain_id, scope=self.task_scope)['chunks']
-        plan_id = _hash(_json([self.domain_id, snapshot_id]))
+        dependency_scope = [self.task_scope] if self.task_scope.startswith('identity:') else []
+        plan_id = _hash(_json([self.domain_id, snapshot_id, *dependency_scope]))
         plan = {'max_chars': max_chars, 'chunks': chunks}
         def save_plan(state):
             prior = state['chunk_plans'].setdefault(plan_id, plan)
@@ -999,12 +1296,24 @@ class ModelService:
         self._update(save_plan)
         outcomes = []
         for chunk in chunks:
-            key = 'extract-' + _hash(_json([self.domain_id, snapshot_id, chunk['start'], chunk['end']]))
+            key = 'extract-' + _hash(_json([self.domain_id, snapshot_id, chunk['start'], chunk['end'], *dependency_scope]))
             saved = self.snapshot()['chunks'].get(key)
-            payload = self._payload(frozen, snapshot, chunk, identity_context or {})
+            payload = self._payload(frozen, snapshot, chunk, extraction_context)
             input_hash = _hash(_json(payload))
             if saved is not None and saved.get('input_sha256') != input_hash:
                 self._input_conflict('extract', key, 'execution_binding', saved.get('input_sha256'), input_hash, payload)
+            if saved is not None and saved.get('status') == 'awaiting_identity':
+                for identifier in saved['candidate_ids']:
+                    self.resume_identity_review(identifier)
+                candidates = [self.snapshot()['candidates'][identifier] for identifier in saved['candidate_ids']]
+                saved = {**saved, 'status': 'awaiting_identity' if any(r['status']=='awaiting_identity' for r in candidates)
+                    else 'review_failed' if any(r['status']=='review_failed' for r in candidates)
+                    else 'budget_stopped' if any(r['status']=='budget_stopped' for r in candidates)
+                    else 'pending' if any(r['status']=='pending' for r in candidates) else 'completed',
+                    'review_status': 'failed' if any(r['status']=='review_failed' for r in candidates)
+                    else 'budget_stopped' if any(r['status']=='budget_stopped' for r in candidates)
+                    else 'in_progress' if any(r['status'] in {'awaiting_identity','pending'} for r in candidates) else 'completed'}
+                self._update(lambda state: (dict(state, chunks={**state['chunks'], key: saved}), None, None))
             if saved is not None and saved.get('status') not in {'pending', 'extract_failed'}:
                 self._mark_coverage(key, snapshot_id, saved)
                 self._record_stages(key, saved)
@@ -1026,6 +1335,30 @@ class ModelService:
                 self._update(save_raw)
                 grouped = {}
                 for index, candidate in enumerate(raw):
+                    if self.domain_id == 'identity' and extraction_context.get('dependency_entity_hint'):
+                        from .entities import EntityResolver, candidate_entity_hint
+                        resolver = EntityResolver(self.store, self.run_id, self.generation)
+                        try:
+                            target, _ = resolver._hint(extraction_context['dependency_entity_hint'])
+                            actual, _ = resolver._hint(candidate_entity_hint(candidate))
+                            matches = all(actual.get(name)==value for name,value in target.items())
+                        except (ValueError, KeyError, TypeError, AttributeError):
+                            matches = False
+                        if not matches:
+                            self._update(lambda state: (state, None, {'kind':'identity_fact_outside_dependency',
+                                'domain_id':self.domain_id, 'raw_ref':raw_key, 'fact_index':index, 'scope':self.task_scope}))
+                            continue
+                    candidate, location_changes = locate_candidate_quotes(candidate, snapshot, chunk)
+                    if location_changes:
+                        location_id = raw_key + '/' + str(index)
+                        def save_location(state):
+                            audits = state.setdefault('quote_locations', [])
+                            if not any(row['id'] == location_id for row in audits):
+                                audits.append({'id': location_id, 'raw_ref': raw_key, 'fact_index': index,
+                                               'changes': location_changes})
+                            return state, None, {'kind': 'quote_located', 'domain_id': self.domain_id,
+                                                 'snapshot_id': snapshot_id, 'raw_ref': raw_key, 'fact_index': index}
+                        self._update(save_location)
                     if isinstance(candidate, dict) and isinstance(candidate.get('evidence'), dict):
                         logical = logical_candidate_id(candidate)
                     else:
@@ -1074,13 +1407,14 @@ class ModelService:
                 outcome = {'chunk': chunk, 'candidate_ids': [row['logical_candidate_id'] for row in rows],
                            'status': 'review_failed' if any(row['status'] == 'review_failed' for row in rows) else
                                      'budget_stopped' if any(row['status'] == 'budget_stopped' for row in rows) else
-                                     'pending' if any(row['status'] == 'pending' for row in rows) else 'completed',
+                                     'pending' if any(row['status'] == 'pending' for row in rows) else
+                                     'awaiting_identity' if any(row['status'] == 'awaiting_identity' for row in rows) else 'completed',
                            'linked_domains': invocation['response'].get('linked_domains', []), 'extract_status': 'completed',
                            'review_reused': any(row.get('duplicate_status') for row in rows),
                            'review_status': 'not_executed' if not review_executed else
                                             'failed' if any(row['status'] == 'review_failed' for row in rows) else
                                             'budget_stopped' if any(row['status'] == 'budget_stopped' for row in rows) else
-                                            'in_progress' if any(row['status'] == 'pending' for row in rows) else
+                                            'in_progress' if any(row['status'] in {'pending','awaiting_identity'} for row in rows) else
                                             'completed' if any(row['reviews'] for row in rows) else 'not_executed'}
             outcome['input_sha256'] = input_hash
             def save_chunk(state):
@@ -1100,7 +1434,7 @@ class ModelService:
                 'outstanding': [row for row in outcomes if row['status'] != 'completed']}
 
     def _mark_coverage(self, key, snapshot_id, outcome):
-        status = 'processed' if outcome['status'] == 'completed' else 'pending' if outcome['status'] in {'pending', 'budget_stopped'} else 'failed'
+        status = 'processed' if outcome['status'] == 'completed' else 'pending' if outcome['status'] in {'pending', 'budget_stopped', 'awaiting_identity'} else 'failed'
         return self.pages.mark_coverage('model-coverage-' + _hash(_json([key, self.task_scope, status])), snapshot_id,
             outcome['chunk']['start'], outcome['chunk']['end'], status, domain_id=self.domain_id, scope=self.task_scope)
 

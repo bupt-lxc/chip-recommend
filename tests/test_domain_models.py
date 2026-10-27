@@ -22,6 +22,42 @@ def test_models_module_exists():
     assert importlib.util.find_spec('chip_model.pipeline.domain_discovery.models') is not None
 
 
+@pytest.mark.parametrize('text,field,value,unit', [
+    ('X80单芯片功耗达1300W','tdp_w',1300,'W'),
+    ('X80功耗约1300 W','tdp_w',1300,'W'),
+    ('X80功耗为+1300W','tdp_w',1300,'W'),
+    ('X80显存容量为64GB','vram_gb',64,'GB'),
+])
+def test_chinese_adjacent_quantity_with_explicit_unit_is_valid(module,environment,text,field,value,unit):
+    _,snapshot=page(environment,text)
+    candidate=fact(snapshot,field_name=field,raw_value=value,normalized_value=value,unit=unit,
+                   conversion={'source_unit':unit,'factor':1,'basis':'decimal'})
+    before=copy.deepcopy(candidate)
+    program=module.validate_candidate(candidate,load_phase(environment[-1],'specs','extract')['contract'],
+                                      snapshot,{'start':0,'end':len(snapshot['text']),'context_refs':[]})
+    assert program['status']=='program_valid' and candidate==before
+
+
+@pytest.mark.parametrize('text,sku,field,value,unit', [
+    ('H1300W型号,功耗300W','H1300W','tdp_w',1300,'W'),
+    ('X-1300W型号,功耗300W','X-1300W','tdp_w',1300,'W'),
+    ('昇腾1300W型号,功耗300W','昇腾1300W','tdp_w',1300,'W'),
+    ('X80功耗-1300W','X80','tdp_w',1300,'W'),
+    ('X80功耗13 W和00 W','X80','tdp_w',1300,'W'),
+    ('X80功耗1300.5W','X80','tdp_w',300,'W'),
+    ('X80功耗1300Watt','X80','tdp_w',1300,'W'),
+    ('X80带宽64GB/s','X80','vram_gb',64,'GB'),
+])
+def test_chinese_numeric_relaxation_never_uses_sku_or_spliced_values(module,environment,text,sku,field,value,unit):
+    _,snapshot=page(environment,text)
+    candidate=fact(snapshot,entity_key={'vendor':'Vendor','chip_model':sku},entity_hints={'full_sku':sku},
+                   field_name=field,raw_value=value,normalized_value=value,unit=unit,
+                   conversion={'source_unit':unit,'factor':1,'basis':'decimal'})
+    with pytest.raises(ValueError,match='raw numeric value'):
+        module.validate_candidate(candidate,load_phase(environment[-1],'specs','extract')['contract'],
+                                  snapshot,{'start':0,'end':len(snapshot['text']),'context_refs':[]})
+
+
 @pytest.fixture
 def module():
     assert importlib.util.find_spec('chip_model.pipeline.domain_discovery.models') is not None
@@ -159,18 +195,20 @@ def test_extract_and_independent_review_receive_complete_same_frozen_bundle(modu
     assert pages.chunks(snapshot['snapshot_id'], domain_id='specs')['coverage']['complete']
 
 
-@pytest.mark.parametrize('reason,text,changes', [
-    ('wrong SKU', 'X80-A: 64GB; X80-B: 80GB', {'entity_key': {'vendor': 'Vendor', 'chip_model': 'X80-A'}, 'raw_value': 80, 'normalized_value': 80}),
-    ('system power', 'X80 server total power 2400 W', {'field_name': 'tdp_w', 'unit': 'W', 'raw_value': 2400, 'normalized_value': 2400, 'conversion': {'source_unit': 'W', 'factor': 1}}),
-    ('unrelated quote', 'X80 ships in 64 countries; capacity unit GB is listed separately', {}),
+@pytest.mark.parametrize('reason,text,changes,status,calls', [
+    ('wrong SKU', 'X80-A: 64GB; X80-B: 80GB', {'entity_key': {'vendor': 'Vendor', 'chip_model': 'X80-A'}, 'raw_value': 80, 'normalized_value': 80}, 'unresolved', 1),
+    ('system power', 'X80 server total power 2400 W', {'field_name': 'tdp_w', 'unit': 'W', 'raw_value': 2400, 'normalized_value': 2400, 'conversion': {'source_unit': 'W', 'factor': 1}}, 'semantic_rejected', 2),
+    ('unrelated quote', 'X80 ships in 64 countries; capacity unit GB is listed separately', {}, 'unresolved', 1),
 ])
-def test_semantic_false_facts_are_never_program_only_accepted(module, environment, reason, text, changes):
+def test_semantic_false_facts_are_never_program_only_accepted(module, environment, reason, text, changes, status, calls):
     pages, snapshot = page(environment, text)
     candidate = fact(snapshot, **changes)
     client = FakeModel([{'facts': [candidate]}, {'verdict': 'reject', 'reason': reason}])
     result = service(module, environment, pages, client).extract_page(snapshot['snapshot_id'])
-    assert result['candidates'][0]['status'] == 'semantic_rejected'
-    assert len(client.requests) == 2 and result['complete']
+    assert result['candidates'][0]['status'] == status
+    assert len(client.requests) == calls and result['complete']
+    if status == 'unresolved':
+        assert result['candidates'][0]['reason'] == 'sku_value_binding_unresolved'
 
 
 @pytest.mark.parametrize('change', [
@@ -582,7 +620,7 @@ def test_model_coverage_is_authoritative_and_isolated_per_domain_scope(module, e
 
 
 def test_successful_sibling_review_cannot_hide_failed_fact_in_same_chunk(module, environment):
-    pages, snapshot = page(environment, 'X80 memory 64 GB, single card TDP 300 W')
+    pages, snapshot = page(environment, 'X80 memory 64 GB, X80 single card TDP 300 W')
     vram = fact(snapshot)
     power = fact(snapshot, field_name='tdp_w', raw_value=300, normalized_value=300, unit='W',
                  conversion={'source_unit': 'W', 'factor': 1})
@@ -596,7 +634,7 @@ def test_successful_sibling_review_cannot_hide_failed_fact_in_same_chunk(module,
 
 
 def test_pending_review_then_true_completion_clears_range_only_after_all_facts_finished(module, environment, monkeypatch):
-    pages, snapshot = page(environment, 'X80 memory 64 GB, single card TDP 300 W')
+    pages, snapshot = page(environment, 'X80 memory 64 GB, X80 single card TDP 300 W')
     vram = fact(snapshot)
     power = fact(snapshot, field_name='tdp_w', raw_value=300, normalized_value=300, unit='W',
                  conversion={'source_unit': 'W', 'factor': 1})
@@ -1107,3 +1145,274 @@ def test_legacy_transport_rejects_invalid_temperature_before_request(module,monk
     monkeypatch.setattr('requests.post',lambda *args,**kwargs:pytest.fail('invalid configuration must not send request'))
     with pytest.raises(ValueError,match='TEMPERATURE'):
         module.OpenAIModelTransport().call_model(messages=[],timeout=7)
+
+
+def test_extract_prompt_scopes_backend_and_explains_candidate_contract(module, environment):
+    frozen = load_phase(environment[-1], 'specs', 'extract')
+    messages = module.phase_messages('extract', frozen['skill_text'], frozen['references'], frozen['contract'], {})
+    instruction = messages[0]['content']
+    assert 'BACKEND PHASE TASK: extract' in instruction
+    assert 'empty baseline' in instruction
+    assert 'entity_hints' in instruction and 'Omit unknown optional hints' in instruction
+    assert 'numeric raw_value' in instruction
+    assert 'continuous substring' in instruction
+    for reference in frozen['references'].values():
+        assert reference in instruction
+
+
+@pytest.mark.parametrize('text,quote,start,end,expected', [
+    ('Vendor X80 64GB', '64GB', 1, 5, (11, 15)),
+    ('64GB / 64GB', '64GB', 7, 11, (7, 11)),
+    ('64GB / 64GB', '64GB', 1, 5, (1, 5)),
+    ('64 GB', '64GB', 0, 4, (0, 4)),
+])
+def test_quote_location_only_repairs_unique_verbatim_evidence(module, text, quote, start, end, expected):
+    snapshot = {'snapshot_id': 's', 'body_hash': 'h', 'text': text}
+    candidate = {'evidence': {'snapshot_id': 's', 'body_hash': 'h', 'quote': quote, 'start': start, 'end': end}}
+    located, audit = module.locate_candidate_quotes(candidate, snapshot, {'start': 0, 'end': len(text), 'context_refs': []})
+    assert (located['evidence']['start'], located['evidence']['end']) == expected
+    assert candidate['evidence']['start'] == start
+    assert bool(audit) == (expected != (start, end))
+
+
+def test_quote_location_rejects_wrong_snapshot_and_outside_chunk(module):
+    snap = {'snapshot_id': 's', 'body_hash': 'h', 'text': '64GB outside'}
+    for sid, chunk in [('other', {'start': 0, 'end': 12, 'context_refs': []}),
+                       ('s', {'start': 5, 'end': 12, 'context_refs': []})]:
+        candidate = {'evidence': {'snapshot_id': sid, 'body_hash': 'h', 'quote': '64GB', 'start': 1, 'end': 5}}
+        located, audit = module.locate_candidate_quotes(candidate, snap, chunk)
+        assert located == candidate and not audit
+
+
+def test_extract_locates_quote_before_validation_and_retains_raw_audit(module, environment):
+    pages, snapshot = page(environment)
+    candidate = fact(snapshot)
+    candidate['evidence'].update(start=1, end=2)
+    client = FakeModel([{'facts': [candidate]}, {'verdict': 'accept', 'reason': 'Exact source supports this SKU capacity.'}])
+    models = service(module, environment, pages, client)
+    result = models.extract_page(snapshot['snapshot_id'])
+    assert result['candidates'][0]['status'] == 'validated'
+    assert models.snapshot()['raw_facts'][0]['facts'][0]['evidence']['start'] == 1
+    assert models.snapshot()['quote_locations'][0]['changes'][0]['method'] == 'unique_exact_substring'
+
+
+def test_quote_location_requires_integer_offsets_and_keeps_validation_strict(module):
+    snap = {'snapshot_id': 's', 'body_hash': 'h', 'text': 'prefix GPU 64GB'}
+    chunk = {'start': 0, 'end': len(snap['text']), 'context_refs': []}
+    candidate = {'evidence': {'snapshot_id': 's', 'body_hash': 'h', 'quote': '64GB', 'start': True, 'end': 4}}
+    located, changes = module.locate_candidate_quotes(candidate, snap, chunk)
+    assert located == candidate and not changes
+    with pytest.raises(ValueError):
+        module.validate_quote(snap['text'], located['evidence'])
+
+
+def test_quote_location_unicode_nonzero_chunk_and_context_deduplication(module):
+    snap = {'snapshot_id': 's', 'body_hash': 'h', 'text': '标题\n芯片 X80：64GB'}
+    chunk = {'start': 3, 'end': len(snap['text']), 'context_refs': [{'start': 3, 'end': len(snap['text'])}]}
+    candidate = {'evidence': {'snapshot_id': 's', 'body_hash': 'h', 'quote': '64GB', 'start': 0, 'end': 4}}
+    located, changes = module.locate_candidate_quotes(candidate, snap, chunk)
+    assert located['evidence']['start'] == snap['text'].index('64GB')
+    assert len(changes) == 1
+    assert module.validate_quote(snap['text'], located['evidence'])
+
+
+def test_extract_payload_binds_backend_protocol_version(module, environment):
+    pages, snapshot = page(environment)
+    models = service(module, environment, pages, FakeModel([]))
+    chunk = pages.chunks(snapshot['snapshot_id'])['chunks'][0]
+    payload = models._payload(models._phase('extract'), snapshot, chunk, {})
+    assert payload['backend_protocol_version'] == 8
+
+
+def test_extract_required_schema_describes_facts_not_unconstrained_json(module, environment):
+    pages, snapshot = page(environment)
+    models = service(module, environment, pages, FakeModel([]))
+    payload = models._payload(models._phase('extract'), snapshot, pages.chunks(snapshot['snapshot_id'])['chunks'][0], {})
+    item = payload['required_schema']['properties']['facts']['items']
+    assert item['additionalProperties'] is False
+    assert 'entity_key' in item['properties'] and 'evidence' in item['required']
+    assert 'confidence_reason_detail' not in item['properties']
+    messages = module.phase_messages('extract', '', {}, {}, payload)
+    assert 'conversion.description' in messages[0]['content']
+    assert 'no extra properties' in messages[0]['content']
+
+
+@pytest.mark.parametrize('raw,normalized,valid', [
+    (2, 2, True), (2.5, 2.5, True), ('2nm', 2, False),
+    ('2', 2, False), (2, '2', False), (True, 2, False),
+])
+def test_extract_schema_enforces_frozen_numeric_field_types(module, environment, raw, normalized, valid):
+    import jsonschema
+    pages, snapshot = page(environment, 'X80 uses 2nm')
+    models = service(module, environment, pages, FakeModel([]))
+    frozen = models._phase('extract')
+    before = copy.deepcopy(frozen)
+    payload = models._payload(frozen, snapshot, pages.chunks(snapshot['snapshot_id'])['chunks'][0], {})
+    candidate = fact(snapshot, field_name='process_node_nm', raw_value=raw, normalized_value=normalized,
+                     unit='nm', conversion={'source_unit': 'nm', 'factor': 1})
+    response = {'facts': [candidate], 'linked_domains': []}
+    if valid:
+        jsonschema.validate(response, payload['required_schema'])
+    else:
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(response, payload['required_schema'])
+    assert frozen == before
+    # Wire models and independent reviewer stay compatible with archived proofs.
+    assert payload['candidate_schema'] == module.FactCandidate.model_json_schema()
+    review = models._payload(models._phase('review'), snapshot,
+                             pages.chunks(snapshot['snapshot_id'])['chunks'][0], {}, candidate)
+    assert review['required_schema'] == module.ReviewResponse.model_json_schema()
+
+
+def test_extract_schema_keeps_prose_and_source_format_fields(module, environment):
+    import jsonschema
+    pages, snapshot = page(environment, 'X80 uses HBM3')
+    models = service(module, environment, pages, FakeModel([]))
+    frozen = models._phase('extract')
+    # No numeric assumption for source-native formats or unowned unit metadata.
+    frozen['contract']['units'].update(vram_type='explicit_source_format', not_owned='W')
+    payload = models._payload(frozen, snapshot, pages.chunks(snapshot['snapshot_id'])['chunks'][0], {})
+    candidate = fact(snapshot, field_name='vram_type', raw_value='HBM3', normalized_value='HBM3',
+                     unit=None, conversion={})
+    jsonschema.validate({'facts': [candidate], 'linked_domains': []}, payload['required_schema'])
+    assert 'not_owned' not in json.dumps(payload['required_schema'])
+
+
+def test_extract_prompt_requires_separate_concrete_variants_and_complete_claim(module):
+    legacy = module.phase_messages('extract', '', {}, {}, {'backend_protocol_version': 6})[0]['content']
+    current = module.phase_messages('extract', '', {}, {}, {'backend_protocol_version': 7})[0]['content']
+    assert 'EXTRACTION FIELD TYPES AND SUBJECTS' not in legacy
+    assert 'EXTRACTION FIELD TYPES AND SUBJECTS' in current
+    assert 'separate fact for each concrete named SKU' in current
+    assert 'include the named subjects and shared predicate' in current
+
+
+@pytest.mark.parametrize('phase,expected', [
+    ('extract', 'b7e6ecab1017fbaaddffafc3d3eed8930fa1fbd22387ca99be11e74ff26a45e0'),
+    ('review', '64826633da4ee95d690dfcb5086f288e6ae0377c24b75ef5a88098d0a4340766'),
+])
+def test_protocol_six_archived_prompt_bytes_remain_unchanged(module, phase, expected):
+    import hashlib
+    system = module.phase_messages(phase, 'frozen skill', {'rules': 'frozen ref'},
+        {'domain_id': 'specs', 'fields': {'chips': ['tdp_w']}},
+        {'backend_protocol_version': 6, 'candidate': {'target_table': 'chips', 'field_name': 'tdp_w'}})[0]['content']
+    assert hashlib.sha256(system.encode()).hexdigest() == expected
+
+
+def test_review_json_schema_expresses_revision_only_candidate(module):
+    import jsonschema
+    schema = module.ReviewResponse.model_json_schema()
+    jsonschema.validate({'verdict': 'accept', 'reason': 'Supported', 'candidate': None}, schema)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({'verdict': 'accept', 'reason': 'Supported', 'candidate': {}}, schema)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({'verdict': 'revise', 'reason': 'Correct source', 'candidate': None}, schema)
+
+
+def test_source_schema_distinguishes_first_party_release_from_media(module):
+    description = module.FactCandidate.model_json_schema()['properties']['source_type'].get('description', '')
+    assert 'first-party' in description and 'third-party' in description
+    for phase in ['extract', 'review']:
+        prompt = module.phase_messages(phase, '', {}, {}, {})[0]['content']
+        assert 'third-party media' in prompt and 'actual page publisher' in prompt
+
+
+def test_compute_skill_metadata_names_resolve_to_candidate_schema(module):
+    contract = json.loads((ROOT / '.hermes-skills/chip-compute/domain.json').read_text(encoding='utf-8'))
+    paths = contract['conditions']['business_format']['metadata']
+    assert set(paths) == {'conversion.precision', 'conversion.source_unit', 'raw_value',
+                          'conversion.dense_or_sparse', 'conversion.calculation_basis'}
+    for path in paths:
+        parts = path.split('.')
+        assert parts[0] in module.FactCandidate.model_fields
+        if len(parts) == 2:
+            assert parts[0] == 'conversion' and parts[1] in module.Conversion.model_fields
+
+
+@pytest.mark.parametrize('domain', ['identity', 'specs', 'compute', 'compatibility', 'benchmark', 'deployment'])
+def test_frozen_skill_schema_examples_reach_extract_and_review(module, environment, domain):
+    import re
+    frozen = load_phase(environment[-1], domain, 'extract')
+    shared = frozen['references']['_shared/rules.md']
+    marker = '## 候选 JSON 输出与 Schema 对齐'
+    assert marker in shared
+    section = shared.split(marker, 1)[1].split('\n## ', 1)[0]
+    examples = re.findall(r'```json\s*\n(.*?)\n```', section, re.DOTALL)
+    assert len(examples) == 1
+    examples = json.loads(examples[0])
+    assert len(examples) == 4
+    for example in examples:
+        candidate = fact({'text': 'Fictional example', 'snapshot_id': 'example', 'body_hash': 'example'})
+        candidate.update(example)
+        module.FactCandidate.model_validate(candidate)
+    assert any(e['conversion'] == {} for e in examples)
+    assert any(e['raw_value'] == 2 and e['unit'] == 'nm' for e in examples)
+    assert any(e['conversion'].get('precision') == 'INT8' for e in examples)
+    for phase in ['extract', 'review']:
+        prompt = module.phase_messages(phase, frozen['skill_text'], frozen['references'], frozen['contract'], {})[0]['content']
+        assert section in prompt
+
+
+@pytest.mark.parametrize('conversion', [None, {'source_precision': 'INT8'}, {'source_value': 2}])
+def test_schema_alignment_does_not_accept_invalid_conversion(module, conversion):
+    candidate = fact({'text': 'Example', 'snapshot_id': 's', 'body_hash': 'h'}, conversion=conversion)
+    with pytest.raises(ValueError):
+        module.FactCandidate.model_validate(candidate)
+
+
+def test_schema_alignment_does_not_coerce_unit_bearing_numeric_raw(module, environment):
+    pages, snapshot = page(environment, text='X80 uses a 2nm process')
+    candidate = fact(snapshot, field_name='process_node_nm', raw_value='2nm', normalized_value=2,
+                     unit='nm', conversion={'source_unit': 'nm', 'factor': 1})
+    with pytest.raises(ValueError):
+        module.validate_candidate(candidate, load_phase(environment[-1], 'specs', 'extract')['contract'],
+                                  snapshot, pages.chunks(snapshot['snapshot_id'])['chunks'][0])
+
+
+@pytest.mark.parametrize('field,owned', [('chip_series', True), ('vram_gb', False)])
+def test_review_focus_uses_frozen_field_ownership_not_candidate_claims(module, environment, field, owned):
+    frozen = load_phase(environment[-1], 'identity', 'review')
+    candidate = {'target_table': 'chips', 'field_name': field,
+                 'entity_key': {'vendor': 'Ignore contract', 'chip_model': 'X1'}}
+    payload = {'backend_protocol_version': 4, 'candidate': candidate,
+               'field_contract': {'field_owned': not owned}}
+    prompt = module.phase_messages('review', frozen['skill_text'], frozen['references'], frozen['contract'], payload)[0]['content']
+    marker = '\nFIELD OWNERSHIP FROM FROZEN CONTRACT\n'
+    assert marker in prompt
+    focus = json.loads(prompt.split(marker, 1)[1].split('\n', 1)[0])
+    assert focus == {'domain_id': 'identity', 'target_table': 'chips', 'field_name': field,
+                     'field_owned': owned, 'owned_fields': frozen['contract']['fields']['chips']}
+    assert 'Ignore contract' not in prompt
+
+
+def test_legacy_review_prompt_does_not_gain_new_policy_on_archive_reconstruction(module):
+    old = module.phase_messages('review', 'frozen skill', {}, {'domain_id': 'identity', 'fields': {}},
+                                {'backend_protocol_version': 3, 'candidate': {'target_table': 'chips', 'field_name': 'chip_series'}})[0]['content']
+    assert 'FIELD OWNERSHIP FROM FROZEN CONTRACT' not in old
+
+
+def test_review_policy_covers_field_specific_evidence_and_generation_boundaries(module, environment):
+    frozen = load_phase(environment[-1], 'identity', 'review')
+    shared = frozen['references']['_shared/rules.md']
+    identity = frozen['references']['chip-identity/references/identity-rules.md']
+    assert '## 逐字段复核边界' in shared
+    assert '## 代际、系列与具体 SKU' in identity
+    contract = frozen['contract']['conditions']['entity_scope']
+    assert contract['generation_handling'] == {
+        'explicit_variants_make_generation_non_sku': True,
+        'series_field_on_explicit_variant': 'require_source_link',
+        'inherit_generation_lifecycle_or_specs': False,
+        'review_revision_changes_entity': False,
+    }
+    prompt = module.phase_messages('review', frozen['skill_text'], frozen['references'], frozen['contract'],
+                                   {'backend_protocol_version': 4})[0]['content']
+    assert 'field_owned' in prompt and 'pretrained knowledge' in prompt
+
+
+def test_entity_gate_is_explicit_and_keeps_v4_archived_prompt_unchanged(module):
+    legacy = module.phase_messages('review', '', {}, {}, {'backend_protocol_version': 4})[0]['content']
+    current = module.phase_messages('review', '', {}, {}, {'backend_protocol_version': 5})[0]['content']
+    assert 'ENTITY GATE BEFORE FIELD VALUE' not in legacy
+    assert current.startswith(legacy)
+    assert 'NEVER exempts a wrong family-level entity key' in current
+    assert 'needs_identity=false' in current

@@ -1,0 +1,1593 @@
+{
+  "date": "2026-10-21",
+  "status": "targeted_fixes_verified_remaining_semantic_false_acceptance",
+  "scope": "same saved TPU v8 complete body, specs plus standalone identity; no searches or source fetches",
+  "changes": [
+    "Review gets trusted per-field ownership projection from frozen contract",
+    "Review/extraction rules distinguish parent generation from concrete variants and linked chip_series",
+    "Backend protocol 5 adds entity gate before field value; preserves archived protocol 3/4 prompts",
+    "Entity policy 3 treats actual rejected/unresolved chip_model review as conflict for the exact same variant; vendor approval cannot bypass it"
+  ],
+  "tdd": {
+    "field_focus_red": {
+      "failed": 4,
+      "passed": 1
+    },
+    "field_focus_green": 5,
+    "identity_conflict_red": {
+      "failed": 3,
+      "passed": 1
+    },
+    "identity_conflict_green": 4
+  },
+  "regression": {
+    "tests": 391,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "strict_candidate_schema_unchanged": true,
+  "strict_review_schema_unchanged": true,
+  "live_replay": {
+    "model": "qwen3.8-flash",
+    "calls": 28,
+    "cases": [
+      {
+        "domain": "specs",
+        "run_id": "run-d22dc7471cb140f2aa6798dc7642edb3",
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-identity-fixed-replay\\specs-b1254404-2d4a83",
+        "bundle_sha256": "03c71ceff1c8ddb693ae6cc7ace3a55a448c512a42266d567bd0b72dc586c92b",
+        "protocols": [
+          5
+        ],
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "candidate_statuses": {
+          "validated": 9,
+          "semantic_rejected": 3,
+          "program_rejected": 1
+        },
+        "raw_facts": 13,
+        "explicit_conversion_null": 0,
+        "calls": 15,
+        "call_statuses": {
+          "completed": 15
+        },
+        "family_candidates": [
+          {
+            "field": "tdp_w",
+            "status": "semantic_rejected",
+            "reason": "The entity key 'TPU v8' is a family/generation name explicitly split into concrete variants (TPU 8t and TPU 8i) in the source text. The contract rules state that when a generation is split into named variants, the parent cannot be used as a concrete chip SKU for field extraction. Additionally, the value 1300W is attributed to the general 'TPU v8' family context rather than a specific variant's datasheet specification."
+          }
+        ],
+        "candidates": [
+          {
+            "id": "fact-1c54d82d10d17e9e4cc424cdfc27cbdc842a456c2bee29cbba4ddb09cca4e49e",
+            "domain": "identity",
+            "status": "validated",
+            "field": "vendor",
+            "entity": {
+              "chip_model": "TPU 8i",
+              "vendor": "Google"
+            },
+            "value": "Google",
+            "reason": "The candidate identifies a concrete SKU 'TPU 8i' which is explicitly named in the source text as an inference chip variant of TPU v8. The vendor 'Google' is correctly attributed based on the context of Google's TPU product line mentioned throughout the article (e.g., 'Google Cloud Next', 'Google's liquid cooling path'). The evidence quote supports the existence and naming of this specific model. Although the page is a third-party news report (web_crawl), it provides sufficient explicit textual evidence for the identity fields (vendor and model) without requiring official datasheet status for these basic identification facts. The entity key is valid, and the field value is supported.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The candidate identifies a concrete SKU 'TPU 8i' which is explicitly named in the source text as an inference chip variant of TPU v8. The vendor 'Google' is correctly attributed based on the context of Google's TPU product line mentioned throughout the article (e.g., 'Google Cloud Next', 'Google's liquid cooling path'). The evidence quote supports the existence and naming of this specific model. Although the page is a third-party news report (web_crawl), it provides sufficient explicit textual evidence for the identity fields (vendor and model) without requiring official datasheet status for these basic identification facts. The entity key is valid, and the field value is supported.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-4a40148d1fc1cd2be536cdf91686a1fdbd2d31f1f482539b2928dca7203ddc79",
+            "domain": "specs",
+            "status": "validated",
+            "field": "process_node_nm",
+            "entity": {
+              "chip_model": "TPU 8i",
+              "vendor": "Google"
+            },
+            "value": 2,
+            "reason": "The source text explicitly states that the inference chip TPU 8i (codename Zebrafish) is locked to TSMC's 2nm process node ('均锁定台积电2nm制程'). The entity key correctly identifies 'TPU 8i' as a concrete SKU variant of the TPU v8 family, satisfying the entity gate. The field 'process_node_nm' is owned by the specs domain, and the value '2' with unit 'nm' matches the evidence. The source type 'web_crawl' is appropriate for this third-party industry report.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states that the inference chip TPU 8i (codename Zebrafish) is locked to TSMC's 2nm process node ('均锁定台积电2nm制程'). The entity key correctly identifies 'TPU 8i' as a concrete SKU variant of the TPU v8 family, satisfying the entity gate. The field 'process_node_nm' is owned by the specs domain, and the value '2' with unit 'nm' matches the evidence. The source type 'web_crawl' is appropriate for this third-party industry report.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-60feb5cfe2e2f2ae7d13e29e64690fc0a9648c525daf29d85e48a8c7fa971892",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_series",
+            "entity": {
+              "chip_model": "TPU 8i",
+              "vendor": "Google"
+            },
+            "value": "TPU v8",
+            "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i...', establishing a clear hierarchical relationship between the generation (v8) and the specific SKU (8i). The identity rules allow recording the explicitly linked family/generation in the chip_series field for a concrete variant. The entity key is correct, the evidence supports the value, and the source type (web_crawl) accurately reflects the third-party nature of the page.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i...', establishing a clear hierarchical relationship between the generation (v8) and the specific SKU (8i). The identity rules allow recording the explicitly linked family/generation in the chip_series field for a concrete variant. The entity key is correct, the evidence supports the value, and the source type (web_crawl) accurately reflects the third-party nature of the page.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-663fa108ad04f31d98d0ae7338a1a8540048df219dac0ec8a71ec80a3679c02f",
+            "domain": "identity",
+            "status": "semantic_rejected",
+            "field": "release_date",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "2026-04-22",
+            "reason": "The evidence states 'TPU v8 release' on April 22, 2026. The page explicitly splits TPU v8 into variants TPU 8t and TPU 8i ('TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i'). According to identity rules, a generation split into named variants is not a concrete SKU for individual field attribution unless the text explicitly links the specific variant's lifecycle event (release date) to that date. The text says 'the release of the eighth generation TPU', which refers to the family/generation announcement. It does not provide explicit evidence that the specific SKU 'TPU 8t' was released on that exact date distinct from the series launch context. Transferring the family-level release date to the specific child SKU without explicit linkage violates the rule: 'Do not transfer family-level dates or specifications to a variant'. Therefore, the candidate using entity_key chip_model='TPU 8t' with this evidence is rejected.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The evidence states 'TPU v8 release' on April 22, 2026. The page explicitly splits TPU v8 into variants TPU 8t and TPU 8i ('TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i'). According to identity rules, a generation split into named variants is not a concrete SKU for individual field attribution unless the text explicitly links the specific variant's lifecycle event (release date) to that date. The text says 'the release of the eighth generation TPU', which refers to the family/generation announcement. It does not provide explicit evidence that the specific SKU 'TPU 8t' was released on that exact date distinct from the series launch context. Transferring the family-level release date to the specific child SKU without explicit linkage violates the rule: 'Do not transfer family-level dates or specifications to a variant'. Therefore, the candidate using entity_key chip_model='TPU 8t' with this evidence is rejected.",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-6e8c6f86a96c2eb707eb62000c5a283e727610ba407952ed02c1e6c43953603f",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_series",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "TPU v8",
+            "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', establishing a clear hierarchical relationship where 'TPU v8' is the series/generation for the specific SKU 'TPU 8t'. The entity key correctly uses the concrete variant 'TPU 8t' as required by identity rules when a generation is split, and the field 'chip_series' is populated with the parent generation name supported by the text. The evidence quote matches the snapshot location.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', establishing a clear hierarchical relationship where 'TPU v8' is the series/generation for the specific SKU 'TPU 8t'. The entity key correctly uses the concrete variant 'TPU 8t' as required by identity rules when a generation is split, and the field 'chip_series' is populated with the parent generation name supported by the text. The evidence quote matches the snapshot location.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-83901114747f233f3b085c170d7771b73816ba6ec42dbdf137456870881dc60d",
+            "domain": "specs",
+            "status": "validated",
+            "field": "process_node_nm",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": 2,
+            "reason": "The source text explicitly states that TPU v8 is split into training chip TPU 8t and inference chip TPU 8i, and that both chips are locked to TSMC's 2nm process. The candidate correctly identifies the specific SKU 'TPU 8t' as a concrete variant (not just the parent family) and attributes the '2nm' value to it based on the phrase 'both... use TSMC 2nm'. The field ownership for process_node_nm in the specs domain is valid. The source_type 'web_crawl' is appropriate for this third-party industry news article.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states that TPU v8 is split into training chip TPU 8t and inference chip TPU 8i, and that both chips are locked to TSMC's 2nm process. The candidate correctly identifies the specific SKU 'TPU 8t' as a concrete variant (not just the parent family) and attributes the '2nm' value to it based on the phrase 'both... use TSMC 2nm'. The field ownership for process_node_nm in the specs domain is valid. The source_type 'web_crawl' is appropriate for this third-party industry news article.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-98d6235a6b01fd9ef335560a63c5988d0ae42fa5f218ee0fdd1ff5aaed480a31",
+            "domain": "identity",
+            "status": "validated",
+            "field": "usage",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "training",
+            "reason": "The candidate entity 'TPU 8t' is a concrete SKU explicitly named in the source text as the training chip ('训练芯片'). The evidence quote directly supports the usage field value 'training'. The source type 'web_crawl' is correct for this third-party industry news page. The normalization from Chinese to English is valid.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The candidate entity 'TPU 8t' is a concrete SKU explicitly named in the source text as the training chip ('训练芯片'). The evidence quote directly supports the usage field value 'training'. The source type 'web_crawl' is correct for this third-party industry news page. The normalization from Chinese to English is valid.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-b044cebd70d25bc5b43e7f2aa289b248d06507dbb3a7d983b3af14446dd09375",
+            "domain": "identity",
+            "status": "semantic_rejected",
+            "field": "vendor",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "Google",
+            "reason": "The entity_key 'TPU 8t' is a specific variant explicitly split from the parent generation 'TPU v8' in the source text ('TPU v8分拆为训练芯片TPU 8t...'). According to identity rules, when a generation is split into named variants, the parent generation cannot be used as a concrete SKU for field extraction unless explicitly linked. While the vendor 'Google' is correct for the product line, the candidate uses the parent generation context or implies it without strictly binding the vendor evidence to the specific variant 'TPU 8t' in a way that bypasses the generation gate. More critically, the evidence quote provided ('谷歌TPU v8全面液冷...') refers to the parent 'TPU v8', not specifically 'TPU 8t'. The rule states: 'If the source has split into multiple sub-models, candidates using the parent generation key for vendor/chip_type/release_date etc. cannot pass.' Although the entity_key here is 'TPU 8t', the *evidence* cited is for 'TPU v8'. The explanation claims the title/body identifies Google as owner of the TPU line, but does not provide direct evidence linking 'Google' specifically to the string 'TPU 8t' in the quoted snippet (which says 'TPU v8'). However, looking at the full text, 'TPU 8t' is mentioned later. But the primary issue is often misattribution or using general family info. Let's re-read carefully. The rule says: 'A family/generation explicitly split into named variants is not itself a concrete SKU.' The candidate entity is 'TPU 8t'. Is 'TPU 8t' a concrete SKU? Yes. Does the evidence support 'Google' as the vendor for 'TPU 8t'? The text says 'TPU v8分拆为训练芯片TPU 8t...'. It also says 'Google的...TPU'. So Google is the vendor of TPU v8, which contains TPU 8t. This seems valid. \n\nWait, let's look at the ENTITY GATE instruction again: 'First validate entity_key as a concrete source-supported SKU... A correct vendor... NEVER exempts a wrong family-level entity key.' Here the key is 'TPU 8t', which IS a concrete SKU. \n\nLet's check the evidence quote vs entity. Quote: '谷歌TPU v8全面液冷如何重构全球AI供应链'. Entity: 'TPU 8t'. The quote mentions 'TPU v8', not 'TPU 8t'. The explanation says 'The title and body refer to ... identifying Google as the vendor/owner of the TPU line.' \n\nIs there a violation? 'Do not transfer family-level dates or specifications to a variant'. Vendor is usually inherited. \n\nHowever, there is a stricter rule: 'When the page explicitly splits a generation into variants, reject candidates using the parent as a concrete chip'. The candidate uses 'TPU 8t' (child), not 'TPU v8' (parent). So this specific rejection reason doesn't apply directly to the key.\n\nLet's look at `source_type`. The URL is `lianliwork.com`, a third-party liquid cooling company blog/news site. It is NOT an official Google announcement. The candidate marks it as `web_crawl` with `confidence: high`. This classification is correct per instructions ('third-party media reports... are community or web_crawl').\n\nLet's look at the `vendor` value. Raw: 'Google'. Normalized: 'Google'. Evidence quote starts with '谷歌' (Chinese for Google). The normalization '谷歌' -> 'Google' is standard. \n\nIs there any other issue? \nReviewing the `identity-rules.md`: '身份厂商与型号逐字有证据...'. The quote '谷歌TPU v8...' provides evidence for 'Google' being associated with 'TPU v8'. Since 'TPU 8t' is part of 'TPU v8', is this sufficient? Usually yes for vendor.\n\nBut wait, look at the `entity_key` construction in the prompt's example logic or similar cases. If the evidence only supports the parent, can we extract for the child? 'Parent generation... cannot be used as a concrete chip'. We are using the child. \n\nLet's check if `TPU 8t` is actually present in the evidence snippet provided in the `candidate.evidence.quote`. No, the quote is '谷歌TPU v8全面液冷如何重构全球AI供应链'. The quote does NOT contain 'TPU 8t'. The extraction relies on the full page text where 'TPU 8t' appears later. The `evidence` field must locate the support for the value. If the value is 'Google' and the entity is 'TPU 8t', does the quote '谷歌TPU v8...' prove 'Google' makes 'TPU 8t'? Indirectly. \n\nHowever, usually, if the specific model isn't in the quote, but the family is, and the family maps to the model, it might be acceptable IF the mapping is explicit in the same context. But strict review often requires the evidence to link the specific entity. \n\nActually, there is a more fundamental error potentially: The `source_type` is `web_crawl`. The confidence is `high`. For a third-party blog post about supply chains, claiming `high` confidence for the vendor identity of a specific unreleased/just-released chip variant based on a headline about the generation might be overstated, but `web_crawl` is the right type.\n\nLet's look at the `chip_model` validity. 'TPU 8t' is listed in the text. \n\nRe-evaluating the ",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The entity_key 'TPU 8t' is a specific variant explicitly split from the parent generation 'TPU v8' in the source text ('TPU v8分拆为训练芯片TPU 8t...'). According to identity rules, when a generation is split into named variants, the parent generation cannot be used as a concrete SKU for field extraction unless explicitly linked. While the vendor 'Google' is correct for the product line, the candidate uses the parent generation context or implies it without strictly binding the vendor evidence to the specific variant 'TPU 8t' in a way that bypasses the generation gate. More critically, the evidence quote provided ('谷歌TPU v8全面液冷...') refers to the parent 'TPU v8', not specifically 'TPU 8t'. The rule states: 'If the source has split into multiple sub-models, candidates using the parent generation key for vendor/chip_type/release_date etc. cannot pass.' Although the entity_key here is 'TPU 8t', the *evidence* cited is for 'TPU v8'. The explanation claims the title/body identifies Google as owner of the TPU line, but does not provide direct evidence linking 'Google' specifically to the string 'TPU 8t' in the quoted snippet (which says 'TPU v8'). However, looking at the full text, 'TPU 8t' is mentioned later. But the primary issue is often misattribution or using general family info. Let's re-read carefully. The rule says: 'A family/generation explicitly split into named variants is not itself a concrete SKU.' The candidate entity is 'TPU 8t'. Is 'TPU 8t' a concrete SKU? Yes. Does the evidence support 'Google' as the vendor for 'TPU 8t'? The text says 'TPU v8分拆为训练芯片TPU 8t...'. It also says 'Google的...TPU'. So Google is the vendor of TPU v8, which contains TPU 8t. This seems valid. \n\nWait, let's look at the ENTITY GATE instruction again: 'First validate entity_key as a concrete source-supported SKU... A correct vendor... NEVER exempts a wrong family-level entity key.' Here the key is 'TPU 8t', which IS a concrete SKU. \n\nLet's check the evidence quote vs entity. Quote: '谷歌TPU v8全面液冷如何重构全球AI供应链'. Entity: 'TPU 8t'. The quote mentions 'TPU v8', not 'TPU 8t'. The explanation says 'The title and body refer to ... identifying Google as the vendor/owner of the TPU line.' \n\nIs there a violation? 'Do not transfer family-level dates or specifications to a variant'. Vendor is usually inherited. \n\nHowever, there is a stricter rule: 'When the page explicitly splits a generation into variants, reject candidates using the parent as a concrete chip'. The candidate uses 'TPU 8t' (child), not 'TPU v8' (parent). So this specific rejection reason doesn't apply directly to the key.\n\nLet's look at `source_type`. The URL is `lianliwork.com`, a third-party liquid cooling company blog/news site. It is NOT an official Google announcement. The candidate marks it as `web_crawl` with `confidence: high`. This classification is correct per instructions ('third-party media reports... are community or web_crawl').\n\nLet's look at the `vendor` value. Raw: 'Google'. Normalized: 'Google'. Evidence quote starts with '谷歌' (Chinese for Google). The normalization '谷歌' -> 'Google' is standard. \n\nIs there any other issue? \nReviewing the `identity-rules.md`: '身份厂商与型号逐字有证据...'. The quote '谷歌TPU v8...' provides evidence for 'Google' being associated with 'TPU v8'. Since 'TPU 8t' is part of 'TPU v8', is this sufficient? Usually yes for vendor.\n\nBut wait, look at the `entity_key` construction in the prompt's example logic or similar cases. If the evidence only supports the parent, can we extract for the child? 'Parent generation... cannot be used as a concrete chip'. We are using the child. \n\nLet's check if `TPU 8t` is actually present in the evidence snippet provided in the `candidate.evidence.quote`. No, the quote is '谷歌TPU v8全面液冷如何重构全球AI供应链'. The quote does NOT contain 'TPU 8t'. The extraction relies on the full page text where 'TPU 8t' appears later. The `evidence` field must locate the support for the value. If the value is 'Google' and the entity is 'TPU 8t', does the quote '谷歌TPU v8...' prove 'Google' makes 'TPU 8t'? Indirectly. \n\nHowever, usually, if the specific model isn't in the quote, but the family is, and the family maps to the model, it might be acceptable IF the mapping is explicit in the same context. But strict review often requires the evidence to link the specific entity. \n\nActually, there is a more fundamental error potentially: The `source_type` is `web_crawl`. The confidence is `high`. For a third-party blog post about supply chains, claiming `high` confidence for the vendor identity of a specific unreleased/just-released chip variant based on a headline about the generation might be overstated, but `web_crawl` is the right type.\n\nLet's look at the `chip_model` validity. 'TPU 8t' is listed in the text. \n\nRe-evaluating the ",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-b5f1db1c7cdf0c55f6fd51499c305adf5f27bef7225f5572968cbead050f9040",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_model",
+            "entity": {
+              "chip_model": "TPU 8i",
+              "vendor": "Google"
+            },
+            "value": "TPU 8i",
+            "reason": "页面正文明确陈述'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)'，直接命名了具体SKU 'TPU 8i'。该实体键符合身份领域对具体芯片型号的要求（非父代际或系列泛指），且证据逐字支持该值。来源类型为web_crawl（第三方媒体/供应链分析文章），置信度high基于文本的直接命名事实。",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "页面正文明确陈述'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)'，直接命名了具体SKU 'TPU 8i'。该实体键符合身份领域对具体芯片型号的要求（非父代际或系列泛指），且证据逐字支持该值。来源类型为web_crawl（第三方媒体/供应链分析文章），置信度high基于文本的直接命名事实。",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-bcfff794a8d05cf5082b00d7aadb37f1d0967ac094d44e177b0ad04c701dff90",
+            "domain": "identity",
+            "status": "program_rejected",
+            "field": "production_status",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "released",
+            "reason": "chips.production_status 须使用项目既有中文状态，而非英文枚举。",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "chips.production_status 须使用项目既有中文状态，而非英文枚举。",
+                  "status": "rejected"
+                }
+              }
+            ],
+            "reviews": [],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-ee0b56ae0efc2ff4b8fc83bdf8198369a8add60b55444cfbdc470015d1455f69",
+            "domain": "specs",
+            "status": "semantic_rejected",
+            "field": "tdp_w",
+            "entity": {
+              "chip_model": "TPU v8",
+              "vendor": "Google"
+            },
+            "value": 1300,
+            "reason": "The entity key 'TPU v8' is a family/generation name explicitly split into concrete variants (TPU 8t and TPU 8i) in the source text. The contract rules state that when a generation is split into named variants, the parent cannot be used as a concrete chip SKU for field extraction. Additionally, the value 1300W is attributed to the general 'TPU v8' family context rather than a specific variant's datasheet specification.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The entity key 'TPU v8' is a family/generation name explicitly split into concrete variants (TPU 8t and TPU 8i) in the source text. The contract rules state that when a generation is split into named variants, the parent cannot be used as a concrete chip SKU for field extraction. Additionally, the value 1300W is attributed to the general 'TPU v8' family context rather than a specific variant's datasheet specification.",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-ee23d8514cb0b7fd4f331c9f4d929a62fb5c0847bc150a8c34d069211ae29f90",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_model",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "TPU 8t",
+            "reason": "The source explicitly names 'TPU 8t' as a specific training chip variant resulting from the split of 'TPU v8'. The candidate correctly uses this concrete SKU name for the entity_key and field value, adhering to identity rules that forbid using parent generations (v8) as SKUs when variants are named. The evidence quote supports the model name.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source explicitly names 'TPU 8t' as a specific training chip variant resulting from the split of 'TPU v8'. The candidate correctly uses this concrete SKU name for the entity_key and field value, adhering to identity rules that forbid using parent generations (v8) as SKUs when variants are named. The evidence quote supports the model name.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-f86c0d2aa8362f3e1c012a0bcfdedc89f31faa43b5f1fde3b672d3e2327a91c2",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_type",
+            "entity": {
+              "chip_model": "TPU 8i",
+              "vendor": "Google"
+            },
+            "value": "ASIC",
+            "reason": "The candidate entity 'TPU 8i' is a concrete SKU explicitly named in the source text as an inference chip. The field 'chip_type' is owned by the identity domain. The evidence quote supports that TPU 8i is an inference chip, and the conversion to 'ASIC' is semantically correct for Google's custom AI accelerators under the provided schema constraints (GPU/NPU/DCU/TPU/PPU/MLU/ASIC). Although the source is a third-party news site (web_crawl), the classification of the chip type based on its function and known architecture is acceptable within the medium confidence level assigned.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The candidate entity 'TPU 8i' is a concrete SKU explicitly named in the source text as an inference chip. The field 'chip_type' is owned by the identity domain. The evidence quote supports that TPU 8i is an inference chip, and the conversion to 'ASIC' is semantically correct for Google's custom AI accelerators under the provided schema constraints (GPU/NPU/DCU/TPU/PPU/MLU/ASIC). Although the source is a third-party news site (web_crawl), the classification of the chip type based on its function and known architecture is acceptable within the medium confidence level assigned.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          }
+        ],
+        "entities": [
+          {
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "tpu 8i",
+              "vendor": "google"
+            },
+            "status": "new",
+            "reason": "verified_identity_absent_from_baseline"
+          },
+          {
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "tpu 8t",
+              "vendor": "google"
+            },
+            "status": "new",
+            "reason": "verified_identity_absent_from_baseline"
+          }
+        ],
+        "statistics": {
+          "independent_fields": 9,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 9,
+          "rejected_candidates": 4,
+          "value_changes": 9,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 1,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0,
+          "new_entities": 2,
+          "main": {
+            "independent_fields": 2,
+            "source_candidates": 1,
+            "urls": 1,
+            "validated_candidates": 2,
+            "rejected_candidates": 1,
+            "value_changes": 2,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 1,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "linked": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 0,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "formal_business_writes": 0,
+          "formal_provenance_writes": 0,
+          "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+        },
+        "all_tasks_complete": true,
+        "main_body_complete": true,
+        "exceptions": [],
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true,
+        "business_table_rows_after": {
+          "chips": 0,
+          "models": 0,
+          "chip_model_benchmarks": 0,
+          "chip_model_compatibility": 0,
+          "field_provenance": 0,
+          "link_library": 0,
+          "source_registry": 0,
+          "benchmark_workbook_rows": 0,
+          "source_discovery_edges": 0,
+          "deployment_guides": 0,
+          "update_runs": 0,
+          "update_run_events": 0,
+          "source_monitor_state": 0,
+          "source_checks": 0,
+          "source_diffs": 0,
+          "source_auto_applies": 0,
+          "data_agent_jobs": 0,
+          "parse_ledger": 0,
+          "extraction_candidates": 0,
+          "candidate_baselines": 0,
+          "skill_inbox": 0,
+          "entity_aliases": 0,
+          "candidate_publications": 0
+        }
+      },
+      {
+        "domain": "identity",
+        "run_id": "run-403866ec27a742b3ab46446ca30ac270",
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-identity-fixed-replay\\identity-b1254404-21b7d5",
+        "bundle_sha256": "03c71ceff1c8ddb693ae6cc7ace3a55a448c512a42266d567bd0b72dc586c92b",
+        "protocols": [
+          5
+        ],
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "candidate_statuses": {
+          "semantic_rejected": 6,
+          "validated": 6
+        },
+        "raw_facts": 12,
+        "explicit_conversion_null": 0,
+        "calls": 13,
+        "call_statuses": {
+          "completed": 13
+        },
+        "family_candidates": [
+          {
+            "field": "release_date",
+            "status": "semantic_rejected",
+            "reason": "The candidate uses 'TPU v8' as the entity_key.chip_model. The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)'. According to identity rules, when a generation is split into named variants, the parent generation ('TPU v8') is not a concrete SKU and cannot be used as an entity key for specific lifecycle dates like release_date. The date refers to the announcement of the eighth-generation TPU (the family), but attributing it directly to 'TPU v8' as a single chip model violates the entity gate."
+          },
+          {
+            "field": "vendor",
+            "status": "semantic_rejected",
+            "reason": "Entity gate failure: The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the frozen identity rules, a generation/family explicitly split into named variants is not itself a concrete SKU. Therefore, using 'TPU v8' as the entity_key.chip_model is invalid for a specific chip candidate. The vendor value 'Google' may be factually correct for the family, but it cannot exempt the wrong parent-generation entity key."
+          },
+          {
+            "field": "chip_type",
+            "status": "semantic_rejected",
+            "reason": "Entity gate failure: The page explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to identity rules, a generation/series split into named variants cannot be used as a concrete SKU entity_key. The candidate uses 'TPU v8' as the chip_model, which is a parent generation, not a specific chip. Additionally, the source is a third-party supply chain news article (web_crawl/community), not an official Google datasheet or announcement, so it does not meet the evidence quality standard for definitive identity extraction of a specific SKU type."
+          },
+          {
+            "field": "is_released",
+            "status": "semantic_rejected",
+            "reason": "The candidate uses 'TPU v8' as the entity_key.chip_model, but the source text explicitly states: \"TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)\". According to identity rules and the frozen contract, a generation/family split into named variants is not a concrete SKU. Field values (such as is_released) cannot be attributed to the parent generation when it has been decomposed into specific children in the same context. The review must reject the parent-level entity key rather than revise it to a child variant."
+          },
+          {
+            "field": "chip_model",
+            "status": "semantic_rejected",
+            "reason": "The entity_key uses 'TPU v8', which is a generation/family name. The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the identity rules, when a generation is explicitly split into named variants, the parent generation cannot be used as a concrete SKU entity key. Therefore, the candidate is rejected for using a non-concrete family-level identifier."
+          },
+          {
+            "field": "production_status",
+            "status": "semantic_rejected",
+            "reason": "The entity key 'TPU v8' is a generation/family identifier explicitly split into specific SKUs ('TPU 8t' and 'TPU 8i') in the source text. According to the frozen contract rules, a family/generation that is explicitly split into named variants is not itself a concrete SKU. Therefore, the candidate cannot be accepted for the parent generation key. The evidence supports the release of the generation, but lifecycle fields must be attributed to the specific chip entities or the series field if linked, not used as the primary entity key for a concrete chip review."
+          }
+        ],
+        "candidates": [
+          {
+            "id": "fact-46b1e6e3a7c5aaa1f1cb40f7c1db257752681b7c48049e21e239afb7b2a75a8e",
+            "domain": "identity",
+            "status": "semantic_rejected",
+            "field": "release_date",
+            "entity": {
+              "chip_model": "TPU v8",
+              "vendor": "Google"
+            },
+            "value": "2026-04-22",
+            "reason": "The candidate uses 'TPU v8' as the entity_key.chip_model. The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)'. According to identity rules, when a generation is split into named variants, the parent generation ('TPU v8') is not a concrete SKU and cannot be used as an entity key for specific lifecycle dates like release_date. The date refers to the announcement of the eighth-generation TPU (the family), but attributing it directly to 'TPU v8' as a single chip model violates the entity gate.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The candidate uses 'TPU v8' as the entity_key.chip_model. The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)'. According to identity rules, when a generation is split into named variants, the parent generation ('TPU v8') is not a concrete SKU and cannot be used as an entity key for specific lifecycle dates like release_date. The date refers to the announcement of the eighth-generation TPU (the family), but attributing it directly to 'TPU v8' as a single chip model violates the entity gate.",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-53e489b77c502af5a03c9814f5e5655ea49bc64102865bf5834a336bc5790ee1",
+            "domain": "identity",
+            "status": "semantic_rejected",
+            "field": "vendor",
+            "entity": {
+              "chip_model": "TPU v8",
+              "vendor": "Google"
+            },
+            "value": "Google",
+            "reason": "Entity gate failure: The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the frozen identity rules, a generation/family explicitly split into named variants is not itself a concrete SKU. Therefore, using 'TPU v8' as the entity_key.chip_model is invalid for a specific chip candidate. The vendor value 'Google' may be factually correct for the family, but it cannot exempt the wrong parent-generation entity key.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "Entity gate failure: The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the frozen identity rules, a generation/family explicitly split into named variants is not itself a concrete SKU. Therefore, using 'TPU v8' as the entity_key.chip_model is invalid for a specific chip candidate. The vendor value 'Google' may be factually correct for the family, but it cannot exempt the wrong parent-generation entity key.",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-5f81677b9aebf7a3d1b27892989fb3270aecc5cc84399c1f60dc4f957a842758",
+            "domain": "identity",
+            "status": "semantic_rejected",
+            "field": "chip_type",
+            "entity": {
+              "chip_model": "TPU v8",
+              "vendor": "Google"
+            },
+            "value": "TPU",
+            "reason": "Entity gate failure: The page explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to identity rules, a generation/series split into named variants cannot be used as a concrete SKU entity_key. The candidate uses 'TPU v8' as the chip_model, which is a parent generation, not a specific chip. Additionally, the source is a third-party supply chain news article (web_crawl/community), not an official Google datasheet or announcement, so it does not meet the evidence quality standard for definitive identity extraction of a specific SKU type.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "Entity gate failure: The page explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to identity rules, a generation/series split into named variants cannot be used as a concrete SKU entity_key. The candidate uses 'TPU v8' as the chip_model, which is a parent generation, not a specific chip. Additionally, the source is a third-party supply chain news article (web_crawl/community), not an official Google datasheet or announcement, so it does not meet the evidence quality standard for definitive identity extraction of a specific SKU type.",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-60feb5cfe2e2f2ae7d13e29e64690fc0a9648c525daf29d85e48a8c7fa971892",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_series",
+            "entity": {
+              "chip_model": "TPU 8i",
+              "vendor": "Google"
+            },
+            "value": "TPU v8",
+            "reason": "The source text explicitly states that 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', establishing a direct hierarchical relationship. The candidate correctly identifies 'TPU 8i' as the concrete SKU in the entity_key and assigns the parent generation 'TPU v8' to the chip_series field, which is permitted when the source explicitly links the variant to the family.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states that 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', establishing a direct hierarchical relationship. The candidate correctly identifies 'TPU 8i' as the concrete SKU in the entity_key and assigns the parent generation 'TPU v8' to the chip_series field, which is permitted when the source explicitly links the variant to the family.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-6e8c6f86a96c2eb707eb62000c5a283e727610ba407952ed02c1e6c43953603f",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_series",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "TPU v8",
+            "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t' (TPU v8 is split into training chip TPU 8t), which establishes the hierarchical relationship where TPU v8 is the series/generation for the specific SKU TPU 8t. The candidate correctly identifies 'TPU v8' as the value for the 'chip_series' field of entity 'TPU 8t'. The evidence quote matches the snapshot, and the classification as web_crawl is appropriate for a third-party industry news article.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t' (TPU v8 is split into training chip TPU 8t), which establishes the hierarchical relationship where TPU v8 is the series/generation for the specific SKU TPU 8t. The candidate correctly identifies 'TPU v8' as the value for the 'chip_series' field of entity 'TPU 8t'. The evidence quote matches the snapshot, and the classification as web_crawl is appropriate for a third-party industry news article.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-80299ea807a3b4f6f2fe304cf89190c1da1b1892ef525bfa0742bf88adcaa327",
+            "domain": "identity",
+            "status": "semantic_rejected",
+            "field": "is_released",
+            "entity": {
+              "chip_model": "TPU v8",
+              "vendor": "Google"
+            },
+            "value": "1",
+            "reason": "The candidate uses 'TPU v8' as the entity_key.chip_model, but the source text explicitly states: \"TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)\". According to identity rules and the frozen contract, a generation/family split into named variants is not a concrete SKU. Field values (such as is_released) cannot be attributed to the parent generation when it has been decomposed into specific children in the same context. The review must reject the parent-level entity key rather than revise it to a child variant.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The candidate uses 'TPU v8' as the entity_key.chip_model, but the source text explicitly states: \"TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)\". According to identity rules and the frozen contract, a generation/family split into named variants is not a concrete SKU. Field values (such as is_released) cannot be attributed to the parent generation when it has been decomposed into specific children in the same context. The review must reject the parent-level entity key rather than revise it to a child variant.",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-893a1238c9dd4d457084d23d5e746027ab46462992487d71fbe5ec60ab04db84",
+            "domain": "identity",
+            "status": "semantic_rejected",
+            "field": "chip_model",
+            "entity": {
+              "chip_model": "TPU v8",
+              "vendor": "Google"
+            },
+            "value": "TPU v8",
+            "reason": "The entity_key uses 'TPU v8', which is a generation/family name. The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the identity rules, when a generation is explicitly split into named variants, the parent generation cannot be used as a concrete SKU entity key. Therefore, the candidate is rejected for using a non-concrete family-level identifier.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The entity_key uses 'TPU v8', which is a generation/family name. The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)' (TPU v8 is split into training chip TPU 8t and inference chip TPU 8i). According to the identity rules, when a generation is explicitly split into named variants, the parent generation cannot be used as a concrete SKU entity key. Therefore, the candidate is rejected for using a non-concrete family-level identifier.",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-98d6235a6b01fd9ef335560a63c5988d0ae42fa5f218ee0fdd1ff5aaed480a31",
+            "domain": "identity",
+            "status": "validated",
+            "field": "usage",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "Training",
+            "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t' (TPU v8 is split into training chip TPU 8t). The entity key correctly identifies the specific SKU 'TPU 8t'. The field 'usage' is supported by the direct functional description '训练芯片' (training chip), which maps to the normalized value 'Training'. The evidence quote and location match the provided context. The conversion description accurately explains the translation of the Chinese term to the standardized category.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t' (TPU v8 is split into training chip TPU 8t). The entity key correctly identifies the specific SKU 'TPU 8t'. The field 'usage' is supported by the direct functional description '训练芯片' (training chip), which maps to the normalized value 'Training'. The evidence quote and location match the provided context. The conversion description accurately explains the translation of the Chinese term to the standardized category.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-b5f1db1c7cdf0c55f6fd51499c305adf5f27bef7225f5572968cbead050f9040",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_model",
+            "entity": {
+              "chip_model": "TPU 8i",
+              "vendor": "Google"
+            },
+            "value": "TPU 8i",
+            "reason": "The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)'. This confirms 'TPU 8i' as a specific SKU name for the inference variant, distinct from the parent generation 'TPU v8'. The entity key correctly identifies this concrete chip model. The evidence is direct and supports the field value.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states: 'TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish)'. This confirms 'TPU 8i' as a specific SKU name for the inference variant, distinct from the parent generation 'TPU v8'. The entity key correctly identifies this concrete chip model. The evidence is direct and supports the field value.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-d2496619eb9b18db616f14053d21ec469b5321664ac8d30fcd7cc06fdfa5f188",
+            "domain": "identity",
+            "status": "validated",
+            "field": "usage",
+            "entity": {
+              "chip_model": "TPU 8i",
+              "vendor": "Google"
+            },
+            "value": "Inference",
+            "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', directly supporting the usage value 'Inference' (normalized from '推理芯片') for the specific SKU 'TPU 8i'. The entity key is a concrete variant derived from the generation split, satisfying the identity gate. The evidence quote matches the snapshot location.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', directly supporting the usage value 'Inference' (normalized from '推理芯片') for the specific SKU 'TPU 8i'. The entity key is a concrete variant derived from the generation split, satisfying the identity gate. The evidence quote matches the snapshot location.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-e30e0796e80836877dd0c09461f69a07bebc24f4c97e29abbf434ff8a0db4877",
+            "domain": "identity",
+            "status": "semantic_rejected",
+            "field": "production_status",
+            "entity": {
+              "chip_model": "TPU v8",
+              "vendor": "Google"
+            },
+            "value": "已发布",
+            "reason": "The entity key 'TPU v8' is a generation/family identifier explicitly split into specific SKUs ('TPU 8t' and 'TPU 8i') in the source text. According to the frozen contract rules, a family/generation that is explicitly split into named variants is not itself a concrete SKU. Therefore, the candidate cannot be accepted for the parent generation key. The evidence supports the release of the generation, but lifecycle fields must be attributed to the specific chip entities or the series field if linked, not used as the primary entity key for a concrete chip review.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The entity key 'TPU v8' is a generation/family identifier explicitly split into specific SKUs ('TPU 8t' and 'TPU 8i') in the source text. According to the frozen contract rules, a family/generation that is explicitly split into named variants is not itself a concrete SKU. Therefore, the candidate cannot be accepted for the parent generation key. The evidence supports the release of the generation, but lifecycle fields must be attributed to the specific chip entities or the series field if linked, not used as the primary entity key for a concrete chip review.",
+                "verdict": "reject",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          },
+          {
+            "id": "fact-ee23d8514cb0b7fd4f331c9f4d929a62fb5c0847bc150a8c34d069211ae29f90",
+            "domain": "identity",
+            "status": "validated",
+            "field": "chip_model",
+            "entity": {
+              "chip_model": "TPU 8t",
+              "vendor": "Google"
+            },
+            "value": "TPU 8t",
+            "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t', identifying 'TPU 8t' as a concrete SKU variant. The candidate correctly extracts this specific model name for the chip_model field. The evidence quote matches the normalized value, and the entity key uses the correct concrete SKU rather than the parent generation.",
+            "versions": [
+              {
+                "version": 0,
+                "kind": null,
+                "program": {
+                  "reason": "contract_and_exact_evidence_passed",
+                  "status": "program_valid"
+                }
+              }
+            ],
+            "reviews": [
+              {
+                "candidate": null,
+                "needs_identity": false,
+                "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t', identifying 'TPU 8t' as a concrete SKU variant. The candidate correctly extracts this specific model name for the chip_model field. The evidence quote matches the normalized value, and the entity key uses the correct concrete SKU rather than the parent generation.",
+                "verdict": "accept",
+                "version": 0
+              }
+            ],
+            "identity_followup": false
+          }
+        ],
+        "entities": [
+          {
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "tpu 8i",
+              "vendor": "google"
+            },
+            "status": "new",
+            "reason": "verified_identity_absent_from_baseline"
+          },
+          {
+            "hint": {
+              "entity_kind": "chip",
+              "full_sku": "tpu 8t",
+              "vendor": "google"
+            },
+            "status": "new",
+            "reason": "verified_identity_absent_from_baseline"
+          }
+        ],
+        "statistics": {
+          "independent_fields": 6,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 6,
+          "rejected_candidates": 6,
+          "value_changes": 6,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 6,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0,
+          "new_entities": 2,
+          "main": {
+            "independent_fields": 6,
+            "source_candidates": 1,
+            "urls": 1,
+            "validated_candidates": 6,
+            "rejected_candidates": 6,
+            "value_changes": 6,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 6,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "linked": {
+            "independent_fields": 0,
+            "source_candidates": 0,
+            "urls": 0,
+            "validated_candidates": 0,
+            "rejected_candidates": 0,
+            "value_changes": 0,
+            "unverifiable_evidence_candidates": 0,
+            "condition_unresolved_candidates": 0,
+            "dependency_unresolved_candidates": 0,
+            "comparison_unresolved_candidates": 0,
+            "ambiguous_entity_candidates": 0
+          },
+          "formal_business_writes": 0,
+          "formal_provenance_writes": 0,
+          "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+        },
+        "all_tasks_complete": true,
+        "main_body_complete": true,
+        "exceptions": [],
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true,
+        "business_table_rows_after": {
+          "chips": 0,
+          "models": 0,
+          "chip_model_benchmarks": 0,
+          "chip_model_compatibility": 0,
+          "field_provenance": 0,
+          "link_library": 0,
+          "source_registry": 0,
+          "benchmark_workbook_rows": 0,
+          "source_discovery_edges": 0,
+          "deployment_guides": 0,
+          "update_runs": 0,
+          "update_run_events": 0,
+          "source_monitor_state": 0,
+          "source_checks": 0,
+          "source_diffs": 0,
+          "source_auto_applies": 0,
+          "data_agent_jobs": 0,
+          "parse_ledger": 0,
+          "extraction_candidates": 0,
+          "candidate_baselines": 0,
+          "skill_inbox": 0,
+          "entity_aliases": 0,
+          "candidate_publications": 0
+        }
+      }
+    ]
+  },
+  "review_controls": {
+    "scope": "six source-grounded constructed review inputs; full same saved body; actual Qwen responses",
+    "model": "qwen3.8-flash",
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_writes": 0,
+    "fixture_model_responses": 0,
+    "controls": [
+      {
+        "name": "owned_series_on_variant",
+        "expectation": "accept",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-boundary-controls-fixed\\owned_series_on_variant",
+        "run_id": "run-1f5e436da4384d2fa6288d1647177163",
+        "bundle_sha256": "03c71ceff1c8ddb693ae6cc7ace3a55a448c512a42266d567bd0b72dc586c92b",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "domain_id": "identity",
+          "target_table": "chips",
+          "field_name": "chip_series",
+          "entity_key": {
+            "vendor": "Google",
+            "chip_model": "TPU 8i"
+          },
+          "entity_hints": {
+            "full_sku": "TPU 8i",
+            "entity_type": "chip"
+          },
+          "raw_value": "TPU v8",
+          "normalized_value": "TPU v8",
+          "unit": null,
+          "conversion": {},
+          "scope": "chip",
+          "evidence_kind": "explicit",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程",
+            "start": 3938,
+            "end": 4022
+          },
+          "context_refs": [],
+          "explanation": "Controlled source-grounded field/entity boundary probe; assess only the supplied evidence.",
+          "source_type": "web_crawl",
+          "confidence": "medium",
+          "confidence_reason": "Third-party saved article, not an official announcement."
+        },
+        "status": "validated",
+        "reason": "The candidate correctly identifies the entity as 'TPU 8i' (a specific variant) and assigns 'TPU v8' to the chip_series field. The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', establishing the direct hierarchical link between the series 'TPU v8' and the model 'TPU 8i'. This satisfies the identity rule allowing a supported variant to carry the explicitly linked family in chip_series. The evidence is verbatim from the snapshot.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "accept",
+            "reason": "The candidate correctly identifies the entity as 'TPU 8i' (a specific variant) and assigns 'TPU v8' to the chip_series field. The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', establishing the direct hierarchical link between the series 'TPU v8' and the model 'TPU 8i'. This satisfies the identity rule allowing a supported variant to carry the explicitly linked family in chip_series. The evidence is verbatim from the snapshot.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 4.32,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "explicit_variant_name",
+        "expectation": "accept",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-boundary-controls-fixed\\explicit_variant_name",
+        "run_id": "run-35d6e3c783b443948f6a2abf6878fd75",
+        "bundle_sha256": "03c71ceff1c8ddb693ae6cc7ace3a55a448c512a42266d567bd0b72dc586c92b",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "domain_id": "identity",
+          "target_table": "chips",
+          "field_name": "chip_model",
+          "entity_key": {
+            "vendor": "Google",
+            "chip_model": "TPU 8t"
+          },
+          "entity_hints": {
+            "full_sku": "TPU 8t",
+            "entity_type": "chip"
+          },
+          "raw_value": "TPU 8t",
+          "normalized_value": "TPU 8t",
+          "unit": null,
+          "conversion": {},
+          "scope": "chip",
+          "evidence_kind": "explicit",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程",
+            "start": 3938,
+            "end": 4022
+          },
+          "context_refs": [],
+          "explanation": "Controlled source-grounded field/entity boundary probe; assess only the supplied evidence.",
+          "source_type": "web_crawl",
+          "confidence": "medium",
+          "confidence_reason": "Third-party saved article, not an official announcement."
+        },
+        "status": "validated",
+        "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', identifying 'TPU 8t' as a specific concrete SKU distinct from the parent generation. The candidate correctly uses 'TPU 8t' as the chip_model, supported by verbatim evidence. The entity key is valid and not a family-level placeholder.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "accept",
+            "reason": "The source text explicitly states 'TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i', identifying 'TPU 8t' as a specific concrete SKU distinct from the parent generation. The candidate correctly uses 'TPU 8t' as the chip_model, supported by verbatim evidence. The entity key is valid and not a family-level placeholder.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 5.06,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "generation_vendor_is_not_chip",
+        "expectation": "reject_or_unresolved",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-boundary-controls-fixed\\generation_vendor_is_not_chip",
+        "run_id": "run-9d355d489bb64e809457b20a8b4a3d02",
+        "bundle_sha256": "03c71ceff1c8ddb693ae6cc7ace3a55a448c512a42266d567bd0b72dc586c92b",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "domain_id": "identity",
+          "target_table": "chips",
+          "field_name": "vendor",
+          "entity_key": {
+            "vendor": "Google",
+            "chip_model": "TPU v8"
+          },
+          "entity_hints": {
+            "full_sku": "TPU v8",
+            "entity_type": "chip"
+          },
+          "raw_value": "Google",
+          "normalized_value": "Google",
+          "unit": null,
+          "conversion": {},
+          "scope": "chip",
+          "evidence_kind": "explicit",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程",
+            "start": 3938,
+            "end": 4022
+          },
+          "context_refs": [],
+          "explanation": "Controlled source-grounded field/entity boundary probe; assess only the supplied evidence.",
+          "source_type": "web_crawl",
+          "confidence": "medium",
+          "confidence_reason": "Third-party saved article, not an official announcement."
+        },
+        "status": "semantic_rejected",
+        "reason": "The entity key 'TPU v8' is a parent generation explicitly split into concrete variants (TPU 8t and TPU 8i) in the source text ('TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i'). According to identity rules, a family/generation explicitly split into named variants is not itself a concrete SKU. Candidates using the parent generation as the chip_model must be rejected even if the vendor value is correct.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "reject",
+            "reason": "The entity key 'TPU v8' is a parent generation explicitly split into concrete variants (TPU 8t and TPU 8i) in the source text ('TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i'). According to identity rules, a family/generation explicitly split into named variants is not itself a concrete SKU. Candidates using the parent generation as the chip_model must be rejected even if the vendor value is correct.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 5.01,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "generation_is_not_third_sku",
+        "expectation": "reject_or_unresolved",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-boundary-controls-fixed\\generation_is_not_third_sku",
+        "run_id": "run-ead7fd4713124839adc3643ebd349970",
+        "bundle_sha256": "03c71ceff1c8ddb693ae6cc7ace3a55a448c512a42266d567bd0b72dc586c92b",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "domain_id": "identity",
+          "target_table": "chips",
+          "field_name": "chip_model",
+          "entity_key": {
+            "vendor": "Google",
+            "chip_model": "TPU v8"
+          },
+          "entity_hints": {
+            "full_sku": "TPU v8",
+            "entity_type": "chip"
+          },
+          "raw_value": "TPU v8",
+          "normalized_value": "TPU v8",
+          "unit": null,
+          "conversion": {},
+          "scope": "chip",
+          "evidence_kind": "explicit",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "quote": "TPU v8分拆为训练芯片TPU 8t(代號Sunfish)和推理芯片TPU 8i(代號Zebrafish),两款芯片分别与博通和联发科合作设计,均锁定台积电2nm制程",
+            "start": 3938,
+            "end": 4022
+          },
+          "context_refs": [],
+          "explanation": "Controlled source-grounded field/entity boundary probe; assess only the supplied evidence.",
+          "source_type": "web_crawl",
+          "confidence": "medium",
+          "confidence_reason": "Third-party saved article, not an official announcement."
+        },
+        "status": "semantic_rejected",
+        "reason": "The entity key 'TPU v8' is a parent generation explicitly split into concrete variants 'TPU 8t' and 'TPU 8i' in the source text. According to identity rules, a family/generation explicitly split into named variants is not itself a concrete SKU. Therefore, the candidate using 'TPU v8' as chip_model is invalid regardless of field value support.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "reject",
+            "reason": "The entity key 'TPU v8' is a parent generation explicitly split into concrete variants 'TPU 8t' and 'TPU 8i' in the source text. According to identity rules, a family/generation explicitly split into named variants is not itself a concrete SKU. Therefore, the candidate using 'TPU v8' as chip_model is invalid regardless of field value support.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 4.89,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "no_inherited_generation_date",
+        "expectation": "reject_or_unresolved",
+        "passed": true,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-boundary-controls-fixed\\no_inherited_generation_date",
+        "run_id": "run-2bcb29e5f98f4bf28ded8805e7604008",
+        "bundle_sha256": "03c71ceff1c8ddb693ae6cc7ace3a55a448c512a42266d567bd0b72dc586c92b",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "conditions": {},
+          "confidence": "medium",
+          "confidence_reason": "Specific date provided in a news report about the event. Not verified against official press release but consistent with event timeline mentioned.",
+          "conversion": {
+            "description": "Converted Chinese date format to ISO 8601 YYYY-MM-DD"
+          },
+          "domain_id": "identity",
+          "entity_hints": {},
+          "entity_key": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "evidence": {
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "end": 342,
+            "quote": "2026年4月22日,Google Cloud Next ’26大会上,第八代TPU的发布",
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "start": 297
+          },
+          "evidence_kind": "explicit",
+          "explanation": "The article states the release date of the eighth-generation TPU (which includes TPU 8t) at Google Cloud Next '26.",
+          "field_name": "release_date",
+          "normalized_value": "2026-04-22",
+          "raw_value": "2026年4月22日",
+          "scope": "chip",
+          "source_type": "web_crawl",
+          "target_table": "chips",
+          "unit": null
+        },
+        "status": "semantic_rejected",
+        "reason": "The entity_key 'TPU 8t' is a specific variant explicitly split from the parent generation 'TPU v8' in the source text ('TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i'). The evidence quote attributes the release date to '第八代TPU的发布' (the eighth-generation TPU / TPU v8), not specifically to the 'TPU 8t' SKU. According to identity rules, family/generation-level dates cannot be transferred to a specific variant unless the source explicitly links them. Therefore, the candidate uses an incorrect entity key for the provided evidence and must be rejected.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "reject",
+            "reason": "The entity_key 'TPU 8t' is a specific variant explicitly split from the parent generation 'TPU v8' in the source text ('TPU v8分拆为训练芯片TPU 8t...和推理芯片TPU 8i'). The evidence quote attributes the release date to '第八代TPU的发布' (the eighth-generation TPU / TPU v8), not specifically to the 'TPU 8t' SKU. According to identity rules, family/generation-level dates cannot be transferred to a specific variant unless the source explicitly links them. Therefore, the candidate uses an incorrect entity key for the provided evidence and must be rejected.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 5.95,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      },
+      {
+        "name": "no_inherited_generation_power",
+        "expectation": "reject_or_unresolved",
+        "passed": false,
+        "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-boundary-controls-fixed\\no_inherited_generation_power",
+        "run_id": "run-56be6473d63b47d29ee5e2d3f6fdf15c",
+        "bundle_sha256": "03c71ceff1c8ddb693ae6cc7ace3a55a448c512a42266d567bd0b72dc586c92b",
+        "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+        "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+        "body_length": 5810,
+        "input_candidate": {
+          "conditions": {},
+          "confidence": "medium",
+          "confidence_reason": "来源为第三方液冷设备商新闻页面，非Google官方技术文档或公告，但具体数值表述清晰且无歧义。",
+          "context_refs": [],
+          "conversion": {},
+          "domain_id": "specs",
+          "entity_key": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "evidence": {
+            "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+            "end": 449,
+            "quote": "TPU v8单芯片功耗达1300W",
+            "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+            "start": 432
+          },
+          "evidence_kind": "explicit",
+          "explanation": "文章明确陈述TPU v8单芯片功耗为1300W，符合芯片级TDP定义。",
+          "field_name": "tdp_w",
+          "normalized_value": 1300,
+          "raw_value": 1300,
+          "scope": "chip",
+          "source_type": "web_crawl",
+          "target_table": "chips",
+          "unit": "W",
+          "entity_hints": {
+            "full_sku": "TPU 8t",
+            "entity_type": "chip"
+          }
+        },
+        "status": "validated",
+        "reason": "The source page (a third-party liquid cooling vendor's news article) explicitly states 'TPU v8单芯片功耗达1300W' and later distinguishes '训练芯片TPU 8t(代號Sunfish)' from the inference variant. The candidate correctly maps this chip-level power figure to field 'tdp_w' for entity 'Google TPU 8t'. The value 1300 W is directly supported by the text, units are correct, scope is 'chip', and source_type 'web_crawl' accurately reflects the publisher nature (not official Google documentation). No contract violations detected.",
+        "reviews": [
+          {
+            "version": 0,
+            "verdict": "accept",
+            "reason": "The source page (a third-party liquid cooling vendor's news article) explicitly states 'TPU v8单芯片功耗达1300W' and later distinguishes '训练芯片TPU 8t(代號Sunfish)' from the inference variant. The candidate correctly maps this chip-level power figure to field 'tdp_w' for entity 'Google TPU 8t'. The value 1300 W is directly supported by the text, units are correct, scope is 'chip', and source_type 'web_crawl' accurately reflects the publisher nature (not official Google documentation). No contract violations detected.",
+            "needs_identity": false,
+            "candidate": null
+          }
+        ],
+        "seconds": 5.6,
+        "call_statuses": {
+          "completed": 1
+        },
+        "all_review_calls": true,
+        "source_db_hash_unchanged": true,
+        "frozen_baseline_hash_unchanged": true
+      }
+    ],
+    "all_passed": false
+  },
+  "copied_actual_output_control": {
+    "mode": "rebuild derived registry only on isolated copy of actual saved Qwen responses; no new model calls",
+    "original_run": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-identity-replay\\specs-b1254404-09490c\\runs\\run-0e47ef41e962496bad57823e557b8fda",
+    "copied_run": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\identity-conflict-copy-bef0982c\\run-0e47ef41e962496bad57823e557b8fda",
+    "model_calls": 0,
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_writes": 0,
+    "original_family_status": "new",
+    "fixed_family_status": "ambiguous",
+    "fixed_family_reason": "identity_model_review_conflict",
+    "conflicts": [
+      {
+        "execution_id": "3f8fb4037f48466285b32cb7e38135ff",
+        "logical_candidate_id": "fact-893a1238c9dd4d457084d23d5e746027ab46462992487d71fbe5ec60ab04db84",
+        "verdict": "reject",
+        "version": 0
+      }
+    ],
+    "model_outputs_and_proofs_unchanged": true,
+    "original_model_metadata_unchanged": true,
+    "frozen_baseline_hash_unchanged": true,
+    "model_metadata_sha256": "8e1419a2812f4709940fda61d89014def47a919afa3efdb199e0029db69009b9",
+    "entities": [
+      {
+        "hint": {
+          "entity_kind": "chip",
+          "full_sku": "tpu v8",
+          "vendor": "google"
+        },
+        "status": "ambiguous",
+        "reason": "identity_model_review_conflict"
+      },
+      {
+        "hint": {
+          "entity_kind": "chip",
+          "full_sku": "tpu 8i",
+          "vendor": "google"
+        },
+        "status": "new",
+        "reason": "verified_identity_absent_from_baseline"
+      },
+      {
+        "hint": {
+          "entity_kind": "chip",
+          "full_sku": "tpu 8t",
+          "vendor": "google"
+        },
+        "status": "new",
+        "reason": "verified_identity_absent_from_baseline"
+      }
+    ],
+    "saved_1300w_candidate_model_status": "validated",
+    "identity_wait_gate_status": "ambiguous",
+    "identity_wait_gate_reason": "identity_model_review_conflict"
+  },
+  "archived_request_reconstruction": [
+    {
+      "source": "tpu-v8-skill-schema-replay",
+      "protocol_versions": [
+        3
+      ],
+      "requests": 20,
+      "mismatches": 0
+    },
+    {
+      "source": "tpu-v8-review-identity-replay",
+      "protocol_versions": [
+        4
+      ],
+      "requests": 52,
+      "mismatches": 0
+    }
+  ],
+  "remaining": [
+    "The constructed TPU 8t=1300W negative control is still incorrectly accepted. The saved quote only states parent TPU v8=1300W; merely naming variants elsewhere does not bind this power to TPU 8t.",
+    "One variant vendor field is rejected because its evidence quote only cites the parent-generation title; the article-level relationship does not fix this candidate citation. Extraction needs better entity-to-evidence binding.",
+    "One English production_status value is correctly rejected by the existing Chinese-status validation.",
+    "Task coverage is complete, but rejected/ambiguous facts and false acceptance remain. This is not full semantic acceptance."
+  ],
+  "safety": {
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_business_writes": 0,
+    "formal_provenance_writes": 0,
+    "fixture_model_responses": 0,
+    "production_deployment": false,
+    "shared_env_changed": false
+  },
+  "limits": [
+    "one source page only; repeated domains/scopes are not independent samples",
+    "new_entities=2 in each empty baseline represents test registry identities, not discoveries against the formal database",
+    "Qwen uses the existing diagnostic adapter; production model transport was not switched",
+    "Negative/unresolved same-key chip_model review currently keeps entity identity conservative; a future multi-source conflict-release policy is still needed",
+    "Earlier intermediary replay and failed controls retained; only final protocol 5 runs are summarized as final results",
+    "Entity policy 3 requires a fresh isolated run when old registered policy-2 entities exist; old records are not silently migrated"
+  ],
+  "next_step": "Design explicit SKU-to-field evidence binding and validate it against fixed positive/negative controls before another search or broader acceptance run.",
+  "artifacts": {
+    "summary": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\tpu-v8-review-identity-fixed-replay\\summary.json",
+    "junit": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\review-identity-fixed-regression.xml",
+    "sha256": {
+      "chip_model/pipeline/domain_discovery/models.py": "998fb4617f53bb432865b5260ebbb88f708eed5e9618c1c4268669da87aa6083",
+      "chip_model/pipeline/domain_discovery/entities.py": "d52e1b78eb3f49e488173a001a9115d8e4c0996964b84b7bd37fb3fdf23a99bf",
+      ".hermes-skills/_shared/rules.md": "bb58d1a195bb461368683fbaf8f6dd87ecffd2fc72a1921b6c323bfab51a2369",
+      ".hermes-skills/chip-identity/domain.json": "d1c14dc5c1761abd2940b54b0cd28550efa435e6d023070a3793693cd69a2efd",
+      ".hermes-skills/chip-identity/references/identity-rules.md": "ecc796f1b90145b7027660afd27e9ac41bf2fa2ef74cc9463cb44b0e70121f59",
+      "tests/test_domain_models.py": "46639f6bc59ed0dec09add343c81bd7ae73dfcd51643252cbfcd91ea9c4d06e7",
+      "tests/test_domain_entities.py": "9954f131e87c033fe4b3ef6602740496571e325f1d1b1f3a52312cac0550278d",
+      ".tmp/replay-tpu-v8-review-identity-fixed.py": "dfb9980ed60376bd0071028a9815bc372106861b8e55335e42b4d014a81bdbbc",
+      ".tmp/replay-tpu-v8-review-identity-fixed-effective.py": "bf6567af833dd37f452ac5e66878d33ab39ab2a6aa3c3b6aec63ac091fe70261",
+      ".tmp/review-tpu-v8-boundary-controls-fixed-effective.py": "82981dbd7aa55d5e7dc756bd29774aab65a78bebe86f4160a2e6b9703221a017",
+      ".tmp/qwen_replay_transport.py": "f69c3b072e2f6e7a556ca61c93f23b5c45b802284b17da07114e83b21de4095c"
+    }
+  }
+}

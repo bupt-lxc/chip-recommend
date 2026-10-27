@@ -1,0 +1,893 @@
+{
+  "date": "2026-10-21",
+  "status": "two_full_bodies_executed_with_qwen_correctness_findings_remain",
+  "scope": "Only the two previously quota-blocked full saved bodies were rerun. The completed compute body retains Kimi results. One archived S60 review control was additionally submitted to Qwen.",
+  "models": {
+    "configuration_keys": [
+      "QWEN_BASE_URL",
+      "QWEN_API_KEY",
+      "QWEN_MODEL"
+    ],
+    "extraction": "qwen3.8-flash",
+    "review": "qwen3.8-flash",
+    "response_model_verified_all_calls": true
+  },
+  "transport": {
+    "mode": "Diagnostic-only DashScope-compatible client; existing production client unchanged",
+    "temperature": 0.6,
+    "enable_thinking": false,
+    "response_format": "json_object",
+    "timeout_seconds": 120
+  },
+  "interface_probe": {
+    "probe": "qwen minimal JSON interface",
+    "requested_model": "qwen3.8-flash",
+    "http_status": 200,
+    "seconds": 0.578,
+    "response_model": "qwen3.8-flash",
+    "usage": {
+      "completion_tokens": 5,
+      "prompt_tokens": 36,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "text_tokens": 36
+      },
+      "total_tokens": 41
+    },
+    "content": "{\"ok\":true}",
+    "error": null
+  },
+  "summary": {
+    "full_body_cases": 2,
+    "all_main_and_linked_ranges_processed": true,
+    "full_body_call_attempts": 35,
+    "schema_completed_attempts": 32,
+    "schema_rejected_attempts": 3,
+    "http_transport_failures": 0,
+    "extraction_calls": 17,
+    "review_calls": 18,
+    "empty_extraction_calls": 8,
+    "empty_main_domain_chunks": 0,
+    "raw_candidates": 22,
+    "program_rejected_candidates": 7,
+    "semantic_rejected_candidates": 2,
+    "condition_unresolved_candidates": 1,
+    "program_and_model_accepted_candidates": 12,
+    "final_comparison_validated_candidates": 3,
+    "schema_valid_accepted_rows_skipped_by_comparison": 9,
+    "separate_negative_control_calls": 1,
+    "additional_probe_calls": 1,
+    "total_qwen_api_attempts_this_round": 37,
+    "natural_needs_identity_verdicts": 0,
+    "identity_followup_versions": 0
+  },
+  "cases": [
+    {
+      "domain": "identity",
+      "url": "https://wallstreetcn.com/articles/3760377",
+      "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+      "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+      "body_length": 26977,
+      "run_id": "run-66a8fdd1d06249a1b47230c4e12ddcdd",
+      "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay\\identity-d335a681-e3beed",
+      "seconds": 282.08,
+      "provider": "qwen",
+      "extraction_model": "qwen3.8-flash",
+      "review_model": "qwen3.8-flash",
+      "candidate_statuses": {
+        "program_rejected": 4,
+        "validated": 12,
+        "unresolved": 1,
+        "semantic_rejected": 2
+      },
+      "statistics": {
+        "independent_fields": 3,
+        "source_candidates": 1,
+        "urls": 1,
+        "validated_candidates": 3,
+        "rejected_candidates": 6,
+        "value_changes": 3,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 1,
+        "dependency_unresolved_candidates": 2,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0,
+        "new_entities": 5,
+        "main": {
+          "independent_fields": 3,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 3,
+          "rejected_candidates": 2,
+          "value_changes": 3,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 1,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "linked": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 4,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 1,
+          "dependency_unresolved_candidates": 1,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "formal_business_writes": 0,
+        "formal_provenance_writes": 0,
+        "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+      },
+      "main_body_complete": true,
+      "all_tasks_complete": true,
+      "tasks": [
+        {
+          "domain": "identity",
+          "scope": "main",
+          "state": "completed",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 26977
+              }
+            ],
+            "failed": [],
+            "body_length": 26977,
+            "complete": true
+          }
+        },
+        {
+          "domain": "specs",
+          "scope": "linked",
+          "state": "completed",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 26977
+              }
+            ],
+            "failed": [],
+            "body_length": 26977,
+            "complete": true
+          }
+        },
+        {
+          "domain": "compute",
+          "scope": "linked",
+          "state": "completed",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 26977
+              }
+            ],
+            "failed": [],
+            "body_length": 26977,
+            "complete": true
+          }
+        },
+        {
+          "domain": "deployment",
+          "scope": "linked",
+          "state": "completed",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 26977
+              }
+            ],
+            "failed": [],
+            "body_length": 26977,
+            "complete": true
+          }
+        }
+      ],
+      "source_db_hash_unchanged": true,
+      "frozen_baseline_hash_unchanged": true,
+      "empty_baseline_table_rows_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0,
+        "link_library": 0,
+        "source_registry": 0,
+        "benchmark_workbook_rows": 0,
+        "source_discovery_edges": 0,
+        "deployment_guides": 0,
+        "update_runs": 0,
+        "update_run_events": 0,
+        "source_monitor_state": 0,
+        "source_checks": 0,
+        "source_diffs": 0,
+        "source_auto_applies": 0,
+        "data_agent_jobs": 0,
+        "parse_ledger": 0,
+        "extraction_candidates": 0,
+        "candidate_baselines": 0,
+        "skill_inbox": 0,
+        "entity_aliases": 0,
+        "candidate_publications": 0
+      },
+      "calls": [
+        {
+          "phase": "extract",
+          "status": "completed",
+          "count": 16
+        },
+        {
+          "phase": "review",
+          "status": "completed",
+          "count": 15
+        },
+        {
+          "phase": "review",
+          "status": "parser_rejected",
+          "count": 3
+        }
+      ],
+      "chunks": [
+        {
+          "domain": "identity",
+          "start": 0,
+          "end": 8000,
+          "facts": 3
+        },
+        {
+          "domain": "identity",
+          "start": 8000,
+          "end": 15972,
+          "facts": 4
+        },
+        {
+          "domain": "identity",
+          "start": 15972,
+          "end": 23886,
+          "facts": 2
+        },
+        {
+          "domain": "identity",
+          "start": 23886,
+          "end": 26977,
+          "facts": 2
+        },
+        {
+          "domain": "specs",
+          "start": 0,
+          "end": 8000,
+          "facts": 0
+        },
+        {
+          "domain": "specs",
+          "start": 8000,
+          "end": 15972,
+          "facts": 3
+        },
+        {
+          "domain": "specs",
+          "start": 15972,
+          "end": 23886,
+          "facts": 2
+        },
+        {
+          "domain": "specs",
+          "start": 23886,
+          "end": 26977,
+          "facts": 0
+        },
+        {
+          "domain": "compute",
+          "start": 0,
+          "end": 8000,
+          "facts": 2
+        },
+        {
+          "domain": "compute",
+          "start": 8000,
+          "end": 15972,
+          "facts": 0
+        },
+        {
+          "domain": "compute",
+          "start": 15972,
+          "end": 23886,
+          "facts": 0
+        },
+        {
+          "domain": "compute",
+          "start": 23886,
+          "end": 26977,
+          "facts": 0
+        },
+        {
+          "domain": "deployment",
+          "start": 0,
+          "end": 8000,
+          "facts": 0
+        },
+        {
+          "domain": "deployment",
+          "start": 8000,
+          "end": 15972,
+          "facts": 0
+        },
+        {
+          "domain": "deployment",
+          "start": 15972,
+          "end": 23886,
+          "facts": 0
+        },
+        {
+          "domain": "deployment",
+          "start": 23886,
+          "end": 26977,
+          "facts": 1
+        }
+      ],
+      "nonaccepted_candidates": [
+        {
+          "id": "fact-000dba029d1412b4caea8b52ce64404738898a750f0f6426ada5c5fdfc7b23be",
+          "domain": "specs",
+          "entity": {
+            "chip_model": "TPU v6 Trillium",
+            "vendor": "Google"
+          },
+          "field": "process_node_nm",
+          "value": 5,
+          "status": "program_rejected",
+          "reason": "source unit is not present in evidence/context"
+        },
+        {
+          "id": "fact-63e754180f1df97a509146d8bb4af1fa1930b6490b5aad48222b96f75d52b506",
+          "domain": "deployment",
+          "entity": {
+            "chip_model": "TPU v5p/v6e",
+            "model_id": "generic",
+            "source_type": "web_crawl",
+            "title": "SemiAnalysis深度解读TPU--谷歌冲击“英伟达帝国”",
+            "url": "https://wallstreetcn.com/articles/3760377"
+          },
+          "field": "backend",
+          "value": "vLLM, SGLang (beta for TPU v5p/v6e)",
+          "status": "unresolved",
+          "reason": "incomplete_evidence"
+        },
+        {
+          "id": "fact-68f833b8f3f7113713411f50295e78267e64470467b7e82062583e5fea9a19ef",
+          "domain": "compute",
+          "entity": {
+            "chip_model": "TPUv7 Ironwood",
+            "vendor": "Google"
+          },
+          "field": "precision_perf",
+          "value": "unknown",
+          "status": "program_rejected",
+          "reason": "unsupported frozen domain unit"
+        },
+        {
+          "id": "fact-a2658ed14b3f72053fcb2833694f9e3fb3e71d899165b94f0337792c31967bf1",
+          "domain": "identity",
+          "entity": {
+            "chip_model": "TPU v6e",
+            "vendor": "Google"
+          },
+          "field": "chip_model",
+          "value": "TPU v6e",
+          "status": "semantic_rejected",
+          "reason": "证据文本“对 vLLM 和 SGLang 提供 beta 版 TPU v5p/v6e 支持”仅表明软件兼容性或支持状态，并未明确声明该芯片已公开发布（is_released=1）或处于量产阶段。根据 identity-rules.md，“公告并不证明量产”，且只有明确未公开发布才使用 production_status=未公开发布。当前证据不足以确立“TPU v6e”作为已发布/量产的具体身份事实，属于信息不足。"
+        },
+        {
+          "id": "fact-a88a86070ca189e06ae57cab968d7874d8e53d5d0d29916a32675aba2e96300e",
+          "domain": "identity",
+          "entity": {
+            "chip_model": "TPUv7 Ironwood",
+            "vendor": "Google"
+          },
+          "field": "chip_type",
+          "value": "TPU",
+          "status": "program_rejected",
+          "reason": "1 validation error for FactCandidate\nconversion\n  Input should be a valid dictionary or instance of Conversion [type=model_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/model_type"
+        },
+        {
+          "id": "fact-d152f2289d90ef3fed8a277423c551ffca9d82787e37d2aee1a6cd173902b77b",
+          "domain": "specs",
+          "entity": {
+            "chip_model": "TPUv7 Ironwood",
+            "vendor": "Google"
+          },
+          "field": "interconnect_bw_gb_s",
+          "value": 100,
+          "status": "program_rejected",
+          "reason": "source unit is not present in evidence/context"
+        },
+        {
+          "id": "fact-fd73e68a37ea6ae07cafc98f75343b73be8af86467255f29defb6f1abd26a32d",
+          "domain": "compute",
+          "entity": {
+            "chip_model": "TPUv7 Ironwood",
+            "vendor": "Google"
+          },
+          "field": "precision_support",
+          "value": [
+            "TPUv7"
+          ],
+          "status": "semantic_rejected",
+          "reason": "The candidate claims field 'precision_support' with value ['TPUv7'], but the evidence text ('首批约40万颗最新的TPUv7 \"Ironwood\"将不再通过云租赁') only confirms the existence and commercial model of the chip, not its supported numerical precisions (e.g., BF16, INT8). The compute domain requires explicit evidence for precision support or peak performance; naming a chip does not constitute proof of specific precision capabilities. Additionally, the source is a third-party analysis article (SemiAnalysis via WallStreetCN), correctly classified as web_crawl, but the extracted fact is unsupported by the quoted text."
+        }
+      ]
+    },
+    {
+      "domain": "specs",
+      "url": "https://cn.lianliwork.com/news/tpu-v8-liquid-cooling-google-supply-chain",
+      "snapshot_id": "b1254404a5a012761d8ff13209e74caa1cf8faa50d312f15836d9536b5c3390e",
+      "body_hash": "89f40481c8cad2bb9bf9c8013aced0c4342b2902217380e3ba3c833281508511",
+      "body_length": 5810,
+      "run_id": "run-ba77f43040444baea411f768ef0b2a0b",
+      "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay\\specs-b1254404-11cb0d",
+      "seconds": 17.54,
+      "provider": "qwen",
+      "extraction_model": "qwen3.8-flash",
+      "review_model": "qwen3.8-flash",
+      "candidate_statuses": {
+        "program_rejected": 3
+      },
+      "statistics": {
+        "independent_fields": 0,
+        "source_candidates": 0,
+        "urls": 0,
+        "validated_candidates": 0,
+        "rejected_candidates": 3,
+        "value_changes": 0,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 0,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0,
+        "new_entities": 0,
+        "main": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 3,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "linked": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 0,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "formal_business_writes": 0,
+        "formal_provenance_writes": 0,
+        "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+      },
+      "main_body_complete": true,
+      "all_tasks_complete": true,
+      "tasks": [
+        {
+          "domain": "specs",
+          "scope": "main",
+          "state": "completed",
+          "identity_dependency": false,
+          "coverage": {
+            "pending": [],
+            "processed": [
+              {
+                "start": 0,
+                "end": 5810
+              }
+            ],
+            "failed": [],
+            "body_length": 5810,
+            "complete": true
+          }
+        }
+      ],
+      "source_db_hash_unchanged": true,
+      "frozen_baseline_hash_unchanged": true,
+      "empty_baseline_table_rows_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0,
+        "link_library": 0,
+        "source_registry": 0,
+        "benchmark_workbook_rows": 0,
+        "source_discovery_edges": 0,
+        "deployment_guides": 0,
+        "update_runs": 0,
+        "update_run_events": 0,
+        "source_monitor_state": 0,
+        "source_checks": 0,
+        "source_diffs": 0,
+        "source_auto_applies": 0,
+        "data_agent_jobs": 0,
+        "parse_ledger": 0,
+        "extraction_candidates": 0,
+        "candidate_baselines": 0,
+        "skill_inbox": 0,
+        "entity_aliases": 0,
+        "candidate_publications": 0
+      },
+      "calls": [
+        {
+          "phase": "extract",
+          "status": "completed",
+          "count": 1
+        }
+      ],
+      "chunks": [
+        {
+          "domain": "specs",
+          "start": 0,
+          "end": 5810,
+          "facts": 3
+        }
+      ],
+      "nonaccepted_candidates": [
+        {
+          "id": "fact-4a40148d1fc1cd2be536cdf91686a1fdbd2d31f1f482539b2928dca7203ddc79",
+          "domain": "specs",
+          "entity": {
+            "chip_model": "TPU 8i",
+            "vendor": "Google"
+          },
+          "field": "process_node_nm",
+          "value": 2,
+          "status": "program_rejected",
+          "reason": "numeric field requires a single numeric raw value"
+        },
+        {
+          "id": "fact-83901114747f233f3b085c170d7771b73816ba6ec42dbdf137456870881dc60d",
+          "domain": "specs",
+          "entity": {
+            "chip_model": "TPU 8t",
+            "vendor": "Google"
+          },
+          "field": "process_node_nm",
+          "value": 2,
+          "status": "program_rejected",
+          "reason": "numeric field requires a single numeric raw value"
+        },
+        {
+          "id": "fact-ee0b56ae0efc2ff4b8fc83bdf8198369a8add60b55444cfbdc470015d1455f69",
+          "domain": "specs",
+          "entity": {
+            "chip_model": "TPU v8",
+            "vendor": "Google"
+          },
+          "field": "tdp_w",
+          "value": 1300,
+          "status": "program_rejected",
+          "reason": "raw numeric value is not continuously present in evidence"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "unicode_numeric_boundary",
+      "priority": 1,
+      "kind": "deterministic_program_false_rejection",
+      "diagnostic": {
+        "original_pattern": "(?<![\\w.])[+-]?\\d+(?:\\.\\d+)?",
+        "quote": "TPU v8单芯片功耗达1300W",
+        "original_tokens": [],
+        "whitespace_control": [
+          "1300"
+        ],
+        "unicode_word_matches_han": true,
+        "explanation": "Python Unicode \\w treats the preceding Chinese character as a word character, so the negative lookbehind prevents recognizing 1300. This is a pure regex diagnostic, not modified evidence or an accepted candidate."
+      },
+      "effect": "1300W rejected before semantic review despite the exact original quote. Pure regex control only; no source evidence was modified."
+    },
+    {
+      "id": "optional_object_contract_mismatch",
+      "priority": 1,
+      "kind": "cross_module_contract_mismatch",
+      "optional_fields_not_required_by_fact_schema": [
+        "entity_hints",
+        "conditions"
+      ],
+      "affected": [
+        {
+          "candidate_id": "fact-1f4413c61ad542bdb7f151b454bb504feaf5227e76ea34f19b9fa4224beb9a91",
+          "status": "validated",
+          "schema_valid": true,
+          "missing_optional_objects": [
+            "entity_hints",
+            "conditions"
+          ],
+          "field": "vram_type",
+          "entity": {
+            "chip_model": "TPU v6 Trillium",
+            "vendor": "Google"
+          }
+        },
+        {
+          "candidate_id": "fact-203981f5b68d4522125721f51d11ab96999c1126b7efdb3abb1cbe8fc5738e7f",
+          "status": "validated",
+          "schema_valid": true,
+          "missing_optional_objects": [
+            "entity_hints"
+          ],
+          "field": "vendor",
+          "entity": {
+            "chip_model": "TPUv7 Ironwood",
+            "vendor": "Google"
+          }
+        },
+        {
+          "candidate_id": "fact-3013ec661895271615a1040d07c35a8beaea9559bb56808eafc7bdc9892dc427",
+          "status": "validated",
+          "schema_valid": true,
+          "missing_optional_objects": [
+            "entity_hints"
+          ],
+          "field": "chip_model",
+          "entity": {
+            "chip_model": "TPUv7 Ironwood",
+            "vendor": "Google"
+          }
+        },
+        {
+          "candidate_id": "fact-4668e990a387652be0ec066fd42ede4c22ce5f83de7c6854d4094aa629a74383",
+          "status": "validated",
+          "schema_valid": true,
+          "missing_optional_objects": [
+            "entity_hints"
+          ],
+          "field": "interconnect_tech",
+          "entity": {
+            "chip_model": "TPUv7 Ironwood",
+            "vendor": "Google"
+          }
+        },
+        {
+          "candidate_id": "fact-9d7e9769c855b3338e9027ddbea67e2617b75346a1f351d1fde0a36bc09679b2",
+          "status": "validated",
+          "schema_valid": true,
+          "missing_optional_objects": [
+            "entity_hints",
+            "conditions"
+          ],
+          "field": "chip_model",
+          "entity": {
+            "chip_model": "TPU v6 Trillium",
+            "vendor": "Google"
+          }
+        },
+        {
+          "candidate_id": "fact-9ef3374adcdbf030698cb39c7128a3fe44b303aebe0e15669a05aa0968e5f16f",
+          "status": "validated",
+          "schema_valid": true,
+          "missing_optional_objects": [
+            "entity_hints",
+            "conditions"
+          ],
+          "field": "chip_type",
+          "entity": {
+            "chip_model": "TPU v6 Trillium",
+            "vendor": "Google"
+          }
+        },
+        {
+          "candidate_id": "fact-acf3ccb16a543d1133d5b2ad88ff569ef58b758175d9f48ff2146dafdcb29cd9",
+          "status": "validated",
+          "schema_valid": true,
+          "missing_optional_objects": [
+            "entity_hints",
+            "conditions"
+          ],
+          "field": "chip_type",
+          "entity": {
+            "chip_model": "TPU v7 Ironwood",
+            "vendor": "Google"
+          }
+        },
+        {
+          "candidate_id": "fact-c3e31766faa9c61c558e0e52be388babe431f5e3e870abf903ee89fe66fa843b",
+          "status": "validated",
+          "schema_valid": true,
+          "missing_optional_objects": [
+            "entity_hints",
+            "conditions"
+          ],
+          "field": "vram_type",
+          "entity": {
+            "chip_model": "TPU v7 Ironwood",
+            "vendor": "Google"
+          }
+        },
+        {
+          "candidate_id": "fact-e2b4aa7c22e93c7238963191a2d3d3bbf56188e4dd1999e2a33ebeed0d43e961",
+          "status": "validated",
+          "schema_valid": true,
+          "missing_optional_objects": [
+            "entity_hints",
+            "conditions"
+          ],
+          "field": "chip_model",
+          "entity": {
+            "chip_model": "TPU v7 Ironwood",
+            "vendor": "Google"
+          }
+        }
+      ],
+      "effect": "Nine accepted, schema-valid rows omitted optional entity_hints/conditions. Comparison rejects their absence. A fix must preserve original raw facts and model-proof hashes."
+    },
+    {
+      "id": "memory_type_from_equal_capacity",
+      "priority": 1,
+      "kind": "manual_false_accept",
+      "candidate_id": "fact-c3e31766faa9c61c558e0e52be388babe431f5e3e870abf903ee89fe66fa843b",
+      "evidence": {
+        "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+        "end": 11509,
+        "quote": "容量与 8-Hi HBM3E 相同",
+        "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+        "start": 11492
+      },
+      "value": "HBM3E",
+      "context": "的 FLOPS,Trillium 实现的性能 TCO 是无与伦比的。\n(图表:TPU v6 (Trillium) vs H100 (SXM) 比较)\nTPU v7 Ironwood 是下一次迭代,谷歌在 FLOPs、内存和带宽方面几乎完全缩小了与相应 Nvidia 旗舰 GPU 的差距,尽管全面上市时间比 Blackwell 晚 1 年。与 GB200 相比,FLOPs 和内存带宽仅有轻微的短缺,容量与 8-Hi HBM3E 相同,当然这与拥有 288GB 12-Hi HBM3E 的 GB300 相比有显著差距。\n(图表:TPU v7 (Ironwood) vs GB200/GB300 比较)\n理论绝对性能是一回事,但真正重要的是 每总拥有成本 (TCO) 的真实世界性能 。\n虽然谷歌通过 Broadcom 采购 TPU 并支付高额利润,但这远低于 Nvidia 不仅在销售 GPU 上,而且在包括 CPU、交换机、NIC、系统内存、布线和连接器在内的整个系统上赚取的利润。从谷歌的角度来看,这导致全 3D 环面(3D Torus)配置的每 Ironwood 芯片的 全包 TCO 比 GB",
+      "analysis": "Equal capacity to 8-Hi HBM3E does not establish Ironwood memory type. Qwen accepted this inference. The row was later excluded by optional binding shape, not by a factual rejection."
+    },
+    {
+      "id": "model_name_requires_release_status",
+      "priority": 1,
+      "kind": "manual_false_rejection",
+      "candidate_id": "fact-a2658ed14b3f72053fcb2833694f9e3fb3e71d899165b94f0337792c31967bf1",
+      "evidence": {
+        "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+        "end": 24232,
+        "quote": "对 vLLM 和 SGLang 提供 beta 版 TPU v5p/v6e 支持",
+        "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+        "start": 24192
+      },
+      "reason": "证据文本“对 vLLM 和 SGLang 提供 beta 版 TPU v5p/v6e 支持”仅表明软件兼容性或支持状态，并未明确声明该芯片已公开发布（is_released=1）或处于量产阶段。根据 identity-rules.md，“公告并不证明量产”，且只有明确未公开发布才使用 production_status=未公开发布。当前证据不足以确立“TPU v6e”作为已发布/量产的具体身份事实，属于信息不足。",
+      "analysis": "The requested field is the explicit model name, not release/production status. The same sentence yielded an accepted TPU v5p. Requiring released/mass-produced status for this candidate is unjustified."
+    },
+    {
+      "id": "identity_alias_fragmentation",
+      "priority": 2,
+      "kind": "normalization_gap",
+      "same_article_spellings": [
+        "TPUv7 Ironwood",
+        "TPU v7 Ironwood",
+        "TPUv7"
+      ],
+      "effect": "Three spellings became separate test identities. Five new entities in an empty baseline are not five actual discoveries. Alias confirmation needs explicit same-SKU evidence and variant preservation."
+    },
+    {
+      "id": "numeric_raw_values_with_units",
+      "priority": 2,
+      "kind": "extraction_format_error",
+      "examples": [
+        "TPU 8t process_node_nm raw_value=2nm",
+        "TPU 8i process_node_nm raw_value=2nm"
+      ],
+      "effect": "Numeric contract requires numeric raw values with separate units. Correcting raw formatting alone may still encounter Chinese numeric-boundary rejection."
+    },
+    {
+      "id": "review_protocol_errors",
+      "priority": 2,
+      "kind": "model_schema_error",
+      "cases": [
+        {
+          "logical_id": "review-4dcd86b73f3ba80fdbb9728b325fd4512ee891c743bbb7b2e3725e3241d5e251",
+          "attempt": 0,
+          "status": "parser_rejected",
+          "error": "1 validation error for ReviewResponse\n  Value error, only revise requires a complete replacement candidate [type=value_error, input_value={'verdict': 'revise', 're... appropriate metadata.'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error"
+        },
+        {
+          "logical_id": "review-8de642c817a24ebf7387e6d67baecc7ce771cddaff13c980134a680bd2c9a332",
+          "attempt": 0,
+          "status": "parser_rejected",
+          "error": "1 validation error for ReviewResponse\n  Value error, only revise requires a complete replacement candidate [type=value_error, input_value={'verdict': 'revise', 're...provided entity_key `{\"}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error"
+        },
+        {
+          "logical_id": "review-dbe4218fe225d2df861c64df533a20bca4898a1d69c04babbe67e18366895a95",
+          "attempt": 0,
+          "status": "parser_rejected",
+          "error": "1 validation error for ReviewResponse\n  Value error, only revise requires a complete replacement candidate [type=value_error, input_value={'verdict': 'revise', 're...结论：**Accept**。'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error"
+        }
+      ],
+      "effect": "Three JSON-valid revise responses omitted the replacement candidate. The bounded technical retries returned valid business responses. These were not valid semantic revisions, and no review quota was reset."
+    },
+    {
+      "id": "empty_linked_chunks",
+      "priority": 2,
+      "kind": "empty_fact_diagnosis",
+      "count": 8,
+      "analysis": "All empty chunks belong to linked specs/compute/deployment tasks. Main identity and main specs produced facts. Broad links include commercial discussion, relative performance and software descriptions without complete owned fact conditions. Not all empty results are errors; recall completeness is not established.",
+      "saved_html_observation": {
+        "table_tags": 0,
+        "image_tags": 66,
+        "scope": "Wallstreetcn saved HTML only",
+        "note": "Body contains chart/table captions without transcribed graphic values. Only brand image alt text was nonempty in the inspected HTML. No image fetch or OCR was performed."
+      }
+    },
+    {
+      "id": "s60_control",
+      "priority": 2,
+      "kind": "fixed_negative_control",
+      "prior_kimi_k3_verdict": "accept",
+      "qwen_status": "semantic_rejected",
+      "reason": "The evidence quote explicitly identifies the S60 as an '人工智能加速卡' (AI acceleration card) based on the GCU320 chip. In the context of AI hardware taxonomy, such cards are typically classified as NPU (Neural Processing Unit) or ASIC depending on architecture. The page mentions 'ASIC' in a general market trend paragraph ('预计 2027 年 ASIC 在 AI 芯片市场份额将突破 45%'), but does not explicitly label the specific S60 SKU as an ASIC. Inferring 'ASIC' from 'acceleration card' is a classification judgment that may conflict with the vendor's own categorization (often NPU for inference cards). More critically, the source_type is correctly identified as 'web_crawl' (third-party media), but the normalized_value 'ASIC' lacks direct textual support for this specific entity; the text supports 'NPU' or generic 'AI accelerator' more strongly if forced to choose a standard type, or simply leaves it ambiguous between ASIC/NPU without explicit vendor definition. However, the primary rejection reason is that the evidence provided does not contain the word 'ASIC' associated with the S60 product itself, only in a general industry forecast. Therefore, the mapping from raw_value '人工智能加速卡' to normalized_value 'ASIC' is an unsupported inference rather than an extracted fact.",
+      "run_id": "run-275b2b20035b4c79b9b76c68da5bf55b",
+      "folder": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay\\qwen-s60-control-c791c8c0",
+      "analysis": "Qwen correctly rejected the unsupported ASIC inference. Its reason still speculates about NPU as an alternative; that speculation is not a fact."
+    }
+  ],
+  "safety": {
+    "search_requests": 0,
+    "new_page_fetch_requests": 0,
+    "formal_business_writes": 0,
+    "formal_provenance_writes": 0,
+    "fixture_responses": 0,
+    "production_deployment_changed": false,
+    "heartbeat_enabled": false,
+    "shared_env_edited_by_agent": false,
+    "application_source_changed_this_round": false
+  },
+  "verification": {
+    "saved_snapshot_hashes_checked": true,
+    "all_source_and_frozen_baseline_hashes_unchanged": true,
+    "all_isolated_business_tables_remained_empty": true,
+    "response_model_verified_all_calls": true,
+    "application_source_matches_previous_hashes": {}
+  },
+  "next_steps": [
+    "Fix Chinese-adjacent numeric detection with regression cases that still reject digits embedded in SKUs and unrelated quantities.",
+    "Align comparison optional-object defaults with FactCandidate without rewriting raw facts or relaxing proof bindings.",
+    "Keep fixed controls for capacity-versus-memory-type and model-name-versus-release-status; audit accepted rows when extraction and review share the same model.",
+    "Add evidence-backed SKU alias normalization and more precise linked-domain triggers.",
+    "Rerun these same saved full bodies after fixes; execution coverage alone is not data-quality acceptance."
+  ],
+  "limitations": [
+    "Two bodies and one negative control do not constitute a provider accuracy benchmark. The earlier completed body was not rerun with Qwen.",
+    "No natural typed identity wait occurred; this replay adds no live evidence for waiting-recovery behavior.",
+    "Empty baselines cannot measure real new discovery or production matching.",
+    "Graphic-only numeric evidence is unavailable to this text-only replay."
+  ],
+  "artifacts": {
+    "local_summary": "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\full-body-replay\\summary.json",
+    "previous_report": "docs/acceptance/2026-10-21-full-body-replay.json",
+    "diagnostic_code_sha256": {
+      "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\replay-complete-saved-bodies.py": "bff9b47a6626b9d6d6b7069b5eb4c64cc8879cece5e8a87109a68d618af98d05",
+      "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\qwen_replay_transport.py": "f69c3b072e2f6e7a556ca61c93f23b5c45b802284b17da07114e83b21de4095c",
+      "D:\\projects\\北电项目\\chip-recommend\\.worktrees\\hermes-domain-discovery\\.tmp\\qwen-review-s60-control.py": "4a8a87e6848003f402fd7207877a235fdc0177025ae0a966488aa16ca6e1afbc"
+    }
+  }
+}

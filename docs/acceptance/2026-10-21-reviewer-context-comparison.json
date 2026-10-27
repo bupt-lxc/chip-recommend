@@ -1,0 +1,609 @@
+{
+  "date": "2026-10-21",
+  "status": "diagnosis_and_small_controlled_model_comparison_complete",
+  "constraints": {
+    "new_search_requests": 0,
+    "new_source_page_fetches": 0,
+    "formal_business_writes": 0,
+    "formal_provenance_writes": 0,
+    "production_configuration_changed": false,
+    "business_code_changed_this_round": false
+  },
+  "scope": {
+    "saved_source_pages": 2,
+    "fixture_types": 4,
+    "inference_requests": 9,
+    "model_inventory_api_requests": 2,
+    "live_runtime_end_to_end_run": false
+  },
+  "provider_inventory": [
+    {
+      "provider": "moonshot",
+      "host": "api.moonshot.cn",
+      "configured_model": "kimi-k2.6",
+      "http_status": 200,
+      "models": [
+        "kimi-k2.7-code",
+        "kimi-k2.6",
+        "kimi-k3",
+        "kimi-k2.7-code-highspeed"
+      ],
+      "configured_model_listed": true
+    },
+    {
+      "provider": "deepseek",
+      "host": "api.deepseek.com",
+      "configured_model": "deepseek-v4-flash",
+      "http_status": 401
+    }
+  ],
+  "cases": {
+    "chip_positive": {
+      "url": "https://www.ithome.com/1/010/867.htm",
+      "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+      "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+      "start": 2030,
+      "end": 2240,
+      "saved_source_excerpt": "寒武纪\n寒武纪思元 370 芯片基于 7nm 制程工艺和 chiplet 芯粒技术,最大算力 256TOPS(INT8),是国内第一款公开发布支持 LPDDR5 内存的云端 AI 芯片。思元 370 搭载 MLU-Link 多芯互联技术,寒武纪基础软件平台新增推理加速引擎 MagicMind,实现训推一体。思元 370 系列智能加速卡包括 MLU370-S4/S8、MLU370-X4、MLU370-X8 等产品形态。",
+      "candidate": {
+        "domain_id": "compute",
+        "target_table": "chips",
+        "field_name": "precision_perf",
+        "entity_key": {
+          "vendor": "寒武纪",
+          "chip_model": "思元 370"
+        },
+        "entity_hints": {},
+        "raw_value": 256,
+        "normalized_value": 256,
+        "unit": "TOPS",
+        "conversion": {
+          "source_unit": "TOPS",
+          "factor": 1,
+          "basis": "unknown",
+          "direction": "unknown",
+          "aggregation": "per_chip",
+          "dense_or_sparse": "unknown",
+          "precision": "INT8",
+          "calculation_basis": "theoretical_peak",
+          "description": "Source states '最大算力 256TOPS(INT8)' indicating theoretical peak INT8 performance of 256 TOPS"
+        },
+        "scope": "chip",
+        "evidence_kind": "theoretical",
+        "conditions": {},
+        "evidence": {
+          "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+          "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+          "quote": "最大算力 256TOPS(INT8)",
+          "start": 2072,
+          "end": 2090
+        },
+        "context_refs": [],
+        "explanation": "The page explicitly states that the 寒武纪思元 370 chip has maximum compute performance of 256 TOPS for INT8 precision. This is a theoretical peak performance figure for the chip. The source is IT Home (ithome.com), an independent technology media outlet, not a first-party manufacturer announcement or datasheet.",
+        "source_type": "community",
+        "confidence": "medium",
+        "confidence_reason": "The performance figure is explicitly stated with precision (INT8) and unit (TOPS), but the source is third-party media (IT Home) rather than official Cambricon documentation. No dense/sparse distinction is provided, and '最大算力' (maximum compute) suggests theoretical peak but the exact calculation basis is not specified."
+      },
+      "expected_verdict": "accept",
+      "fixture_origin": "Original saved extraction candidate"
+    },
+    "board_negative": {
+      "url": "https://www.ithome.com/1/010/867.htm",
+      "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+      "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+      "start": 2030,
+      "end": 2240,
+      "saved_source_excerpt": "寒武纪\n寒武纪思元 370 芯片基于 7nm 制程工艺和 chiplet 芯粒技术,最大算力 256TOPS(INT8),是国内第一款公开发布支持 LPDDR5 内存的云端 AI 芯片。思元 370 搭载 MLU-Link 多芯互联技术,寒武纪基础软件平台新增推理加速引擎 MagicMind,实现训推一体。思元 370 系列智能加速卡包括 MLU370-S4/S8、MLU370-X4、MLU370-X8 等产品形态。",
+      "candidate": {
+        "domain_id": "compute",
+        "target_table": "chips",
+        "field_name": "precision_perf",
+        "entity_key": {
+          "vendor": "寒武纪",
+          "chip_model": "MLU370-X4"
+        },
+        "entity_hints": {
+          "entity_type": "board_sku"
+        },
+        "raw_value": 256,
+        "normalized_value": 256,
+        "unit": "TOPS",
+        "conversion": {
+          "source_unit": "TOPS",
+          "factor": 1,
+          "basis": "unknown",
+          "direction": "unknown",
+          "aggregation": "per_chip",
+          "dense_or_sparse": "unknown",
+          "precision": "INT8",
+          "calculation_basis": "theoretical_peak",
+          "description": "Source states '最大算力 256TOPS(INT8)' indicating theoretical peak INT8 performance of 256 TOPS"
+        },
+        "scope": "board_sku",
+        "evidence_kind": "theoretical",
+        "conditions": {},
+        "evidence": {
+          "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+          "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+          "quote": "最大算力 256TOPS(INT8)",
+          "start": 2072,
+          "end": 2090
+        },
+        "context_refs": [],
+        "explanation": "The page explicitly states that the 寒武纪MLU370-X4 chip has maximum compute performance of 256 TOPS for INT8 precision. This is a theoretical peak performance figure for the board. The source is IT Home (ithome.com), an independent technology media outlet, not a first-party manufacturer announcement or datasheet.",
+        "source_type": "community",
+        "confidence": "medium",
+        "confidence_reason": "The performance figure is explicitly stated with precision (INT8) and unit (TOPS), but the source is third-party media (IT Home) rather than official Cambricon documentation. No dense/sparse distinction is provided, and '最大算力' (maximum compute) suggests theoretical peak but the exact calculation basis is not specified."
+      },
+      "expected_verdict": "reject",
+      "fixture_origin": "Controlled candidate from the same saved source; board_negative changes entity/scope only, identity_model_positive preserves literal name without lifecycle inference."
+    },
+    "identity_model_positive": {
+      "url": "https://wallstreetcn.com/articles/3760377",
+      "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+      "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+      "start": 606,
+      "end": 909,
+      "saved_source_excerpt": "谷歌“主动出击”\n长期以来,谷歌的TPU就像其搜索算法一样,是深藏不露的内部核武器。但SemiAnalysis获取的供应链情报显示,这一策略已发生根本性逆转。\n最直接的案例来自Anthropic。作为能在前沿模型上媲美OpenAI抗衡的大模型公司,Anthropic已确认将部署超过100万颗TPU。这笔交易的结构极具破坏力,它揭示了谷歌“混合销售”的新模式:\n在这100万颗芯片中,首批约40万颗最新的TPUv7 \"Ironwood\"将不再通过云租赁,而是由博通直接出售给Anthropic,价值约100亿美元。博通作为TPU的长期联合设计方,在此次交易中从幕后走向台前,成为了这场算力转移的隐形赢家。\n",
+      "candidate": {
+        "domain_id": "identity",
+        "target_table": "chips",
+        "field_name": "chip_model",
+        "entity_key": {
+          "vendor": "谷歌",
+          "chip_model": "TPUv7 \"Ironwood\""
+        },
+        "entity_hints": {
+          "entity_type": "chip"
+        },
+        "raw_value": "TPUv7 \"Ironwood\"",
+        "normalized_value": "TPUv7 \"Ironwood\"",
+        "unit": null,
+        "scope": "chip",
+        "evidence_kind": "explicit",
+        "conditions": {},
+        "evidence": {
+          "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+          "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+          "quote": "谷歌“主动出击”\n长期以来,谷歌的TPU就像其搜索算法一样,是深藏不露的内部核武器。但SemiAnalysis获取的供应链情报显示,这一策略已发生根本性逆转。\n最直接的案例来自Anthropic。作为能在前沿模型上媲美OpenAI抗衡的大模型公司,Anthropic已确认将部署超过100万颗TPU。这笔交易的结构极具破坏力,它揭示了谷歌“混合销售”的新模式:\n在这100万颗芯片中,首批约40万颗最新的TPUv7 \"Ironwood\"将不再通过云租赁,而是由博通直接出售给Anthropic,价值约100亿美元。博通作为TPU的长期联合设计方,在此次交易中从幕后走向台前,成为了这场算力转移的隐形赢家。\n",
+          "start": 606,
+          "end": 909
+        },
+        "context_refs": [],
+        "explanation": "The submitted excerpt names Google TPUv7 Ironwood; the exact literal product name is retained without lifecycle inference.",
+        "source_type": "community",
+        "confidence": "medium",
+        "confidence_reason": "Explicit model name in a third-party report; no manufacturer confirmation claimed."
+      },
+      "expected_verdict": "accept",
+      "fixture_origin": "Controlled candidate from the same saved source; board_negative changes entity/scope only, identity_model_positive preserves literal name without lifecycle inference."
+    },
+    "identity_lifecycle_negative": {
+      "url": "https://wallstreetcn.com/articles/3760377",
+      "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+      "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+      "start": 606,
+      "end": 909,
+      "saved_source_excerpt": "谷歌“主动出击”\n长期以来,谷歌的TPU就像其搜索算法一样,是深藏不露的内部核武器。但SemiAnalysis获取的供应链情报显示,这一策略已发生根本性逆转。\n最直接的案例来自Anthropic。作为能在前沿模型上媲美OpenAI抗衡的大模型公司,Anthropic已确认将部署超过100万颗TPU。这笔交易的结构极具破坏力,它揭示了谷歌“混合销售”的新模式:\n在这100万颗芯片中,首批约40万颗最新的TPUv7 \"Ironwood\"将不再通过云租赁,而是由博通直接出售给Anthropic,价值约100亿美元。博通作为TPU的长期联合设计方,在此次交易中从幕后走向台前,成为了这场算力转移的隐形赢家。\n",
+      "candidate": {
+        "domain_id": "identity",
+        "target_table": "chips",
+        "field_name": "production_status",
+        "entity_key": {
+          "vendor": "Google",
+          "chip_model": "TPUv7 Ironwood"
+        },
+        "raw_value": "已确认部署，首批约40万颗",
+        "normalized_value": "confirmed_deployment",
+        "unit": null,
+        "conversion": {
+          "description": "Status description from supply chain report indicating confirmed deployment with specific quantity of first batch"
+        },
+        "scope": "chip",
+        "evidence_kind": "explicit",
+        "conditions": {},
+        "evidence": {
+          "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+          "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+          "quote": "首批约40万颗最新的TPUv7 \"Ironwood\"将不再通过云租赁,而是由博通直接出售给Anthropic,价值约100亿美元。",
+          "start": 798,
+          "end": 863
+        },
+        "context_refs": [],
+        "explanation": "The text states that Anthropic has 'confirmed' (已确认) deployment of over 1 million TPUs, with the first batch of ~400K TPUv7 Ironwood chips to be sold directly by Broadcom. This indicates the chip is in production/delivery phase, not merely announced.",
+        "source_type": "community",
+        "confidence": "medium",
+        "confidence_reason": "Specific quantity and transaction value mentioned, but source is supply chain intelligence rather than official production status announcement. 'Confirmed' refers to Anthropic's deployment confirmation, not necessarily Google's official production status declaration."
+      },
+      "expected_verdict": "reject",
+      "fixture_origin": "Original saved extraction candidate"
+    }
+  },
+  "model_only_comparisons": [
+    {
+      "case": "chip_positive",
+      "messages_identical": true,
+      "difference": "Only request model differs; same provider/base URL/credential, temperature=0.6, thinking disabled, max_tokens=3072, timeout=120, stream=false."
+    },
+    {
+      "case": "board_negative",
+      "messages_identical": true,
+      "difference": "Only request model differs; same provider/base URL/credential, temperature=0.6, thinking disabled, max_tokens=3072, timeout=120, stream=false."
+    }
+  ],
+  "results": [
+    {
+      "case": "chip_positive",
+      "arm": "kimi26_no_context",
+      "requested_model": "kimi-k2.6",
+      "returned_model": "kimi-k2.6",
+      "request_messages_sha256": "b85bb408cea0c91100ee704a20f47d7476104e10c993f7b27767189ecc36710e",
+      "status": "completed",
+      "verdict": "reject",
+      "expected_verdict": "accept",
+      "matches_expected_verdict": false,
+      "seconds": 14.922,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14362,
+        "completion_tokens": 495,
+        "total_tokens": 14857,
+        "completion_tokens_details": {
+          "reasoning_tokens": 1
+        }
+      },
+      "business_response_untrusted": {
+        "verdict": "reject",
+        "reason": "Source type misclassification: ithome.com is an independent third-party technology media outlet, not a first-party manufacturer announcement. The candidate correctly classified it as 'community', but the review task requires rejecting incorrect source classifications. However, the actual source_type in the candidate is 'community', which is correct for IT Home. Re-examining: the candidate's source_type is actually 'community', not 'official_news'. The real issue is that this is a third-party media report about 寒武纪's product, and while the figure '256TOPS(INT8)' is explicitly stated, the evidence does not support 'theoretical' as the evidence_kind with confidence. The phrase '最大算力' (maximum compute power) in Chinese tech media commonly implies peak/theoretical capability, but without explicit 'theoretical peak' or '峰值' (peak) qualification from the manufacturer, this is a media characterization. More critically, the candidate lacks dense/sparse distinction which compute-rules.md requires as separate preservation. The conversion.dense_or_sparse is 'unknown' which violates the condition that dense/sparse must be separately tracked and not left unknown when the source doesn't specify. Per compute-rules.md: '峰值必须同一 SKU、同一精度/计算单元、同一 Dense/Sparse 与 TFLOPS/TOPS 口径' - when dense/sparse is not specified, it must be marked unknown but the candidate should not claim validated theoretical peak without this distinction. The evidence_kind 'theoretical' is unsupported because the source (IT Home) does not explicitly label this as theoretical peak; it's a media report using '最大算力' which is ambiguous. The correct evidence_kind should be 'explicit' (the number is explicitly stated) not 'theoretical' (which requires explicit theoretical labeling). Additionally, scope should be 'single_card' or 'chip' - the entity_key identifies the chip, but the text mentions '思元 370 系列智能加速卡' (acceleration cards), creating ambiguity about whether 256TOPS refers to the chip or card. The candidate assumes 'chip' scope without justification when the source discusses both chip and card products. Finally, confidence 'medium' is generous for a single third-party media claim without manufacturer corroboration; the explicit figure warrants low confidence due to source independence and lack of dense/sparse specification."
+      }
+    },
+    {
+      "case": "chip_positive",
+      "arm": "kimi26_source_context",
+      "requested_model": "kimi-k2.6",
+      "returned_model": "kimi-k2.6",
+      "request_messages_sha256": "6b8cdbc056690bb097d71f5970618e2e2a176003b47a095c141b298abafc68a1",
+      "status": "completed",
+      "verdict": "revise",
+      "expected_verdict": "accept",
+      "matches_expected_verdict": false,
+      "seconds": 19.126,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14610,
+        "completion_tokens": 678,
+        "total_tokens": 15288,
+        "cached_tokens": 12288,
+        "completion_tokens_details": {
+          "reasoning_tokens": 1
+        },
+        "prompt_tokens_details": {
+          "cached_tokens": 12288
+        }
+      },
+      "business_response_untrusted": {
+        "verdict": "revise",
+        "reason": "The source_type classification is incorrect and must be revised. The page is from ithome.com (IT Home), an independent third-party technology media outlet, not a first-party manufacturer/owner announcement. Per the contract: 'official_news requires a first-party manufacturer/owner announcement; third-party media reports and reposts are community or web_crawl, even if they cite official information.' The current classification as 'community' understates the third-party nature; this is properly 'web_crawl' as it is a media article without first-party provenance. Additionally, the dense_or_sparse field in conversion must remain 'unknown' (correctly set), but the source_type requires correction to reflect the actual publisher evidence class.",
+        "candidate": {
+          "domain_id": "compute",
+          "target_table": "chips",
+          "field_name": "precision_perf",
+          "entity_key": {
+            "vendor": "寒武纪",
+            "chip_model": "思元 370"
+          },
+          "entity_hints": {},
+          "raw_value": 256,
+          "normalized_value": 256,
+          "unit": "TOPS",
+          "conversion": {
+            "source_unit": "TOPS",
+            "factor": 1,
+            "basis": "unknown",
+            "direction": "unknown",
+            "aggregation": "per_chip",
+            "dense_or_sparse": "unknown",
+            "precision": "INT8",
+            "calculation_basis": "theoretical_peak",
+            "description": "Source states '最大算力 256TOPS(INT8)' indicating theoretical peak INT8 performance of 256 TOPS"
+          },
+          "scope": "chip",
+          "evidence_kind": "theoretical",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+            "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+            "quote": "最大算力 256TOPS(INT8)",
+            "start": 2072,
+            "end": 2090
+          },
+          "context_refs": [],
+          "explanation": "The page explicitly states that the 寒武纪思元 370 chip has maximum compute performance of 256 TOPS for INT8 precision. This is a theoretical peak performance figure for the chip. The source is IT Home (ithome.com), an independent third-party technology media outlet reporting on the chip, not a first-party manufacturer announcement or official datasheet.",
+          "source_type": "web_crawl",
+          "confidence": "medium",
+          "confidence_reason": "The performance figure is explicitly stated with precision (INT8) and unit (TOPS), but the source is third-party media (IT Home) rather than official Cambricon documentation. No dense/sparse distinction is provided, and '最大算力' (maximum compute) suggests theoretical peak but the exact calculation basis is not specified."
+        }
+      }
+    },
+    {
+      "case": "chip_positive",
+      "arm": "kimi3_source_context",
+      "requested_model": "kimi-k3",
+      "returned_model": "kimi-k3",
+      "request_messages_sha256": "6b8cdbc056690bb097d71f5970618e2e2a176003b47a095c141b298abafc68a1",
+      "status": "completed",
+      "verdict": "accept",
+      "expected_verdict": "accept",
+      "matches_expected_verdict": true,
+      "seconds": 5.268,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14628,
+        "completion_tokens": 260,
+        "total_tokens": 14888,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 14592
+        }
+      },
+      "business_response_untrusted": {
+        "verdict": "accept",
+        "reason": "The candidate is supported by the supplied snapshot: the verbatim quote '最大算力 256TOPS(INT8)' appears at the stated offsets (2072-2090) within the page body, and the surrounding text explicitly names 寒武纪思元 370 as the chip, matching the entity_key (vendor=寒武纪, chip_model=思元 370). The value 256 TOPS at INT8 precision is preserved without cross-format conversion, evidence_kind=theoretical is appropriate for a '最大算力' peak figure, and dense_or_sparse=unknown is correctly left unresolved rather than inferred. The source_type is correctly classified as community: ithome.com (IT Home) is an independent third-party technology media outlet, not a first-party Cambricon announcement or datasheet, so it must not be labeled official_news/official_datasheet. Confidence medium with the stated reasoning is consistent with an explicit but third-party media claim lacking dense/sparse and calculation-basis detail. Field ownership (chips.precision_perf), unit (TOPS), scope (chip), and entity-key preservation all conform to the frozen compute contract; no revision is required.",
+        "candidate": null
+      }
+    },
+    {
+      "case": "board_negative",
+      "arm": "kimi26_no_context",
+      "requested_model": "kimi-k2.6",
+      "returned_model": "kimi-k2.6",
+      "request_messages_sha256": "17126a760edfb57b9d7851b120a8445b924fb604a6529085fd8e8e7238635cb7",
+      "status": "completed",
+      "verdict": "reject",
+      "expected_verdict": "reject",
+      "matches_expected_verdict": true,
+      "seconds": 9.714,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14371,
+        "completion_tokens": 302,
+        "total_tokens": 14673,
+        "cached_tokens": 12288,
+        "completion_tokens_details": {
+          "reasoning_tokens": 1
+        },
+        "prompt_tokens_details": {
+          "cached_tokens": 12288
+        }
+      },
+      "business_response_untrusted": {
+        "verdict": "reject",
+        "reason": "Entity key mismatch with scope and evidence: The candidate uses entity_key chip_model='MLU370-X4', but the page text explicitly states '思元 370 芯片' (Cambricon MLU370 chip) and lists 'MLU370-X4' as one of '思元 370 系列智能加速卡' (MLU370 series accelerator card products). The field_name 'precision_perf' belongs to the 'chips' table per domain contract, and the scope is set to 'board_sku', yet the entity_key claims a chip_model without the board suffix. Per compute-rules.md and domain.json, 'vendor' and 'chip_model' are the entity keys for chips; board SKUs with suffixes like -X4 are distinct from the base chip. The evidence '最大算力 256TOPS(INT8)' refers to '思元 370 芯片' (the chip), not specifically to MLU370-X4 board. The candidate conflates chip-level and board-level entities without proper entity separation. Additionally, source_type 'community' is correctly classified for IT Home, but the confidence should remain medium; however, the fundamental entity/scope inconsistency makes this candidate invalid as structured. No revision is attempted because the evidence does not unambiguously support either a pure chip entity or a specific board SKU with the claimed precision_perf value."
+      }
+    },
+    {
+      "case": "board_negative",
+      "arm": "kimi26_source_context",
+      "requested_model": "kimi-k2.6",
+      "returned_model": "kimi-k2.6",
+      "request_messages_sha256": "a2337e97436add055bea575c3490aff0d64c8fabe39e803e2802ea7ec5424484",
+      "status": "completed",
+      "verdict": "revise",
+      "expected_verdict": "reject",
+      "matches_expected_verdict": false,
+      "seconds": 33.652,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14622,
+        "completion_tokens": 1416,
+        "total_tokens": 16038,
+        "cached_tokens": 12288,
+        "completion_tokens_details": {
+          "reasoning_tokens": 1
+        },
+        "prompt_tokens_details": {
+          "cached_tokens": 12288
+        }
+      },
+      "business_response_untrusted": {
+        "verdict": "revise",
+        "reason": "The candidate contains a critical source_type misclassification that must be corrected. The page is from IT Home (ithome.com), an independent third-party technology media outlet, not a first-party manufacturer/owner announcement. Per the frozen contract: 'official_news requires a first-party manufacturer/owner announcement; third-party media reports and reposts are community or web_crawl, even if they cite official information.' The current classification as 'community' is acceptable but the confidence and explanation should accurately reflect this is third-party media reporting, not direct manufacturer communication. However, the more significant issue is that the entity_key uses 'MLU370-X4' as chip_model, but the source text refers to '思元 370' (Siyuan 370) as the chip family, with MLU370-X4 being a board SKU ('智能加速卡' product form). The source text states '思元 370 系列智能加速卡包括 MLU370-S4/S8、MLU370-X4、MLU370-X8 等产品形态' - explicitly identifying MLU370-X4 as a board/card product form, not the chip itself. Per domain.json entity_scope default ['chip', 'single_card'] and entity_matching rules preserving sku_suffix/capacity/form_factor, the chip_model should be '思元 370' or 'MLU370' with MLU370-X4 as a board_sku suffix. The current entity_key conflates board SKU with chip model. Also, the scope is 'board_sku' which is correct, but the entity_key chip_model should not include the -X4 suffix. The evidence quote '最大算力 256TOPS(INT8)' appears in a paragraph discussing the 思元 370 chip family generally, not specifically the MLU370-X4 board variant. The text structure suggests 256 TOPS INT8 may be the chip-level maximum, with board variants potentially having different configurations. The candidate should be revised to: (1) correct chip_model to '思元 370' or 'MLU370' removing -X4 suffix, (2) add board_sku hint 'MLU370-X4' in entity_hints, (3) adjust explanation to note the figure is stated for the chip family generally with board_sku scope being inferred, (4) maintain source_type as 'community' (third-party media), (5) reduce confidence to 'low' due to ambiguity about whether 256 TOPS applies to all board variants or specifically X4, and lack of dense/sparse distinction.",
+        "candidate": {
+          "domain_id": "compute",
+          "target_table": "chips",
+          "field_name": "precision_perf",
+          "entity_key": {
+            "vendor": "寒武纪",
+            "chip_model": "思元 370"
+          },
+          "entity_hints": {
+            "entity_type": "board_sku",
+            "board_sku": "MLU370-X4"
+          },
+          "raw_value": 256,
+          "normalized_value": 256,
+          "unit": "TOPS",
+          "conversion": {
+            "source_unit": "TOPS",
+            "factor": 1,
+            "basis": "unknown",
+            "direction": "unknown",
+            "aggregation": "per_chip",
+            "dense_or_sparse": "unknown",
+            "precision": "INT8",
+            "calculation_basis": "theoretical_peak",
+            "description": "Source states '最大算力 256TOPS(INT8)' for 思元 370 chip family; board SKU MLU370-X4 is one product form in the series"
+          },
+          "scope": "board_sku",
+          "evidence_kind": "theoretical",
+          "conditions": {},
+          "evidence": {
+            "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+            "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+            "quote": "最大算力 256TOPS(INT8)",
+            "start": 2072,
+            "end": 2090
+          },
+          "context_refs": [
+            {
+              "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+              "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+              "quote": "思元 370 系列智能加速卡包括 MLU370-S4/S8、MLU370-X4、MLU370-X8 等产品形态",
+              "start": 2115,
+              "end": 2163,
+              "kind": "table_caption"
+            }
+          ],
+          "explanation": "The page states that 寒武纪's 思元 370 (Siyuan 370) chip family has maximum compute performance of 256 TOPS for INT8 precision. The source explicitly lists MLU370-X4 as one board SKU ('智能加速卡' product form) in the 思元 370 series, alongside MLU370-S4/S8 and MLU370-X8. The 256 TOPS figure is stated in the general chip description, not specifically attributed to the X4 variant. The source is IT Home (ithome.com), an independent third-party technology media outlet, not a first-party manufacturer announcement or official datasheet. No dense/sparse distinction is provided. The scope is board_sku due to the entity hint, but the performance figure may apply to the chip family generally with variant-specific configurations unknown.",
+          "source_type": "community",
+          "confidence": "low",
+          "confidence_reason": "The performance figure is explicitly stated with precision (INT8) and unit (TOPS), but: (1) the source is third-party media (IT Home) not official Cambricon documentation; (2) the 256 TOPS figure is stated for the 思元 370 chip family generally, not specifically confirmed for the MLU370-X4 board SKU; (3) no dense/sparse distinction is provided; (4) '最大算力' suggests theoretical peak but exact calculation basis is unspecified; (5) multiple board variants exist (S4/S8/X4/X8) with potentially different configurations, and the source does not clarify if 256 TOPS applies equally to all variants."
+        }
+      }
+    },
+    {
+      "case": "board_negative",
+      "arm": "kimi3_source_context",
+      "requested_model": "kimi-k3",
+      "returned_model": "kimi-k3",
+      "request_messages_sha256": "a2337e97436add055bea575c3490aff0d64c8fabe39e803e2802ea7ec5424484",
+      "status": "completed",
+      "verdict": "reject",
+      "expected_verdict": "reject",
+      "matches_expected_verdict": true,
+      "seconds": 9.709,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14640,
+        "completion_tokens": 262,
+        "total_tokens": 14902,
+        "cached_tokens": 13312,
+        "prompt_tokens_details": {
+          "cached_tokens": 13312,
+          "cache_write_tokens": 1280
+        }
+      },
+      "business_response_untrusted": {
+        "verdict": "reject",
+        "reason": "实体绑定错误：页面原文为'寒武纪思元 370 芯片基于 7nm 制程工艺和 chiplet 芯粒技术,最大算力 256TOPS(INT8)'，该 256TOPS(INT8) 明确归属思元 370 芯片本体，而非 MLU370-X4 板卡 SKU；原文仅在另一句列举'思元 370 系列智能加速卡包括 MLU370-S4/S8、MLU370-X4、MLU370-X8 等产品形态'，并未给出 X4 板卡自身的算力数值。将芯片级峰值绑定到 entity_key chip_model=MLU370-X4 属于跨实体拼接（芯片峰值当板卡值），违反算力领域'峰值必须同一 SKU'与实体范围规则。此外 source_type 分类为 community 可接受（ithome 为第三方科技媒体），但实体错误不可修订为直接通过：修订为思元 370 芯片实体将改变 entity_key 且当前身份上下文（unverified 的 MLU370-X4 board_sku 提示）不支持该变更，故拒绝。",
+        "candidate": null
+      }
+    },
+    {
+      "case": "chip_positive",
+      "arm": "kimi3_no_context",
+      "requested_model": "kimi-k3",
+      "returned_model": "kimi-k3",
+      "request_messages_sha256": "b85bb408cea0c91100ee704a20f47d7476104e10c993f7b27767189ecc36710e",
+      "status": "completed",
+      "verdict": "accept",
+      "expected_verdict": "accept",
+      "matches_expected_verdict": true,
+      "seconds": 4.321,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14380,
+        "completion_tokens": 238,
+        "total_tokens": 14618,
+        "cached_tokens": 13312,
+        "prompt_tokens_details": {
+          "cached_tokens": 13312,
+          "cache_write_tokens": 1024
+        }
+      },
+      "business_response_untrusted": {
+        "verdict": "accept",
+        "reason": "The candidate is supported by the supplied snapshot: the quote '最大算力 256TOPS(INT8)' appears verbatim within the page text (offsets 2072-2090 within the 2030-2240 range), explicitly stating INT8 precision and 256 TOPS for the 寒武纪思元 370 chip, matching entity_key vendor 寒武纪 and chip_model 思元 370. The value is a theoretical peak ('最大算力'), correctly marked evidence_kind=theoretical with calculation_basis=theoretical_peak, unit TOPS preserved without cross-format conversion, and dense_or_sparse left unknown per contract since the source gives no dense/sparse distinction. source_type=community is correct: ithome.com (IT Home) is independent third-party technology media, not a first-party Cambricon announcement or datasheet, so it cannot be official_news/official_datasheet. Confidence medium with its reasoning is appropriate given third-party sourcing and unspecified calculation basis. No revision is needed; per review rules the candidate field is null for accept.",
+        "candidate": null
+      }
+    },
+    {
+      "case": "identity_model_positive",
+      "arm": "kimi3_source_context",
+      "requested_model": "kimi-k3",
+      "returned_model": "kimi-k3",
+      "request_messages_sha256": "51ee8c710f36ead49dad0caa2747bc4e80a4fd860b58ebab60c28b1f2d446328",
+      "status": "completed",
+      "verdict": "accept",
+      "expected_verdict": "accept",
+      "matches_expected_verdict": true,
+      "seconds": 7.159,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14903,
+        "completion_tokens": 200,
+        "total_tokens": 15103,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 14848
+        }
+      },
+      "business_response_untrusted": {
+        "verdict": "accept",
+        "reason": "The evidence quote matches the supplied snapshot verbatim at the stated offsets (606-909, body_hash 1fde376b...), and explicitly names the specific chip SKU \"TPUv7 \\\"Ironwood\\\"\" as the latest TPU in a concrete deployment/sale context, satisfying the identity requirement of an explicit vendor (Google/谷歌) plus specific model. The candidate correctly limits itself to chip_model without inferring lifecycle or release dates, retains the full SKU including the Ironwood suffix, and classifies the source as community (wallstreetcn.com is third-party media reporting SemiAnalysis supply-chain intelligence, not a first-party manufacturer announcement), which is the correct source_type per contract. Medium confidence is appropriate for an explicit model name in a third-party report without manufacturer confirmation. Baseline has no matching chip, so identity proceeds as unverified-new pending comparison; no revision needed.",
+        "candidate": null
+      }
+    },
+    {
+      "case": "identity_lifecycle_negative",
+      "arm": "kimi3_source_context",
+      "requested_model": "kimi-k3",
+      "returned_model": "kimi-k3",
+      "request_messages_sha256": "a08b497968b7a86c29454cae08a82e1cb3cd8019ea4d9c1598087013861bb211",
+      "status": "completed",
+      "verdict": "reject",
+      "expected_verdict": "reject",
+      "matches_expected_verdict": true,
+      "seconds": 7.367,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14847,
+        "completion_tokens": 207,
+        "total_tokens": 15054,
+        "cached_tokens": 13568,
+        "prompt_tokens_details": {
+          "cached_tokens": 13568,
+          "cache_write_tokens": 1279
+        }
+      },
+      "business_response_untrusted": {
+        "verdict": "reject",
+        "reason": "The candidate misinterprets the evidence. The source text describes a commercial transaction/deployment agreement (Anthropic purchasing chips from Broadcom), not the production lifecycle status of the TPUv7 Ironwood chip itself. The quote '已确认将部署' (confirmed will deploy) refers to Anthropic's deployment commitment, not Google's official production status declaration. The normalized_value 'confirmed_deployment' is not a valid production_status value per the domain contract (which expects values like 量产, 未公开发布, or explicit release states). Additionally, the source is third-party supply chain intelligence (SemiAnalysis via wallstreetcn.com), not an official manufacturer announcement, making it insufficient to establish official production status. The evidence does not explicitly state the chip is in mass production (量产) or officially released; it only confirms a sales agreement for future delivery.",
+        "candidate": null
+      }
+    }
+  ],
+  "findings": [
+    "kimi-k2.6在完全相同输入上拒绝合法芯片峰值或无必要要求变更合同允许的community来源，出现规则臆造与芯片/板卡层级混淆。",
+    "kimi-k3在4类固定样本上给出符合预期的决定；芯片峰值正例有无新增身份上下文均accept，因此本例核心问题不是缺少更多正文。",
+    "新增身份上下文全为同快照的精确摘录和未验证候选提示，不属于身份确认或新芯片证明。",
+    "独立复核仍不能盲信：kimi-k3量产反例拒绝的主要证据理由合理，但附带production_status枚举约束的说法没有在当前合同中得到证实。",
+    "DeepSeek现有配置模型deepseek-v4-flash的认证返回401，未调用其推理接口；不能据此评价其模型质量。",
+    "源码显示LinkedDomainScheduler只给validated非身份候选调度身份依赖，且execute_task传入的identity_context只含初始芯片线索；后续设计需区分语义拒绝与待身份确认，避免以缺少身份为由先拒绝后失去澄清机会。"
+  ],
+  "runtime_evidence": [
+    {
+      "file": "chip_model/pipeline/domain_discovery/runtime.py",
+      "line": 91,
+      "detail": "schedule_identity ignores candidates whose status is not validated."
+    },
+    {
+      "file": "chip_model/pipeline/domain_discovery/runtime.py",
+      "line": 151,
+      "detail": "execute_task builds identity_context from immutable initial_chip_clue only; no verified identity proof is injected."
+    },
+    {
+      "file": "chip_model/pipeline/domain_discovery/entities.py",
+      "line": 69,
+      "detail": "candidate_entity_hint reads explicit entity_hints.entity_type; scope is used as type fallback for identity-domain candidates only."
+    }
+  ],
+  "limits": [
+    "小规模语义回归，不能推导跨六域总体准确率或服务性能。",
+    "判定符合预期不代表每一句模型理由都正确；需保留来源与独立身份/比较关卡。",
+    "未在正式服务切换模型，未修改运行器状态机；本轮只验证替代复核模型与上下文因素。"
+  ],
+  "recommendation": [
+    "下一轮隔离验证可优先使用kimi-k3作为复核器，保持提取模型和搜索配置不变。",
+    "为仅复核阶段提供独立模型配置和真实模型审计；不得通过全局模型切换顺带改变提取。",
+    "单独设计带证据的待身份确认状态及依赖调度，保持原始调用绑定、一次修订和隔离写入边界。"
+  ]
+}

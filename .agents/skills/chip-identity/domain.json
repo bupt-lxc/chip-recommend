@@ -57,6 +57,12 @@
         "chip",
         "board_sku"
       ],
+      "generation_handling": {
+        "explicit_variants_make_generation_non_sku": true,
+        "series_field_on_explicit_variant": "require_source_link",
+        "inherit_generation_lifecycle_or_specs": false,
+        "review_revision_changes_entity": false
+      },
       "exclude": [
         "series_as_sku",
         "server",

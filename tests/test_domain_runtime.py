@@ -1009,3 +1009,44 @@ def test_spawn_validation_does_not_block_absolute_deadline_cancellation(deps, sd
     finally:
         timer.cancel()
         release.set()
+
+
+def test_runtime_resumes_typed_identity_wait_with_separate_review_model(deps):
+    from tests.test_domain_entities import fact
+    class Extract(Model):
+        model_name='extract-kimi-k2.6'
+        def call_model(self,**request):
+            self.calls.append(request);p=json.loads(request['messages'][-1]['content'])
+            assert p['phase']=='extract'
+            return {'facts':[fact(({**p['page'],'text':p['page']['text']},),p['domain_id'])]}
+    class Review(Model):
+        model_name='review-kimi-k3'
+        def call_model(self,**request):
+            self.calls.append(request);p=json.loads(request['messages'][-1]['content']);assert p['phase']=='review'
+            if p['domain_id']=='specs' and not p['identity_context'].get('confirmed_identity'):
+                return {'verdict':'unresolved','needs_identity':True,'reason':'Need identity proof'}
+            return {'verdict':'accept','reason':'Exact same entity supported'}
+    e,r=Extract(),Review();deps.update(call_model=e,review_call_model=r)
+    result=run(deps)
+    assert result['status']=='success',result
+    assert result['statistics']['validated_candidates']==2
+    assert len(e.calls)==2 and len(r.calls)==3
+    assert all(t['state']=='completed' for t in deps['store'].list_tasks(result['run_id']))
+
+
+def test_review_model_environment_only_changes_review_client(deps,monkeypatch):
+    class Review(Model):
+        model_name='kimi-k3'
+        def call_model(self,**request):
+            self.calls.append(request)
+            assert json.loads(request['messages'][-1]['content'])['phase']=='review'
+            return {'verdict':'accept','reason':'Supported'}
+    import chip_model.pipeline.domain_discovery.models as models
+    constructors=[];review=Review()
+    def build(**kwargs):
+        constructors.append(kwargs);return review
+    monkeypatch.setenv('DATA_AGENT_REVIEW_MODEL','kimi-k3')
+    monkeypatch.setattr(models,'OpenAIModelTransport',build)
+    extract=deps['call_model'];run(deps)
+    assert constructors==[{'model':'kimi-k3'}]
+    assert all(json.loads(c['messages'][-1]['content'])['phase']=='extract' for c in extract.calls)

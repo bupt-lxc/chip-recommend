@@ -1,0 +1,420 @@
+{
+  "date": "2026-10-21",
+  "scope": "Local isolated fixed saved-body windows only; no new internet discovery or formal publication",
+  "model_routing": {
+    "extraction": "kimi-k2.6",
+    "review": "kimi-k3",
+    "setting": "DATA_AGENT_REVIEW_MODEL=kimi-k3",
+    "unset_behavior": "Review retains extraction client for compatibility",
+    "deployment": "Configured explicitly in isolated replay; remote running container and shared .env unchanged"
+  },
+  "changes": [
+    "Separate extraction/review clients and audit model identity; model name and protocol version bind immutable requests.",
+    "Only unresolved+needs_identity requests enter typed identity wait; rejected and ordinary unresolved facts do not schedule identity.",
+    "Identity tasks bind complete unverified entity hints and separate same-page targets in cache.",
+    "Registered same-snapshot accepted identity proof permits one new review version with unchanged field value; original request remains immutable.",
+    "Identity confirmation neither spends nor restores the single semantic revision; repeated requests cannot loop.",
+    "Chip/board identity comes from reviewed identity proofs; nonidentity measurement scope never chooses between kinds. A wrong-kind identity cannot unblock a typed identity wait.",
+    "Waiting and budget-exhausted ranges remain outstanding; crash recovery and duplicate support preserve the saved confirmed context."
+  ],
+  "sources": [
+    {
+      "url": "https://www.ithome.com/1/010/867.htm",
+      "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+      "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+      "window": [
+        2030,
+        2240
+      ]
+    },
+    {
+      "url": "https://wallstreetcn.com/articles/3760377",
+      "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+      "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+      "window": [
+        606,
+        909
+      ]
+    }
+  ],
+  "live_cases": [
+    {
+      "case": "actual-extraction-and-review",
+      "run_id": "run-908d2bc7f45a4e6b9ee1573b3acafdf5",
+      "result": {
+        "scope_complete": true,
+        "candidates": [
+          {
+            "status": "validated",
+            "field": "precision_perf"
+          }
+        ]
+      },
+      "calls": [
+        {
+          "phase": "extract",
+          "domain_id": "compute",
+          "model": "kimi-k2.6",
+          "status": "completed",
+          "response_model": "kimi-k2.6",
+          "seconds": 10.178070599999046
+        },
+        {
+          "phase": "review",
+          "domain_id": "compute",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 9.655584299995098
+        }
+      ],
+      "empty_baseline_tables_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0
+      },
+      "baseline_hash_unchanged": true,
+      "terminal_status": "partial (bounded saved-window replay)"
+    },
+    {
+      "case": "chip_positive",
+      "run_id": "run-1cc3ecc371c24568baed1c8a8a0dbd96",
+      "result": {
+        "status": "validated",
+        "versions": 1
+      },
+      "calls": [
+        {
+          "phase": "review",
+          "domain_id": "compute",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 13.402924499998335
+        }
+      ],
+      "empty_baseline_tables_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0
+      },
+      "baseline_hash_unchanged": true,
+      "terminal_status": "partial (bounded saved-window replay)"
+    },
+    {
+      "case": "board_negative",
+      "run_id": "run-8c6dd269e12a45db972485e4066cbf07",
+      "result": {
+        "status": "semantic_rejected",
+        "versions": 1
+      },
+      "calls": [
+        {
+          "phase": "review",
+          "domain_id": "compute",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 11.808992799982661
+        }
+      ],
+      "empty_baseline_tables_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0
+      },
+      "baseline_hash_unchanged": true,
+      "terminal_status": "partial (bounded saved-window replay)"
+    },
+    {
+      "case": "identity_model_positive",
+      "run_id": "run-7946d2be47434185869064de05e84f07",
+      "result": {
+        "status": "validated",
+        "versions": 1
+      },
+      "calls": [
+        {
+          "phase": "review",
+          "domain_id": "identity",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 11.504009700001916
+        }
+      ],
+      "empty_baseline_tables_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0
+      },
+      "baseline_hash_unchanged": true,
+      "terminal_status": "partial (bounded saved-window replay)"
+    },
+    {
+      "case": "identity_lifecycle_negative",
+      "run_id": "run-cd57715995f14f2d971848cec5b3bc82",
+      "result": {
+        "status": "semantic_rejected",
+        "versions": 1
+      },
+      "calls": [
+        {
+          "phase": "review",
+          "domain_id": "identity",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 12.197660200006794
+        }
+      ],
+      "empty_baseline_tables_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0
+      },
+      "baseline_hash_unchanged": true,
+      "terminal_status": "partial (bounded saved-window replay)"
+    },
+    {
+      "case": "typed-wait-live-identity-followup",
+      "run_id": "run-d525bf8064d740c3a792dbf82ce39480",
+      "result": {
+        "initial_wait": "controlled_fixture",
+        "identity_task_count": 1,
+        "final_status": "validated",
+        "versions": [
+          0,
+          1
+        ],
+        "semantic_revisions": 0,
+        "entity_status": "new",
+        "validated_after_identity": true,
+        "comparison_status": null,
+        "selected_scope_complete": true,
+        "full_snapshot_claimed_complete": false
+      },
+      "calls": [
+        {
+          "phase": "extract",
+          "domain_id": "compute",
+          "model": "saved-extraction-fixture",
+          "status": "completed",
+          "response_model": null,
+          "seconds": 0.043884299986530095
+        },
+        {
+          "phase": "review",
+          "domain_id": "compute",
+          "model": "controlled-identity-wait-fixture",
+          "status": "completed",
+          "response_model": null,
+          "seconds": 0.04177969999727793
+        },
+        {
+          "phase": "extract",
+          "domain_id": "identity",
+          "model": "kimi-k2.6",
+          "status": "completed",
+          "response_model": "kimi-k2.6",
+          "seconds": 51.67968220001785
+        },
+        {
+          "phase": "review",
+          "domain_id": "identity",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 13.072372599999653
+        },
+        {
+          "phase": "review",
+          "domain_id": "identity",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 11.060696800006554
+        },
+        {
+          "phase": "review",
+          "domain_id": "identity",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 8.464884099987103
+        },
+        {
+          "phase": "review",
+          "domain_id": "identity",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 14.922289100009948
+        },
+        {
+          "phase": "review",
+          "domain_id": "identity",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 10.169948399998248
+        },
+        {
+          "phase": "review",
+          "domain_id": "identity",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 10.837668899999699
+        },
+        {
+          "phase": "review",
+          "domain_id": "compute",
+          "model": "kimi-k3",
+          "status": "completed",
+          "response_model": "kimi-k3",
+          "seconds": 13.505969399993774
+        }
+      ],
+      "empty_baseline_tables_after": {
+        "chips": 0,
+        "models": 0,
+        "chip_model_benchmarks": 0,
+        "chip_model_compatibility": 0,
+        "field_provenance": 0
+      },
+      "baseline_hash_unchanged": true,
+      "terminal_status": "partial (bounded saved-window replay)",
+      "comparison_statistics": {
+        "independent_fields": 1,
+        "source_candidates": 1,
+        "urls": 1,
+        "validated_candidates": 1,
+        "rejected_candidates": 2,
+        "value_changes": 1,
+        "unverifiable_evidence_candidates": 0,
+        "condition_unresolved_candidates": 0,
+        "dependency_unresolved_candidates": 0,
+        "comparison_unresolved_candidates": 0,
+        "ambiguous_entity_candidates": 0,
+        "new_entities": 1,
+        "main": {
+          "independent_fields": 1,
+          "source_candidates": 1,
+          "urls": 1,
+          "validated_candidates": 1,
+          "rejected_candidates": 0,
+          "value_changes": 1,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "linked": {
+          "independent_fields": 0,
+          "source_candidates": 0,
+          "urls": 0,
+          "validated_candidates": 0,
+          "rejected_candidates": 0,
+          "value_changes": 0,
+          "unverifiable_evidence_candidates": 0,
+          "condition_unresolved_candidates": 0,
+          "dependency_unresolved_candidates": 0,
+          "comparison_unresolved_candidates": 0,
+          "ambiguous_entity_candidates": 0
+        },
+        "formal_business_writes": 0,
+        "formal_provenance_writes": 0,
+        "source_summary_basis": "normalized URL + actual supported body_hash; per-field associations retained"
+      }
+    }
+  ],
+  "safety": {
+    "search_requests": 0,
+    "source_fetch_requests": 0,
+    "formal_business_writes": 0,
+    "formal_provenance_writes": 0,
+    "heartbeat_enabled": false,
+    "remote_deployment_changed": false
+  },
+  "limitations": [
+    "Selected source windows only. Runs are deliberately partial for full-snapshot/full-internet coverage; this is not six-domain acceptance.",
+    "Initial extraction and needs_identity response in the wait case are controlled saved-fact fixtures. Subsequent identity extraction, identity reviews and field followup use actual APIs.",
+    "Two accepted positive cases and two rejected negative cases do not establish general accuracy. Lifecycle rejection reason still includes an unsupported enum assertion; decision was correct for insufficient source evidence.",
+    "New entity in wait-case statistics refers only to the empty isolated baseline, not discovery relative to the actual business database.",
+    "Live model replay preceded the final budget-outstanding guard; regression tests cover that guard without additional API calls. A proposed scope-to-kind inference was removed after its conflict with the existing identity contract was detected.",
+    "Validation timeout was 120 seconds per API request; production default timeout was not changed.",
+    "Pre-existing working-tree changes and earlier replay reports were retained; no commit or remote deployment was made."
+  ],
+  "tests": {
+    "status": "Focused regression passed; broad run retained with deadline-test failures and serial rechecks. No claim of a fresh all-green full project suite.",
+    "intermediate_runs": [
+      {
+        "command": "python -m pytest tests/test_domain_identity_wait.py tests/test_domain_models.py tests/test_domain_runtime.py tests/test_domain_entities.py tests/test_domain_linked.py tests/test_domain_compare.py tests/test_domain_pages.py -q",
+        "passed": 391,
+        "failed": 1,
+        "seconds": 789.95,
+        "failure": "test_blocked_model_is_stopped_at_absolute_budget_and_late_response_cannot_commit: model entry event not set before two-second deadline"
+      },
+      {
+        "command": "python -m pytest tests/test_domain_identity_wait.py tests/test_domain_entities.py tests/test_domain_runtime.py tests/test_domain_linked.py -q --tb=short",
+        "passed": 137,
+        "failed": 3,
+        "seconds": 481.84,
+        "failures": [
+          "Scope-to-kind inference violated ambiguity contract; inference subsequently removed",
+          "Two-second model entry timeout before entry",
+          "One-second adapter entry timeout before entry"
+        ],
+        "execution_note": "Overlapped with previous broad run; deadline failures require serial verification, not relaxed assertions"
+      }
+    ],
+    "final_focused": {
+      "command": "python -m pytest tests/test_domain_identity_wait.py tests/test_domain_entities.py tests/test_domain_runtime.py -q -k 'identity_wait or untyped_nonidentity_measurement_scope or untyped_specs or review_model_environment_only_changes_review_client' --maxfail=1 --tb=short",
+      "passed": 21,
+      "failed": 0,
+      "deselected": 105,
+      "seconds": 21.6
+    },
+    "serial_deadline_rechecks": [
+      {
+        "selection": "blocked_model_is_stopped_at_absolute_budget or cancel_after_successful_validate_cannot_be_cleared",
+        "passed": 1,
+        "failed": 1,
+        "seconds": 5.43,
+        "passed_test": "test_blocked_model_is_stopped_at_absolute_budget_and_late_response_cannot_commit",
+        "failed_test": "test_cancel_after_successful_validate_cannot_be_cleared_by_old_preflight_or_fresh_runner"
+      },
+      {
+        "selection": "test_cancel_after_successful_validate_cannot_be_cleared_by_old_preflight_or_fresh_runner",
+        "passed": 1,
+        "failed": 0,
+        "seconds": 8.73,
+        "note": "Unchanged assertions and timeout; demonstrates timing variability, not proof the suite is always stable"
+      }
+    ],
+    "other_checks": {
+      "git_diff_check": "passed",
+      "python_compileall_domain_discovery": "passed",
+      "audit_json_parse": "passed"
+    },
+    "code_sha256": {
+      "chip_model\\pipeline\\domain_discovery\\models.py": "22e203d8dc07f7dcd71ae717e852d1233d6658b53a37d522cc57ec7933bf3abd",
+      "chip_model\\pipeline\\domain_discovery\\runtime.py": "cdc911bf938014a40c1fe6cdee1e2714b270c2dcc54bfb710f94c2a0b9ea8337",
+      "chip_model\\pipeline\\domain_discovery\\pages.py": "49e1b5e2277f54664a206159b6dbe31cd954b9ae44506c186139e7472c4895b8",
+      "chip_model\\pipeline\\domain_discovery\\compare.py": "9bcfc64c0781324e5d53c5eb95b4ba497ce3539c965935305f088ac53a979dd8",
+      "tests\\test_domain_identity_wait.py": "79c4902a50a8ddb7a80dbbbb165ae0823ea93bcabb857943a6aa1924e278efb8"
+    }
+  }
+}

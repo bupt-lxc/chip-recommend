@@ -141,6 +141,57 @@ def resolver(entities, env, **kwargs):
     return entities.EntityResolver(env[0], 'run-a', env[1], **kwargs)
 
 
+@pytest.mark.parametrize('verdict', ['reject', 'unresolved'])
+def test_vendor_accept_cannot_override_negative_review_of_same_model(entities, env, verdict):
+    vendor = fact(env, field='vendor', value='Vendor A')
+    model_name = fact(env, field='chip_model', value='X80 64GB PCIe')
+    client = Transport([{'verdict': 'accept', 'reason': 'Vendor named in source.'},
+                        {'verdict': verdict, 'reason': 'Concrete SKU identity is not established.'}])
+    model = ModelService(env[0], 'run-a', env[1], env[2], env[4], env[3], domain_id='identity', client=client)
+    accepted = model.review_candidate(vendor)
+    negative = model.review_candidate(model_name)
+    before = model.snapshot()
+    resolved = resolver(entities, env)
+    entity = resolved.register_identity(accepted['logical_candidate_id'])
+    assert entity['status'] == 'ambiguous'
+    assert entity['reason'] == 'identity_model_review_conflict'
+    assert entity['identity_conflicts'][0]['logical_candidate_id'] == negative['logical_candidate_id']
+    assert resolved.snapshot()['new_entity_count'] == 0
+    assert model.snapshot() == before
+
+
+def test_later_negative_model_review_blocks_previously_registered_vendor(entities, env):
+    vendor = fact(env, field='vendor', value='Vendor A')
+    name = fact(env, field='chip_model', value='X80 64GB PCIe')
+    client = Transport([{'verdict':'accept','reason':'Vendor supported.'},
+                        {'verdict':'reject','reason':'Entity is a family, not a specific SKU.'}])
+    model = ModelService(env[0], 'run-a', env[1], env[2], env[4], env[3], domain_id='identity', client=client)
+    accepted = model.review_candidate(vendor)
+    resolved = resolver(entities, env)
+    entity = resolved.register_identity(accepted['logical_candidate_id'])
+    assert entity['status'] == 'new'
+    model.review_candidate(name)
+    hint = entities.candidate_entity_hint(vendor)
+    assert resolved.resolve_entity(hint)['status'] == 'ambiguous'
+    assert resolved.snapshot()['new_entity_count'] == 0
+    assert resolved.snapshot()['entity_decisions'][-1]['reason'] == 'identity_model_review_conflict'
+
+
+def test_negative_model_review_does_not_block_other_variant_or_unrelated_field(entities, env):
+    vendor = fact(env, field='vendor', value='Vendor A')
+    other = fact(env, sku='X80 80GB SXM', field='chip_model', value='X80 80GB SXM')
+    date = fact(env, field='release_date', value='2026')
+    client = Transport([{'verdict':'accept','reason':'Vendor supported.'},
+                        {'verdict':'reject','reason':'Other variant not proven.'},
+                        {'verdict':'reject','reason':'Release date not proven.'}])
+    model = ModelService(env[0], 'run-a', env[1], env[2], env[4], env[3], domain_id='identity', client=client)
+    accepted = model.review_candidate(vendor)
+    model.review_candidate(other)
+    model.review_candidate(date)
+    resolved = resolver(entities, env)
+    assert resolved.register_identity(accepted['logical_candidate_id'])['status'] == 'new'
+
+
 def test_normalization_preserves_complete_sku(entities):
     assert entities.normalized_sku(' X80   64GB PCIe ') == 'x80 64gb pcie'
     assert entities.normalized_sku('X80 64GB PCIe') != entities.normalized_sku('X80 80GB SXM')

@@ -730,7 +730,7 @@ class PageService:
 
     @staticmethod
     def _coverage_scope(domain_id, scope):
-        if scope not in {'main', 'linked', 'identity'}:
+        if scope not in {'main', 'linked', 'identity'} and not (isinstance(scope, str) and re.fullmatch(r'identity:[0-9a-f]{64}', scope)):
             raise ValueError('unknown coverage scope')
         if domain_id is None:
             if scope != 'main':

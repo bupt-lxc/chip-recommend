@@ -1,0 +1,328 @@
+{
+  "date": "2026-10-21",
+  "status": "partial_improvement_not_acceptance_pass",
+  "purpose": "保存正文重放，定位空事实、程序拒绝与复核协议问题",
+  "source_run_id": "run-63b62d4a028f41e3814eab8f4462ac8c",
+  "remote_artifacts": "/home/ubuntu/utils/saved-body-replay-20261021",
+  "boundaries": {
+    "new_search_requests": 0,
+    "new_page_fetches": 0,
+    "formal_business_writes": 0,
+    "formal_provenance_writes": 0,
+    "production_image_changed": false,
+    "heartbeat_enabled": false,
+    "live_runtime_end_to_end_retested": false
+  },
+  "live_model": "kimi-k2.6",
+  "backend_protocol_version": 2,
+  "tests": {
+    "command": "python -m pytest tests/test_domain_models.py tests/test_domain_runtime.py tests/test_domain_rules.py tests/test_domain_entities.py -q",
+    "passed": 255,
+    "failed": 0
+  },
+  "input_integrity": {
+    "saved_snapshot_utf8_sha256_matches": true,
+    "snapshot_count": 3
+  },
+  "changes": [
+    "完整冻结规则保留；明确当前后端阶段、空基线含义和候选字段约定",
+    "提取根 schema 的 facts.items 展开完整事实 schema",
+    "唯一逐字原文匹配修正偏移，原始输出与定位审计分别保存；不修改值、引文或实体",
+    "复核 schema 表达仅 revise 可带替换候选的约束",
+    "明确官方一手发布与第三方媒体来源分类",
+    "请求和复核证明绑定后端协议版本，避免旧结果混用"
+  ],
+  "experiments": [
+    {
+      "group": "diagnostic-results",
+      "label": "original_identity",
+      "status": "failed",
+      "seconds": 60.16,
+      "request_sha256": "85439aad73fcbdba64c8077013f8497970c7fb9e6944f13e0551e2ff70736f42",
+      "error": "ReadTimeout"
+    },
+    {
+      "group": "diagnostic-results",
+      "label": "focused_identity",
+      "status": "failed",
+      "seconds": 60.112,
+      "request_sha256": "c364d55ba87f6c43dfec1317cf1e45799af04edba51d1639cf59d61e07a4dacd",
+      "error": "ReadTimeout"
+    },
+    {
+      "group": "diagnostic-results",
+      "label": "focused_compute",
+      "status": "failed",
+      "seconds": 60.105,
+      "request_sha256": "53f36cecb511a1ef525edd6ccf1f8a87bfb641a930a62bad1faad93445b6947f",
+      "error": "ReadTimeout"
+    },
+    {
+      "group": "extended-results",
+      "label": "small_transport_probe",
+      "status": "completed",
+      "seconds": 0.648,
+      "request_sha256": "b35f1e9d00ecb066b214a16b23773a9a3375d9e81516d3266d8c040db7b2eab2"
+    },
+    {
+      "group": "extended-results",
+      "label": "fixed_identity_long_request",
+      "status": "completed",
+      "seconds": 100.794,
+      "request_sha256": "ace6d4c1d726f7beaebd37daaad34cdaf407dba4d34af63ec5eb8b3fba1b66b0",
+      "domain": "identity",
+      "url": "https://wallstreetcn.com/articles/3760377",
+      "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+      "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+      "start": 0,
+      "end": 8000,
+      "facts": 10,
+      "program_results": {
+        "evidence must be an exact continuous snapshot quote": 4,
+        "non-numeric normalization requires a conversion explanation": 3,
+        "raw numeric value is not continuously present in evidence": 1,
+        "program_valid": 2
+      },
+      "quote_locations": 7
+    },
+    {
+      "group": "extended-results",
+      "label": "fixed_compute_long_request",
+      "status": "completed",
+      "seconds": 29.341,
+      "request_sha256": "a6236b494803ce87051c9e9cf8e85aff19196b89a9b14df7373ee9b7439ad9c3",
+      "domain": "compute",
+      "url": "https://www.ithome.com/1/010/867.htm",
+      "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+      "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+      "start": 0,
+      "end": 4605,
+      "facts": 3,
+      "program_results": {
+        "program_valid": 3
+      },
+      "quote_locations": 3
+    },
+    {
+      "group": "short-results",
+      "label": "original_identity_short",
+      "status": "completed",
+      "seconds": 1.733,
+      "request_sha256": "8f5dbf99deffca024cfa612d5ff7118c6bec776d0022fe01d66fccbe6d9665a2",
+      "domain": "identity",
+      "url": "https://wallstreetcn.com/articles/3760377",
+      "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+      "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+      "start": 606,
+      "end": 909,
+      "facts": 0,
+      "program_results": {},
+      "quote_locations": 0
+    },
+    {
+      "group": "short-results",
+      "label": "fixed_identity_short",
+      "status": "completed",
+      "seconds": 65.254,
+      "request_sha256": "784dc3e1b54bed237afa723a88267490b1066a9215f802949b4b2d1b8dcf1efa",
+      "domain": "identity",
+      "url": "https://wallstreetcn.com/articles/3760377",
+      "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+      "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+      "start": 606,
+      "end": 909,
+      "facts": 6,
+      "program_results": {
+        "evidence must be an exact continuous snapshot quote": 1,
+        "non-numeric normalization requires a conversion explanation": 3,
+        "program_valid": 1,
+        "raw numeric value is not continuously present in evidence": 1
+      },
+      "quote_locations": 5
+    },
+    {
+      "group": "short-results",
+      "label": "original_compute_short",
+      "status": "completed",
+      "seconds": 28.638,
+      "request_sha256": "17dd49045121267a51c3eb7095ae34501e20739a808e5b5500f9b6ba8d200ff3",
+      "domain": "compute",
+      "url": "https://www.ithome.com/1/010/867.htm",
+      "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+      "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+      "start": 2030,
+      "end": 2240,
+      "facts": 2,
+      "program_results": {
+        "fact values cannot be boolean or null": 1,
+        "non-numeric normalization requires a conversion explanation": 1
+      },
+      "quote_locations": 2
+    },
+    {
+      "group": "short-results",
+      "label": "fixed_compute_short",
+      "status": "completed",
+      "seconds": 24.266,
+      "request_sha256": "748e95a896982bbd0da8b2ab31162eb7a483a7e9ac196d82a51b45a0cba54f02",
+      "domain": "compute",
+      "url": "https://www.ithome.com/1/010/867.htm",
+      "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+      "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+      "start": 2030,
+      "end": 2240,
+      "facts": 2,
+      "program_results": {
+        "1 validation error for FactCandidate\nconfidence_reason_detail\n  Extra inputs are not permitted [type=extra_forbidden, input_value=\"The source is a technolo...n with high confidence.\", input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden": 1,
+        "1 validation error for FactCandidate\nconfidence_reason_detail\n  Extra inputs are not permitted [type=extra_forbidden, input_value=\"The INT8 precision is ex...erformance measurement.\", input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden": 1
+      },
+      "quote_locations": 2
+    },
+    {
+      "group": "final-results",
+      "label": "final_identity_short",
+      "status": "completed",
+      "seconds": 65.617,
+      "request_sha256": "5a9ad1be205f14499453d2297b8b73a12eb0435e85202002d1aae787e3426764",
+      "domain": "identity",
+      "url": "https://wallstreetcn.com/articles/3760377",
+      "snapshot_id": "d335a6819f5fb72f979ffe2a6b0a5dafe5513c3a16739bc68cd50df4241de862",
+      "body_hash": "1fde376b0de0d8e9d70493e37858a1c234fb1affb99f71a4b1f0f0dad9bc0e9f",
+      "start": 606,
+      "end": 909,
+      "facts": 8,
+      "program_results": {
+        "evidence must be an exact continuous snapshot quote": 1,
+        "non-numeric normalization requires a conversion explanation": 3,
+        "program_valid": 3,
+        "raw numeric value is not continuously present in evidence": 1
+      },
+      "quote_locations": 7
+    },
+    {
+      "group": "final-results",
+      "label": "final_compute_short",
+      "status": "completed",
+      "seconds": 19.348,
+      "request_sha256": "c05caa6c13ab7e58464123af66f7d9766217f4cc3a6a5e8536463449dc8da787",
+      "domain": "compute",
+      "url": "https://www.ithome.com/1/010/867.htm",
+      "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+      "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+      "start": 2030,
+      "end": 2240,
+      "facts": 2,
+      "program_results": {
+        "program_valid": 2
+      },
+      "quote_locations": 2
+    },
+    {
+      "group": "source-fixed-results",
+      "label": "final_source_compute_short",
+      "status": "completed",
+      "seconds": 13.282,
+      "request_sha256": "56bbf861eb52da937747b091dadf168a141847db93350aee08feb6aabb83bf2b",
+      "domain": "compute",
+      "url": "https://www.ithome.com/1/010/867.htm",
+      "snapshot_id": "ace30ddf1256cebf80f152157d611bfeeb34e18ec87d7d7e9ccd50230451f768",
+      "body_hash": "839415626d73a7e7ba0efeeba3c47405a98eeff8e90e11ef12243121ebe770f9",
+      "start": 2030,
+      "end": 2240,
+      "facts": 1,
+      "program_results": {
+        "program_valid": 1
+      },
+      "quote_locations": 1
+    }
+  ],
+  "reviews": [
+    {
+      "group": "review-results",
+      "label": "review_identity_chip_type",
+      "status": "completed",
+      "seconds": 10.823,
+      "request_sha256": "63260cfe417e306e9b98cbaa968c3947175d3b0e26ba389d3777e40d632c5eff",
+      "protocol_valid": true,
+      "model_verdict": "reject",
+      "raw_model_reason_unverified": "The candidate claims chip_type='TPU' for entity_key vendor='Google', chip_model='TPUv7 Ironwood', but the evidence quote '长期以来,谷歌的TPU就像其搜索算法一样,是深藏不露的内部核武器。' is a generic metaphor about Google's TPU line as a whole ('internal nuclear weapon'), not a specific statement about TPUv7 Ironwood's chip type. The quote does not contain 'Ironwood' or 'v7'. The actual page text that mentions 'TPUv7 Ironwood' is at a different location (around offset 700-750): '首批约40万颗最新的TPUv7 \"Ironwood\"将不再通过云租赁,而是由博通直接出售给Anthropic'. This specific quote was not used as evidence. The candidate uses a generic TPU description as evidence for a specific SKU's chip type, violating the requirement that evidence must directly support the claimed entity and value. Additionally, the source_type is 'community' (Wall Street CN article citing 'SemiAnalysis supply chain intelligence'), not an official Google source, and the confidence_reason improperly elevates this to 'high' based on general knowledge about Google's product line rather than the specific evidence in the snapshot. The candidate must use the actual quote containing 'TPUv7 Ironwood' to support this specific SKU, or the evidence is insufficient for the claimed entity.",
+      "replacement_source_type": null
+    },
+    {
+      "group": "review-results",
+      "label": "review_identity_production_status",
+      "status": "completed",
+      "seconds": 9.89,
+      "request_sha256": "b55005265dba304ae9b2a1d6511410c0478aa8a5a239b9ca18e4c55169cbd3c1",
+      "protocol_valid": true,
+      "model_verdict": "reject",
+      "raw_model_reason_unverified": "The candidate commits multiple identity rule violations: (1) 'TPUv7 Ironwood' is not a valid chip SKU—'Ironwood' is a board/system code-name, not a chip model; the chip model field must contain a specific chip SKU, not a system/board name. (2) The evidence does not support 'production_status' as a field value; the text describes a sales/deployment arrangement ('由博通直接出售给Anthropic') and a quantity, but contains no explicit statement about mass production status, manufacturing readiness, or production lifecycle phase. Per identity-rules.md: '公告并不证明量产' and lifecycle fields require explicit evidence; supply chain intelligence about a sales deal does not equate to confirmed mass production. (3) The source_type 'community' is correctly classified, but confidence should be lower given the indirect nature of supply chain reporting; however, the fundamental issue is that the field extraction is unsupported by the actual text content for the claimed field. (4) The entity_key uses a system name ('Ironwood') as chip_model, violating entity_scope rules that require chip or board_sku as explicit SKU, not series or system code-names. No revision can salvage this candidate without inventing unsupported facts or redefining the entity; the correct action is rejection.",
+      "replacement_source_type": null
+    },
+    {
+      "group": "review-results",
+      "label": "review_compute_precision_perf",
+      "status": "completed",
+      "seconds": 21.859,
+      "request_sha256": "cabc1888ba02e74393b7817bff112d26bf1754e463b6bbc98bf1a6c0a671038a",
+      "protocol_valid": false,
+      "protocol_error": "1 validation error for ReviewResponse\n  Value error, only revise requires a complete replacement candidate",
+      "model_verdict": "accept",
+      "raw_model_reason_unverified": "候选通过两关审核。程序检查：字段归属正确（domain_id=compute, target_table=chips, field_name=precision_perf）；实体键 vendor=寒武纪, chip_model=思元 370 与正文一致；值 256 TOPS 为整数，单位 TOPS 在 accepted 列表中；未将整数 TOPS 改写为浮点 TFLOPS；precision=INT8 有明确逐字证据；dense_or_sparse=unknown 符合无明确区分时的规范；scope=chip 与 single_card 实体范围一致；evidence_kind=theoretical 正确标注非实测。引文位置核验：quote='最大算力 256TOPS(INT8)' 位于正文 start=2072, end=2090，与 body_hash 匹配的快照文本一致。独立语义复核：正文明确陈述'思元 370 芯片...最大算力 256TOPS(INT8)'，该值直接绑定芯片 SKU 思元 370，非其他型号或服务器聚合值；来源类型 official_news 分类合理（IT之家报道寒武纪产品发布），confidence=medium 恰当反映非直接官方规格书来源。无跨格式推断（如从 INT8 推 FP4/FP8/BF16 等），无 dense/sparse 混淆，无单位转换错误。身份比较：基线 chips 为空，无历史冲突；实体寒武纪/思元 370 为潜在新芯片，待 identity 阶段确认，不影响本域审核。",
+      "replacement_source_type": "official_news"
+    },
+    {
+      "group": "review-fixed-results",
+      "label": "fixed_review_compute_precision_perf",
+      "status": "completed",
+      "seconds": 8.693,
+      "request_sha256": "2895cd7ebae9f5b6ab223d870745291906bd2b89ba17be8072c3ccd16c5e0e1e",
+      "protocol_valid": true,
+      "model_verdict": "accept",
+      "raw_model_reason_unverified": "候选符合chip-compute领域规则与公共规则要求：1）实体键vendor='寒武纪'、chip_model='思元 370'与正文引文一致；2）field_name='precision_perf'属domain.json定义的chips表字段；3）raw_value='256'、normalized_value=256、unit='TOPS'与引文'最大算力 256TOPS(INT8)'逐字对应；4）conversion中precision='INT8'、source_unit='TOPS'、aggregation='per_chip'、calculation_basis='峰值算力'均正确保留；dense_or_sparse='unknown'符合compute-rules.md'无明确口径留unknown'之要求；5）evidence_kind='theoretical'正确，未冒充实测；6）scope='chip'与实体键层级一致；7）source_type='official_news'分类合理（IT之家报道非官方直接白皮书），confidence='medium'匹配来源等级；8）evidence引文位置start=2072/end=2090落在正文范围[2030,2240]内，body_hash与snapshot_id匹配冻结页面。无跨格式推断、无精度缺失假设、无单位转换错误。身份核验：基线chips为空，无历史冲突；实体明确，非ambiguous/out_of_scope。程序检查与独立语义复核均通过。",
+      "replacement_source_type": null
+    },
+    {
+      "group": "source-review-results",
+      "label": "source_corrected_compute_review",
+      "status": "completed",
+      "seconds": 27.791,
+      "request_sha256": "0faa0d374f48f3c591866b6c8f12404dd1d06d58892e1a89378b0d8a752f7b6f",
+      "protocol_valid": true,
+      "model_verdict": "revise",
+      "raw_model_reason_unverified": "The candidate contains multiple issues requiring revision: (1) source_type is incorrectly classified as 'community' when IT Home (ithome.com) is an independent third-party media repost/commentary about a manufacturer announcement, which per contract must be 'web_crawl' not 'community' (community is for community reports like forums, wikis); more critically, the classification guidelines state third-party media reports are 'community or web_crawl', but the candidate's own explanation correctly identifies this as 'third-party media' yet misapplies 'community'—this is a clear classification error that must be corrected to 'web_crawl'. (2) The entity_key uses '思元 370' but the source text explicitly mentions multiple product forms: 'MLU370-S4/S8、MLU370-X4、MLU370-X8'—the chip_model should be the specific SKU or the base chip name must be validated; '思元 370' is the series name, not a specific SKU, creating ambiguity about which product form this 256 TOPS figure applies to. (3) The conversion.dense_or_sparse is 'unknown' but the contract requires explicit preservation of this dimension; while the source doesn't specify, this must remain 'unknown' with explicit acknowledgment. (4) The conversion.calculation_basis 'theoretical_peak' is an inference from '最大算力' (maximum compute), but the source does not explicitly state 'theoretical'—this is a reasonable inference yet should be noted as inferred. (5) confidence 'medium' is appropriate but confidence_reason should explicitly note the SKU ambiguity. The core factual claim (256 TOPS INT8 for 思元 370 series) is supported by the source text, but entity precision and source classification must be corrected.",
+      "replacement_source_type": "web_crawl"
+    },
+    {
+      "group": "revision-review-results",
+      "label": "source_compute_revision_review_v1",
+      "status": "completed",
+      "seconds": 12.238,
+      "request_sha256": "419f403feb80932db631688557d7e27375f2ad560944b256e957fab3b8f7581c",
+      "protocol_valid": true,
+      "model_verdict": "reject",
+      "raw_model_reason_unverified": "The candidate contains critical flaws that cannot be resolved through revision without inventing external facts: (1) ENTITY AMBIGUITY: The source text states '思元 370 系列' (Siyuan 370 series) and lists four distinct product forms (MLU370-S4, MLU370-S8, MLU370-X4, MLU370-X8). The 256 TOPS figure is attributed to the series as a whole, but the source does not specify which individual SKU this applies to. Per compute-rules.md, peaks must be '同一 SKU、同一精度/计算单元' (same SKU, same precision/compute unit). The entity_key claims 'chip_model': '思元 370' but this is a series name, not a specific SKU. The candidate's own conditions field acknowledges 'product_form_uncertainty' and 'MLU370-S4/S8/X4/X8 may have different performance; source does not specify which form 256 TOPS applies to.' This is a fundamental identity/scope violation that makes the candidate unsuitable for the chips table without knowing which specific product form it represents. (2) SOURCE TYPE CORRECTLY CLASSIFIED: The source_type 'web_crawl' is accurate—IT Home (ithome.com) is an independent third-party technology media outlet, not a first-party manufacturer announcement or official datasheet. This classification is accepted. (3) EVIDENCE KIND: 'theoretical' is reasonable given '最大算力' (maximum compute), though the source does not explicitly label it as theoretical peak. However, this is secondary to the entity ambiguity problem. (4) SCOPE MISMATCH: The scope is 'chip' but the source discusses a series with multiple card/SKU variants; without knowing which specific product form the 256 TOPS applies to, this cannot be properly scoped. The candidate cannot be revised because any revision would require assuming which specific SKU the 256 TOPS applies to, or collapsing multiple distinct products into one entity, both of which violate the contract. The correct handling is to reject this candidate and require identity-domain clarification or official source specifying per-SKU performance before compute-domain candidates can be created.",
+      "replacement_source_type": null
+    }
+  ],
+  "remaining": [
+    "身份样本仍有原文改写、规范化说明缺失及状态证据不足",
+    "当前模型复核出现合同臆造及芯片型号与板卡变体混淆；不能把模型 accept 直接当人工确认正确",
+    "身份提取65.617秒，整页样本100.794秒；正式60秒单请求超时未修改，仍会影响运行",
+    "只重放两个页面的有限片段，未验证六域完整覆盖、新实体身份解析或全链路成功"
+  ],
+  "request_count": 19,
+  "final_source_corrected_compute": {
+    "facts": 1,
+    "program_valid": 1,
+    "source_type": "community",
+    "extraction_seconds": 13.282,
+    "semantic_review": "revise_then_reject",
+    "final_validated_candidates": 0,
+    "rejection_scope": "模型把明确芯片名称与其后列出的板卡变体混淆，需继续独立核验，不视为已证实的源事实错误"
+  },
+  "software_sha256": {
+    "chip_model\\pipeline\\domain_discovery\\models.py": "2dffbd86847e85efc5b77ca0d8c986cd632befe900499a6d25a52cbe165ca56d",
+    "tests\\test_domain_models.py": "8834ca6e85a53a183656159a837868057103256d599b95f39f91e906ef27d1db"
+  }
+}
