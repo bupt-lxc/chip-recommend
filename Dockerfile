@@ -20,6 +20,12 @@ COPY .claude/skills/ .claude/skills/
 COPY .agents/skills/ .agents/skills/
 COPY .agents/skills/ .claude/skills/
 
+# Authority and its explicitly referenced public files are immutable in the API.
+# The host worker installs/resolves Hermes; the API image does not need Hermes CLI.
+COPY .hermes-skills/ .hermes-skills/
+COPY .hermes-plugins/aishperf-open-web/ .hermes-plugins/aishperf-open-web/
+RUN chmod -R a-w /app/.hermes-skills /app/.hermes-plugins
+
 # Copy data files
 COPY data/ ./data/
 
@@ -28,6 +34,8 @@ COPY scripts/ ./scripts/
 
 # Point to the bundled SQLite database
 ENV DATA_DB_PATH=/app/data/data.db
+# Bind this to the host worker's --data-root (not separate anonymous data roots).
+VOLUME ["/app/data"]
 
 EXPOSE 8000
 

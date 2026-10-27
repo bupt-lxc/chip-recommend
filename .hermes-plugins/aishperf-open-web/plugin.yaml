@@ -1,9 +1,10 @@
 name: aishperf-open-web
-version: 2.0.0
-description: "AISHPerf 芯片资料开放互联网搜索、网页预览与目标链接提交工具。"
+version: 3.0.0
+description: AISHPerf 芯片资料开放互联网搜索、网页预览与目标链接提交工具。
 author: AISHPerf
 kind: standalone
 provides_tools:
-  - open_web_search
-  - open_web_preview
-  - open_web_submit_selection
+- open_web_search
+- open_web_preview
+- open_web_submit_selection
+tool_contract_sha256: 025a88effdbd690d5ec1142c7fb6ac5ab56631874e4565af08c2d1e8dfe6f25d

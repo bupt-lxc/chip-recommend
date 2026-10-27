@@ -7,7 +7,8 @@ from chip_model.pipeline.open_web_test import TEST_SKILL_REGISTRY
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / ".agents" / "skills"
+# Preserve V2 full-chip behavior as history, not as active V3 requirements.
+SKILL_ROOT = ROOT / "docs" / "archive" / "codex-domain-skills"
 OPEN_WEB_SKILLS = tuple(TEST_SKILL_REGISTRY)
 
 REQUIRED_SECTIONS = (

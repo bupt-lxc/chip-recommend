@@ -65,100 +65,36 @@ def _handle_preview(args: dict, **kwargs) -> str:
     return _tool_response("/v1/preview", args)
 
 
-def _handle_submit_selection(args: dict, **kwargs) -> str:
-    return _tool_response("/v1/submit-selection", args)
+def _handle_selection(args: dict, **kwargs) -> str:
+    return _tool_response("/v1/selection", args)
 
 
-SKILL_ENUM = [
-    "chip-identity", "chip-specs", "chip-compute", "chip-compatibility",
-    "chip-benchmark", "chip-deployment",
-]
-CATEGORY_ENUM = ["芯片型号", "基础参数", "算力指标", "兼容信息", "实测数据", "部署资料"]
+def _load_contract():
+    import hashlib
+    from pathlib import Path
+    contract = json.loads(Path(__file__).with_name('tool-contract.json').read_text(encoding='utf-8'))
+    body = {key: value for key, value in contract.items() if key != 'tool_contract_sha256'}
+    encoded = json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    digest = hashlib.sha256(encoded.encode('utf-8')).hexdigest()
+    if (contract.get('tool_contract_sha256') != digest or contract.get('tool_version') != '3.0.0'
+            or contract.get('contract_version') != 3 or contract.get('pipeline') != 'hermes-open-web-v3'
+            or [tool['name'] for tool in contract.get('tools', [])] != ['open_web_search', 'open_web_preview', 'open_web_submit_selection']):
+        raise RuntimeError('AISHPerf V3 tool contract hash/version mismatch')
+    # Check the shipped manifest without requiring project/Pydantic imports.
+    manifest = Path(__file__).with_name('plugin.yaml').read_text(encoding='utf-8')
+    if 'version: 3.0.0' not in manifest or 'tool_contract_sha256: ' + digest not in manifest:
+        raise RuntimeError('AISHPerf plugin manifest contract mismatch')
+    return contract
 
-SEARCH_SCHEMA = {
-    "name": "open_web_search",
-    "description": "执行已经规划好的 10 条芯片资料搜索词，完成 URL 安全检查、规范化与去重；返回的 candidate_ids 必须原样传给预览工具。",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "run_id": {"type": "string"},
-            "unit_id": {"type": "string"},
-            "scope_type": {"type": "string", "enum": ["chip", "discovery"]},
-            "skill": {"type": "string", "enum": SKILL_ENUM},
-            "target_chip": {"type": "string"},
-            "queries": {
-                "type": "array", "minItems": 10, "maxItems": 10,
-                "items": {
-                    "type": "object",
-                    "properties": {"query": {"type": "string"}, "reason": {"type": "string"}},
-                    "required": ["query", "reason"],
-                    "additionalProperties": False,
-                },
-            },
-        },
-        "required": ["run_id", "unit_id", "scope_type", "skill", "queries"],
-        "additionalProperties": False,
-    },
-}
 
-PREVIEW_SCHEMA = {
-    "name": "open_web_preview",
-    "description": "访问本轮搜索产生的全部候选 URL，保存完整快照并返回每页不超过 500 字的核心文本。",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "run_id": {"type": "string"},
-            "unit_id": {"type": "string"},
-            "scope_type": {"type": "string", "enum": ["chip", "discovery"]},
-            "candidate_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-        },
-        "required": ["run_id", "unit_id", "scope_type", "candidate_ids"],
-        "additionalProperties": False,
-    },
-}
-
-SUBMIT_SCHEMA = {
-    "name": "open_web_submit_selection",
-    "description": "提交对每个已预览候选的选择或拒绝决定，并对选中 URL 执行完整字段提取。",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "run_id": {"type": "string"},
-            "unit_id": {"type": "string"},
-            "scope_type": {"type": "string", "enum": ["chip", "discovery"]},
-            "skill": {"type": "string", "enum": SKILL_ENUM},
-            "decisions": {
-                "type": "array", "minItems": 1,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "candidate_id": {"type": "string"},
-                        "selected": {"type": "boolean"},
-                        "reason": {"type": "string"},
-                        "matched_categories": {"type": "array", "items": {"type": "string", "enum": CATEGORY_ENUM}},
-                        "suggested_skills": {"type": "array", "items": {"type": "string", "enum": SKILL_ENUM}},
-                    },
-                    "required": ["candidate_id", "selected", "reason", "matched_categories", "suggested_skills"],
-                    "additionalProperties": False,
-                },
-            },
-        },
-        "required": ["run_id", "unit_id", "scope_type", "skill", "decisions"],
-        "additionalProperties": False,
-    },
-}
+TOOL_CONTRACT = _load_contract()
+SEARCH_SCHEMA, PREVIEW_SCHEMA, SUBMIT_SCHEMA = TOOL_CONTRACT['tools']
 
 
 def register(ctx) -> None:
-    for name, schema, handler, emoji in (
-        ("open_web_search", SEARCH_SCHEMA, _handle_search, "🔎"),
-        ("open_web_preview", PREVIEW_SCHEMA, _handle_preview, "📄"),
-        ("open_web_submit_selection", SUBMIT_SCHEMA, _handle_submit_selection, "✅"),
+    for schema, handler, emoji in (
+        (SEARCH_SCHEMA, _handle_search, "🔎"),
+        (PREVIEW_SCHEMA, _handle_preview, "📄"),
+        (SUBMIT_SCHEMA, _handle_selection, "✅"),
     ):
-        ctx.register_tool(
-            name=name,
-            toolset=TOOLSET,
-            schema=schema,
-            handler=handler,
-            emoji=emoji,
-        )
+        ctx.register_tool(name=schema['name'], toolset=TOOLSET, schema=schema, handler=handler, emoji=emoji)

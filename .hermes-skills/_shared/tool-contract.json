@@ -1,0 +1,1207 @@
+{
+  "contract_version": 3,
+  "pipeline": "hermes-open-web-v3",
+  "tool_contract_sha256": "025a88effdbd690d5ec1142c7fb6ac5ab56631874e4565af08c2d1e8dfe6f25d",
+  "tool_version": "3.0.0",
+  "tools": [
+    {
+      "description": "Execute Hermes queries, read saved results, or explicitly complete replacement intents.",
+      "name": "open_web_search",
+      "parameters": {
+        "$defs": {
+          "DiscoverySearchPlan": {
+            "additionalProperties": false,
+            "description": "Public search policy is fixed; no fields, provider or quota overrides.",
+            "properties": {
+              "queries": {
+                "items": {
+                  "$ref": "#/$defs/DiscoverySearchQuery"
+                },
+                "maxItems": 10,
+                "minItems": 1,
+                "title": "Queries",
+                "type": "array"
+              },
+              "round_number": {
+                "maximum": 2,
+                "minimum": 0,
+                "title": "Round Number",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "round_number",
+              "queries"
+            ],
+            "title": "DiscoverySearchPlan",
+            "type": "object"
+          },
+          "DiscoverySearchQuery": {
+            "additionalProperties": false,
+            "description": "Hermes supplies the original words; validation never rewrites them.",
+            "properties": {
+              "language": {
+                "enum": [
+                  "zh",
+                  "en"
+                ],
+                "title": "Language",
+                "type": "string"
+              },
+              "page_type": {
+                "maxLength": 80,
+                "minLength": 1,
+                "title": "Page Type",
+                "type": "string"
+              },
+              "query_id": {
+                "title": "Query Id",
+                "type": "string"
+              },
+              "reason": {
+                "maxLength": 400,
+                "minLength": 1,
+                "title": "Reason",
+                "type": "string"
+              },
+              "replaces_query_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Replaces Query Id"
+              },
+              "text": {
+                "maxLength": 120,
+                "minLength": 1,
+                "title": "Text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query_id",
+              "text",
+              "language",
+              "reason",
+              "page_type"
+            ],
+            "title": "DiscoverySearchQuery",
+            "type": "object"
+          },
+          "IntentCompletion": {
+            "additionalProperties": false,
+            "properties": {
+              "failed_query_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Failed Query Id",
+                "type": "string"
+              },
+              "reason": {
+                "maxLength": 400,
+                "minLength": 1,
+                "title": "Reason",
+                "type": "string"
+              },
+              "replacement_query_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Replacement Query Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "failed_query_id",
+              "replacement_query_id",
+              "reason"
+            ],
+            "title": "IntentCompletion",
+            "type": "object"
+          },
+          "SearchCompleteIntents": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "complete_intents",
+                "title": "Action",
+                "type": "string"
+              },
+              "chip": {
+                "anyOf": [
+                  {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Chip"
+              },
+              "completions": {
+                "items": {
+                  "$ref": "#/$defs/IntentCompletion"
+                },
+                "maxItems": 10,
+                "minItems": 1,
+                "title": "Completions",
+                "type": "array"
+              },
+              "contract_version": {
+                "const": 3,
+                "title": "Contract Version",
+                "type": "integer"
+              },
+              "domain": {
+                "enum": [
+                  "identity",
+                  "specs",
+                  "compute",
+                  "compatibility",
+                  "benchmark",
+                  "deployment"
+                ],
+                "title": "Domain",
+                "type": "string"
+              },
+              "pipeline": {
+                "const": "hermes-open-web-v3",
+                "title": "Pipeline",
+                "type": "string"
+              },
+              "request_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "title": "Run Id",
+                "type": "string"
+              },
+              "scope_type": {
+                "enum": [
+                  "chip",
+                  "discovery"
+                ],
+                "title": "Scope Type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contract_version",
+              "pipeline",
+              "run_id",
+              "domain",
+              "scope_type",
+              "chip",
+              "request_id",
+              "action",
+              "completions"
+            ],
+            "title": "SearchCompleteIntents",
+            "type": "object"
+          },
+          "SearchExecute": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "execute",
+                "title": "Action",
+                "type": "string"
+              },
+              "chip": {
+                "anyOf": [
+                  {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Chip"
+              },
+              "contract_version": {
+                "const": 3,
+                "title": "Contract Version",
+                "type": "integer"
+              },
+              "domain": {
+                "enum": [
+                  "identity",
+                  "specs",
+                  "compute",
+                  "compatibility",
+                  "benchmark",
+                  "deployment"
+                ],
+                "title": "Domain",
+                "type": "string"
+              },
+              "pipeline": {
+                "const": "hermes-open-web-v3",
+                "title": "Pipeline",
+                "type": "string"
+              },
+              "plan": {
+                "$ref": "#/$defs/DiscoverySearchPlan"
+              },
+              "request_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "title": "Run Id",
+                "type": "string"
+              },
+              "scope_type": {
+                "enum": [
+                  "chip",
+                  "discovery"
+                ],
+                "title": "Scope Type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contract_version",
+              "pipeline",
+              "run_id",
+              "domain",
+              "scope_type",
+              "chip",
+              "request_id",
+              "action",
+              "plan"
+            ],
+            "title": "SearchExecute",
+            "type": "object"
+          },
+          "SearchResults": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "results",
+                "title": "Action",
+                "type": "string"
+              },
+              "chip": {
+                "anyOf": [
+                  {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Chip"
+              },
+              "contract_version": {
+                "const": 3,
+                "title": "Contract Version",
+                "type": "integer"
+              },
+              "cursor": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ToolCursor"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "domain": {
+                "enum": [
+                  "identity",
+                  "specs",
+                  "compute",
+                  "compatibility",
+                  "benchmark",
+                  "deployment"
+                ],
+                "title": "Domain",
+                "type": "string"
+              },
+              "list_version": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "List Version",
+                "type": "string"
+              },
+              "pipeline": {
+                "const": "hermes-open-web-v3",
+                "title": "Pipeline",
+                "type": "string"
+              },
+              "run_id": {
+                "title": "Run Id",
+                "type": "string"
+              },
+              "scope_type": {
+                "enum": [
+                  "chip",
+                  "discovery"
+                ],
+                "title": "Scope Type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contract_version",
+              "pipeline",
+              "run_id",
+              "domain",
+              "scope_type",
+              "chip",
+              "action",
+              "list_version"
+            ],
+            "title": "SearchResults",
+            "type": "object"
+          },
+          "ToolCursor": {
+            "additionalProperties": false,
+            "properties": {
+              "list_version": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "List Version",
+                "type": "string"
+              },
+              "offset": {
+                "minimum": 0,
+                "title": "Offset",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "list_version",
+              "offset"
+            ],
+            "title": "ToolCursor",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "execute",
+              "results",
+              "complete_intents"
+            ],
+            "type": "string"
+          },
+          "chip": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chip"
+          },
+          "completions": {
+            "items": {
+              "$ref": "#/$defs/IntentCompletion"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Completions",
+            "type": "array"
+          },
+          "contract_version": {
+            "const": 3,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ToolCursor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "domain": {
+            "enum": [
+              "identity",
+              "specs",
+              "compute",
+              "compatibility",
+              "benchmark",
+              "deployment"
+            ],
+            "title": "Domain",
+            "type": "string"
+          },
+          "list_version": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "List Version",
+            "type": "string"
+          },
+          "pipeline": {
+            "const": "hermes-open-web-v3",
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/$defs/DiscoverySearchPlan"
+          },
+          "request_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scope_type": {
+            "enum": [
+              "chip",
+              "discovery"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "chip",
+          "contract_version",
+          "domain",
+          "pipeline",
+          "run_id",
+          "scope_type"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    },
+    {
+      "description": "Visit saved candidates or read bounded detail from a verified saved snapshot.",
+      "name": "open_web_preview",
+      "parameters": {
+        "$defs": {
+          "PreviewDetail": {
+            "additionalProperties": false,
+            "properties": {
+              "chip": {
+                "anyOf": [
+                  {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Chip"
+              },
+              "contract_version": {
+                "const": 3,
+                "title": "Contract Version",
+                "type": "integer"
+              },
+              "domain": {
+                "enum": [
+                  "identity",
+                  "specs",
+                  "compute",
+                  "compatibility",
+                  "benchmark",
+                  "deployment"
+                ],
+                "title": "Domain",
+                "type": "string"
+              },
+              "length": {
+                "default": 4000,
+                "maximum": 4000,
+                "minimum": 1,
+                "title": "Length",
+                "type": "integer"
+              },
+              "mode": {
+                "const": "detail",
+                "title": "Mode",
+                "type": "string"
+              },
+              "offset": {
+                "default": 0,
+                "minimum": 0,
+                "title": "Offset",
+                "type": "integer"
+              },
+              "pipeline": {
+                "const": "hermes-open-web-v3",
+                "title": "Pipeline",
+                "type": "string"
+              },
+              "request_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "title": "Run Id",
+                "type": "string"
+              },
+              "scope_type": {
+                "enum": [
+                  "chip",
+                  "discovery"
+                ],
+                "title": "Scope Type",
+                "type": "string"
+              },
+              "snapshot_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Snapshot Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contract_version",
+              "pipeline",
+              "run_id",
+              "domain",
+              "scope_type",
+              "chip",
+              "request_id",
+              "mode",
+              "snapshot_id"
+            ],
+            "title": "PreviewDetail",
+            "type": "object"
+          },
+          "PreviewInitial": {
+            "additionalProperties": false,
+            "properties": {
+              "chip": {
+                "anyOf": [
+                  {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Chip"
+              },
+              "contract_version": {
+                "const": 3,
+                "title": "Contract Version",
+                "type": "integer"
+              },
+              "cursor": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ToolCursor"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "domain": {
+                "enum": [
+                  "identity",
+                  "specs",
+                  "compute",
+                  "compatibility",
+                  "benchmark",
+                  "deployment"
+                ],
+                "title": "Domain",
+                "type": "string"
+              },
+              "limit": {
+                "default": 10,
+                "maximum": 10,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "list_version": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "List Version",
+                "type": "string"
+              },
+              "mode": {
+                "const": "initial",
+                "title": "Mode",
+                "type": "string"
+              },
+              "pipeline": {
+                "const": "hermes-open-web-v3",
+                "title": "Pipeline",
+                "type": "string"
+              },
+              "request_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "title": "Run Id",
+                "type": "string"
+              },
+              "scope_type": {
+                "enum": [
+                  "chip",
+                  "discovery"
+                ],
+                "title": "Scope Type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contract_version",
+              "pipeline",
+              "run_id",
+              "domain",
+              "scope_type",
+              "chip",
+              "request_id",
+              "mode",
+              "list_version"
+            ],
+            "title": "PreviewInitial",
+            "type": "object"
+          },
+          "ToolCursor": {
+            "additionalProperties": false,
+            "properties": {
+              "list_version": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "List Version",
+                "type": "string"
+              },
+              "offset": {
+                "minimum": 0,
+                "title": "Offset",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "list_version",
+              "offset"
+            ],
+            "title": "ToolCursor",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "chip": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chip"
+          },
+          "contract_version": {
+            "const": 3,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ToolCursor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "domain": {
+            "enum": [
+              "identity",
+              "specs",
+              "compute",
+              "compatibility",
+              "benchmark",
+              "deployment"
+            ],
+            "title": "Domain",
+            "type": "string"
+          },
+          "length": {
+            "default": 4000,
+            "maximum": 4000,
+            "minimum": 1,
+            "title": "Length",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 10,
+            "maximum": 10,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "list_version": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "List Version",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "initial",
+              "detail"
+            ],
+            "type": "string"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "pipeline": {
+            "const": "hermes-open-web-v3",
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scope_type": {
+            "enum": [
+              "chip",
+              "discovery"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Snapshot Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chip",
+          "contract_version",
+          "domain",
+          "mode",
+          "pipeline",
+          "request_id",
+          "run_id",
+          "scope_type"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    },
+    {
+      "description": "Append paged decisions; finalize atomically freezes and enqueues asynchronous jobs.",
+      "name": "open_web_submit_selection",
+      "parameters": {
+        "$defs": {
+          "SelectionAppend": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "append",
+                "title": "Action",
+                "type": "string"
+              },
+              "chip": {
+                "anyOf": [
+                  {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Chip"
+              },
+              "contract_version": {
+                "const": 3,
+                "title": "Contract Version",
+                "type": "integer"
+              },
+              "decisions": {
+                "items": {
+                  "$ref": "#/$defs/ToolDecision"
+                },
+                "maxItems": 10,
+                "minItems": 1,
+                "title": "Decisions",
+                "type": "array"
+              },
+              "domain": {
+                "enum": [
+                  "identity",
+                  "specs",
+                  "compute",
+                  "compatibility",
+                  "benchmark",
+                  "deployment"
+                ],
+                "title": "Domain",
+                "type": "string"
+              },
+              "list_version": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "List Version",
+                "type": "string"
+              },
+              "pipeline": {
+                "const": "hermes-open-web-v3",
+                "title": "Pipeline",
+                "type": "string"
+              },
+              "request_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "title": "Run Id",
+                "type": "string"
+              },
+              "scope_type": {
+                "enum": [
+                  "chip",
+                  "discovery"
+                ],
+                "title": "Scope Type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contract_version",
+              "pipeline",
+              "run_id",
+              "domain",
+              "scope_type",
+              "chip",
+              "request_id",
+              "action",
+              "list_version",
+              "decisions"
+            ],
+            "title": "SelectionAppend",
+            "type": "object"
+          },
+          "SelectionFinalize": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "finalize",
+                "title": "Action",
+                "type": "string"
+              },
+              "chip": {
+                "anyOf": [
+                  {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Chip"
+              },
+              "contract_version": {
+                "const": 3,
+                "title": "Contract Version",
+                "type": "integer"
+              },
+              "domain": {
+                "enum": [
+                  "identity",
+                  "specs",
+                  "compute",
+                  "compatibility",
+                  "benchmark",
+                  "deployment"
+                ],
+                "title": "Domain",
+                "type": "string"
+              },
+              "list_version": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "List Version",
+                "type": "string"
+              },
+              "pipeline": {
+                "const": "hermes-open-web-v3",
+                "title": "Pipeline",
+                "type": "string"
+              },
+              "request_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "title": "Run Id",
+                "type": "string"
+              },
+              "scope_type": {
+                "enum": [
+                  "chip",
+                  "discovery"
+                ],
+                "title": "Scope Type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "contract_version",
+              "pipeline",
+              "run_id",
+              "domain",
+              "scope_type",
+              "chip",
+              "request_id",
+              "action",
+              "list_version"
+            ],
+            "title": "SelectionFinalize",
+            "type": "object"
+          },
+          "ToolDecision": {
+            "additionalProperties": false,
+            "properties": {
+              "candidate_id": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Candidate Id",
+                "type": "string"
+              },
+              "decision": {
+                "enum": [
+                  "select",
+                  "reject"
+                ],
+                "title": "Decision",
+                "type": "string"
+              },
+              "entity_clues": {
+                "items": {
+                  "maxLength": 160,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "title": "Entity Clues",
+                "type": "array"
+              },
+              "expected_info": {
+                "maxLength": 1000,
+                "title": "Expected Info",
+                "type": "string"
+              },
+              "linked_domains": {
+                "items": {
+                  "enum": [
+                    "identity",
+                    "specs",
+                    "compute",
+                    "compatibility",
+                    "benchmark",
+                    "deployment"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 5,
+                "title": "Linked Domains",
+                "type": "array"
+              },
+              "matched_category": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "identity",
+                      "specs",
+                      "compute",
+                      "compatibility",
+                      "benchmark",
+                      "deployment"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Matched Category"
+              },
+              "reason": {
+                "maxLength": 400,
+                "minLength": 1,
+                "title": "Reason",
+                "type": "string"
+              }
+            },
+            "required": [
+              "candidate_id",
+              "decision",
+              "reason",
+              "expected_info",
+              "linked_domains"
+            ],
+            "title": "ToolDecision",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "append",
+              "finalize"
+            ],
+            "type": "string"
+          },
+          "chip": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chip"
+          },
+          "contract_version": {
+            "const": 3,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/$defs/ToolDecision"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Decisions",
+            "type": "array"
+          },
+          "domain": {
+            "enum": [
+              "identity",
+              "specs",
+              "compute",
+              "compatibility",
+              "benchmark",
+              "deployment"
+            ],
+            "title": "Domain",
+            "type": "string"
+          },
+          "list_version": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "List Version",
+            "type": "string"
+          },
+          "pipeline": {
+            "const": "hermes-open-web-v3",
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scope_type": {
+            "enum": [
+              "chip",
+              "discovery"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "chip",
+          "contract_version",
+          "domain",
+          "list_version",
+          "pipeline",
+          "request_id",
+          "run_id",
+          "scope_type"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    }
+  ]
+}

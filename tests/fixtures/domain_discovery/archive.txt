@@ -1,0 +1,2 @@
+Fixture original archived specification with a complete saved producer request.
+NVIDIA L40S 48GB PCIe GPU: 48 GB GDDR6

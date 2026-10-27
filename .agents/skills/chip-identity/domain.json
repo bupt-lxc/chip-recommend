@@ -1,0 +1,118 @@
+{
+  "domain_id": "identity",
+  "label": "芯片身份与生命周期",
+  "skill_name": "chip-identity",
+  "rule_version": "3.0.0",
+  "fields": {
+    "chips": [
+      "vendor",
+      "vendor_display",
+      "vendor_region",
+      "chip_series",
+      "chip_model",
+      "chip_type",
+      "usage",
+      "tier",
+      "release_date",
+      "production_status",
+      "eol_date",
+      "target_market",
+      "is_released",
+      "expected_release_date"
+    ]
+  },
+  "entity_keys": {
+    "chips": [
+      "vendor",
+      "chip_model"
+    ]
+  },
+  "conditions": {
+    "entity_matching": {
+      "preserve": [
+        "sku_suffix",
+        "capacity",
+        "form_factor"
+      ],
+      "strip_suffix_or_capacity": false
+    },
+    "candidate_metadata": [
+      "source_url",
+      "source_type",
+      "confidence"
+    ],
+    "candidate_metadata_namespace": "separate_from_business_fields",
+    "ambiguous_history": {
+      "candidate_status": "validated",
+      "comparison_status": "comparison_unresolved",
+      "overwrite": false
+    },
+    "discovery": {
+      "mode": "open",
+      "chip_hint": "optional_existing_or_unknown",
+      "enumerate_full_database": false
+    },
+    "entity_scope": {
+      "include": [
+        "chip",
+        "board_sku"
+      ],
+      "exclude": [
+        "series_as_sku",
+        "server",
+        "cluster"
+      ]
+    },
+    "chip_type": {
+      "preserve_actual_type": true,
+      "examples": [
+        "GPU",
+        "NPU",
+        "DCU",
+        "TPU",
+        "PPU",
+        "MLU",
+        "ASIC"
+      ]
+    },
+    "release_date": {
+      "requires_explicit_evidence": true,
+      "disallowed_inference": [
+        "copyright_year",
+        "article_date"
+      ]
+    },
+    "unannounced": {
+      "requires_explicit_evidence": true,
+      "values": {
+        "production_status": "未公开发布",
+        "is_released": "0"
+      }
+    },
+    "lifecycle": {
+      "release_date": "actual_release",
+      "expected_release_date": "expected_release",
+      "eol_date": "explicit_end_of_life",
+      "do_not_equate_announcement_and_mass_production": true
+    }
+  },
+  "units": {
+    "dates": {
+      "fields": [
+        "release_date",
+        "expected_release_date",
+        "eol_date"
+      ],
+      "preserve_source_date_precision": true
+    },
+    "is_released": {
+      "released": "1",
+      "unannounced": "0"
+    }
+  },
+  "references": [
+    "_shared/rules.md",
+    "chip-identity/references/identity-rules.md",
+    "_shared/tool-contract.json"
+  ]
+}

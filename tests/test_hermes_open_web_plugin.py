@@ -34,6 +34,7 @@ def test_plugin_registers_exactly_three_tools_in_dedicated_toolset() -> None:
     assert {item["toolset"] for item in context.tools.values()} == {
         "aishperf_open_web"
     }
+    assert all(item['schema']['strict'] is False for item in context.tools.values())
 
 
 def test_plugin_handler_calls_only_configured_loopback_service(monkeypatch) -> None:
@@ -55,12 +56,43 @@ def test_plugin_handler_calls_only_configured_loopback_service(monkeypatch) -> N
     assert calls[0][0] == "/v1/search"
 
 
-def test_plugin_schemas_require_parent_unit_context() -> None:
+def test_plugin_schemas_are_generated_strict_v3_contract() -> None:
     module = _module()
+    from chip_model.domain_tool_api import tool_contract
+    assert [module.SEARCH_SCHEMA, module.PREVIEW_SCHEMA, module.SUBMIT_SCHEMA] == tool_contract()['tools']
     for schema in (module.SEARCH_SCHEMA, module.PREVIEW_SCHEMA, module.SUBMIT_SCHEMA):
-        required = set(schema["parameters"]["required"])
-        assert {"run_id", "unit_id", "scope_type"} <= required
-        assert schema["parameters"]["properties"]["scope_type"]["enum"] == [
-            "chip", "discovery"
-        ]
-    assert "target_chip" not in module.SEARCH_SCHEMA["parameters"]["required"]
+        assert schema['parameters']['type'] == 'object'
+        assert schema['parameters']['additionalProperties'] is False
+        assert {'run_id', 'scope_type', 'domain', 'contract_version', 'pipeline', 'chip'} <= set(schema['parameters']['required'])
+        for model in schema['parameters']['$defs'].values():
+            if 'run_id' in model.get('properties', {}):
+                assert {'run_id', 'scope_type', 'domain', 'contract_version', 'pipeline', 'chip'} <= set(model['required'])
+                assert 'unit_id' not in model['properties']
+                assert model['additionalProperties'] is False
+
+
+def test_selection_handler_uses_v3_route(monkeypatch):
+    module = _module()
+    calls = []
+    monkeypatch.setattr(module, '_post', lambda path, args: calls.append(path) or {'ok': True})
+    module._handle_selection({})
+    assert calls == ['/v1/selection']
+
+
+def test_model_facing_object_schema_accepts_every_action_sample():
+    from jsonschema import Draft202012Validator
+    from tests.test_domain_tool_api import request, plan
+    module = _module()
+    cases = [(module.SEARCH_SCHEMA, request(action='execute', request_id='a', plan=plan())),
+             (module.SEARCH_SCHEMA, request(action='results', list_version='v')),
+             (module.SEARCH_SCHEMA, request(action='complete_intents', request_id='b', completions=[
+                 {'failed_query_id':'q1','replacement_query_id':'q2','reason':'success read'}])),
+             (module.PREVIEW_SCHEMA, request(mode='initial', request_id='c', list_version='v')),
+             (module.PREVIEW_SCHEMA, request(mode='detail', request_id='d', snapshot_id='s', offset=0, length=100)),
+             (module.SUBMIT_SCHEMA, request(action='append', request_id='e', list_version='v', decisions=[
+                 {'candidate_id':'candidate','decision':'reject','reason':'no evidence','expected_info':'','linked_domains':[]}])),
+             (module.SUBMIT_SCHEMA, request(action='finalize', request_id='f', list_version='v'))]
+    for schema, payload in cases:
+        assert schema['parameters'].get('type') == 'object'
+        Draft202012Validator.check_schema(schema['parameters'])
+        Draft202012Validator(schema['parameters']).validate(payload)

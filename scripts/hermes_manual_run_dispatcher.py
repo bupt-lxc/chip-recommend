@@ -7,8 +7,15 @@ import argparse
 import json
 import subprocess
 import time
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from chip_model.pipeline.domain_discovery.markers import is_domain_request
 
 
 def stamp() -> str:
@@ -25,6 +32,8 @@ def dispatch(path: Path, *, container: str, formal_job_id: str, test_job_id: str
              hermes_python: str, docker_bin: str = "/usr/bin/docker",
              test_job_active: bool = True) -> dict:
     value = json.loads(path.read_text(encoding="utf-8"))
+    if is_domain_request(value):
+        return value
     if value.get("status") != "queued" or value.get("mode") not in {"formal", "test"}:
         return value
     if container != "chip-recommend":
@@ -116,6 +125,8 @@ def main() -> int:
             for path in sorted(requests.glob("*.json")):
                 try:
                     value = json.loads(path.read_text(encoding="utf-8"))
+                    if is_domain_request(value):
+                        continue
                     if value.get("status") == "queued":
                         dispatch(path, container=args.container, formal_job_id=args.formal_job_id,
                                  test_job_id=args.test_job_id, hermes_python=args.hermes_python,

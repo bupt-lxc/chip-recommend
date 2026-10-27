@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "旧心跳 Skill 安装入口已归档，不能覆盖新六域。请使用 scripts/install_hermes_open_web_plugin.sh；心跳启用须另行验收。" >&2
+exit 1
+
 # Run on the current primary host, where Hermes Gateway and the primary app
 # container share the same host. This keeps the existing Cron job ID and schedule.
 PROJECT_ROOT=${1:-$(cd "$(dirname "$0")/.." && pwd)}

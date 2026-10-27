@@ -8,6 +8,7 @@ data/crawl_all/
 data/crawl_fetched.jsonl
 data/source_snapshots/
 data/test_runs/
+data/domain_runs/
 data/manual_control/
 .env
 *.egg-info/
@@ -16,6 +17,7 @@ build/
 .claude/settings.local.json
 *.log
 .gstack/
+.codegraph/
 .tmp/
 .worktrees/
 outputs/
